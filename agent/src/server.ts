@@ -102,7 +102,10 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   // Conditionally create OcQueryCollector (depends on oc-serve)
   let ocQueryCollector: OcQueryCollector | null = null;
   if (ocServeEnabled) {
-    ocQueryCollector = new OcQueryCollector(ocServePort);
+    ocQueryCollector = new OcQueryCollector(
+      ocServePort,
+      () => Object.keys(sessionCache!.getSessionDetails()),
+    );
   }
 
   // Conditionally create Claude modules
