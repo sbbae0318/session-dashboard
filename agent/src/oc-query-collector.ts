@@ -48,7 +48,7 @@ const QUERY_MAX_LENGTH = 2000;
 
 // output limit과 분리된 내부 세션 fetch 한도
 // oc-serve에 200+ 세션이 있을 때 활성 세션이 누락되지 않도록 충분히 크게
-const INTERNAL_SESSION_FETCH_LIMIT = 500;
+const INTERNAL_SESSION_FETCH_LIMIT = 100;
 
 // oc-serve가 부하 상태일 때 충분히 기다리기 위한 타임아웃
 // /session?limit=500 실측: ~5초, /session/{id}/message 실측: ~8초

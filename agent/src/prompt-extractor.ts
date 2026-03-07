@@ -10,7 +10,6 @@ const SYSTEM_INJECTED_PREFIXES = [
   "[analyze-mode]",
   "[search-mode]",
   "<ultrawork-mode>",
-  "<command-instruction>",
   "<session-context>",
 ];
 
@@ -20,8 +19,8 @@ const SYSTEM_ONLY_PREFIXES = [
   "[system-directive",
   "<system-reminder>",
   "Continue if you have next steps",
+  "<command-instruction>",
 ];
-
 /**
  * 시스템 주입 prefix를 제거하고 실제 user content를 추출.
  * 시스템 전용 프롬프트이면 null 반환.

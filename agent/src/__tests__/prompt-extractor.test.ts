@@ -49,10 +49,10 @@ describe('extractUserPrompt', () => {
     expect(extractUserPrompt(input)).toBe('do the work');
   });
 
-  // 9. <command-instruction> prefix strip
-  it('strips <command-instruction> prefix and extracts content after separator', () => {
+  // 9. <command-instruction> → SYSTEM_ONLY_PREFIXES (null 반환)
+  it('returns null for <command-instruction> prefix (system-only filter)', () => {
     const input = '<command-instruction>\n---\nrun this command';
-    expect(extractUserPrompt(input)).toBe('run this command');
+    expect(extractUserPrompt(input)).toBeNull();
   });
 
   // 10. <session-context> prefix strip
