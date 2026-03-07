@@ -14,7 +14,7 @@ import { extractUserPrompt, isBackgroundSession } from './prompt-extractor.js';
 interface OcServeSession {
   id: string;
   title: string | null;
-  time: number;
+  time: { created: number; updated: number } | number;
 }
 
 interface OcServeMessage {
@@ -108,10 +108,15 @@ export class OcQueryCollector {
       const extracted = extractUserPrompt(rawText);
       if (extracted === null) continue;
 
+      const rawTime = session.time;
+      const timestamp = typeof rawTime === 'object' && rawTime !== null
+        ? rawTime.created
+        : (rawTime || Date.now());
+
       entries.push({
         sessionId: session.id,
         sessionTitle: session.title,
-        timestamp: session.time || Date.now(),
+        timestamp,
         query: extracted.slice(0, QUERY_MAX_LENGTH),
         isBackground: background,
         source: 'opencode',
