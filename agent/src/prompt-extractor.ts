@@ -20,6 +20,7 @@ const SYSTEM_ONLY_PREFIXES = [
   "<system-reminder>",
   "Continue if you have next steps",
   "<command-instruction>",
+  "## **NO EXCUSES",
 ];
 /**
  * 시스템 주입 prefix를 제거하고 실제 user content를 추출.
@@ -43,13 +44,19 @@ export function extractUserPrompt(text: string): string | null {
   // 3. prefix 제거 후 leading whitespace/separator 제거
   stripped = stripped.replace(/^[\s\-]*\n/, "").trim();
 
-  // 4. '\n---\n' separator 이후 실제 user content 추출
-  const separatorIdx = stripped.indexOf("\n---\n");
+  // 4. 마지막 '\n---\n' separator 이후 실제 user content 추출
+  //    (ultrawork-mode 등 내부에 여러 separator가 있을 수 있음 — 마지막이 user content)
+  const separatorIdx = stripped.lastIndexOf("\n---\n");
   if (separatorIdx !== -1) {
     stripped = stripped.slice(separatorIdx + 5).trim();
   }
 
-  // 5. 공백만 남으면 null
+  // 5. 추출된 content가 시스템 프롬프트인지 재확인 (separator 기준 잘못 추출 방어)
+  if (SYSTEM_ONLY_PREFIXES.some((p) => stripped.startsWith(p))) {
+    return null;
+  }
+
+  // 6. 공백만 남으면 null
   return stripped.length > 0 ? stripped : null;
 }
 

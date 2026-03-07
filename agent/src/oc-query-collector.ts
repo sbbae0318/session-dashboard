@@ -22,7 +22,11 @@ interface OcServeSession {
 }
 
 interface OcServeMessage {
-  info: { role: string; id: string };
+  info: {
+    role: string;
+    id: string;
+    time?: { created: number };
+  };
   parts?: Array<{ type: string; text?: string }>;
 }
 
@@ -164,10 +168,13 @@ export class OcQueryCollector {
       const extracted = extractUserPrompt(rawText);
       if (extracted === null) continue;
 
+      // per-message 타임스탬프 사용 (info.time.created), 없으면 session 타임스탬프 폴백
+      const msgTime = msg.info?.time?.created;
       const rawTime = session.time;
-      const timestamp = typeof rawTime === 'object' && rawTime !== null
+      const sessionTs = typeof rawTime === 'object' && rawTime !== null
         ? rawTime.created
         : (rawTime || Date.now());
+      const timestamp = msgTime ?? sessionTs;
 
       entries.push({
         sessionId: session.id,

@@ -14,9 +14,13 @@ function makeSession(id: string, title: string | null = 'chat', time: number = 1
   return { id, title, time };
 }
 
-function makeMessage(role: string, text: string) {
+function makeMessage(role: string, text: string, createdTime?: number) {
   return {
-    info: { role, id: `msg-${Math.random().toString(36).slice(2, 8)}` },
+    info: {
+      role,
+      id: `msg-${Math.random().toString(36).slice(2, 8)}`,
+      ...(createdTime != null ? { time: { created: createdTime } } : {}),
+    },
     parts: [{ type: 'text', text }],
   };
 }
@@ -299,6 +303,85 @@ describe('OcQueryCollector', () => {
     const entries = await collector.collectQueries(50);
     expect(entries).toHaveLength(1);
     expect(entries[0].query).toBe('normal question');
+  });
+});
+
+describe('OcQueryCollector — per-message timestamp', () => {
+  let collector: OcQueryCollector;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collector = new OcQueryCollector(4321);
+  });
+
+  it('info.time.created가 있으면 per-message 타임스탬프 사용', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([makeSession('s-ts', 'chat', 1000)]);
+      }
+      return Promise.resolve([
+        makeMessage('user', 'first', 5000),
+        makeMessage('user', 'second', 6000),
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(2);
+    // 최신순 정렬: second(6000) 먼저, first(5000) 나중
+    expect(entries[0].timestamp).toBe(6000);
+    expect(entries[0].query).toBe('second');
+    expect(entries[1].timestamp).toBe(5000);
+    expect(entries[1].query).toBe('first');
+  });
+
+  it('info.time.created가 없으면 session 타임스탬프로 폴백', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([makeSession('s-no-ts', 'chat', 9999)]);
+      }
+      return Promise.resolve([
+        makeMessage('user', 'no time field'),  // time 없음
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].timestamp).toBe(9999);  // session.time 사용
+  });
+
+  it('session.time이 객체일 때 per-message time 우선', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([{ id: 's-obj', title: 'chat', time: { created: 1000, updated: 2000 } }]);
+      }
+      return Promise.resolve([
+        makeMessage('user', 'msg with own ts', 7777),
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].timestamp).toBe(7777);  // session.time.created(1000) 대신 msg.info.time.created(7777)
+  });
+
+  it('시스템 프롬프트 필터: ## **NO EXCUSES → skip', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([makeSession('s-noexc', 'chat', 1000)]);
+      }
+      return Promise.resolve([
+        makeMessage('user', '## **NO EXCUSES. NO COMPROMISES. DELIVER WHAT WAS ASKED.**', 8000),
+        makeMessage('user', '실제 유저 질문', 8001),
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('실제 유저 질문');
   });
 });
 

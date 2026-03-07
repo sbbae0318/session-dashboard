@@ -71,6 +71,12 @@ describe('extractUserPrompt', () => {
   it('returns null for empty string', () => {
     expect(extractUserPrompt('')).toBeNull();
   });
+
+  // 13. ## **NO EXCUSES → null (시스템 전용 필터)
+  it('returns null for "## **NO EXCUSES" prefix (system-only filter)', () => {
+    const input = '## **NO EXCUSES. NO COMPROMISES. DELIVER WHAT WAS ASKED.**';
+    expect(extractUserPrompt(input)).toBeNull();
+  });
 });
 
 describe('isBackgroundSession', () => {
