@@ -15,6 +15,7 @@ interface OcServeSession {
   id: string;
   title: string | null;
   time: { created: number; updated: number } | number;
+  parentID?: string;  // 있으면 서브에이전트/툴 생성 세션
 }
 
 interface OcServeMessage {
@@ -60,9 +61,12 @@ export class OcQueryCollector {
       return [];
     }
 
+    // parentID가 있는 세션 = 서브에이전트/툴 생성 세션 → 제외
+    const mainSessions = sessions.filter((s) => !s.parentID);
+
     // 각 세션의 메시지를 병렬로 가져오기 (개별 실패 격리)
     const results = await Promise.allSettled(
-      sessions.map((session) => this.collectFromSession(session)),
+      mainSessions.map((session) => this.collectFromSession(session)),
     );
 
     const entries: QueryEntry[] = [];

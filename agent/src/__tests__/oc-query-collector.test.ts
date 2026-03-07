@@ -181,4 +181,54 @@ describe('OcQueryCollector', () => {
     expect(entries[0].sessionId).toBe('ok-session');
     expect(entries[0].query).toBe('from working session');
   });
+
+  it('parentID 있는 세션 필터링: 서브에이전트 세션 제외', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([
+          makeSession('main-session', 'user chat', 1000),
+          { id: 'sub-session', title: 'look_at: some file', time: 2000, parentID: 'main-session' },
+        ]);
+      }
+      if (url.includes('main-session')) {
+        return Promise.resolve([makeMessage('user', 'real user question')]);
+      }
+      // sub-session은 호출되면 안 됨
+      return Promise.resolve([makeMessage('user', 'tool generated message')]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].sessionId).toBe('main-session');
+    expect(entries[0].query).toBe('real user question');
+  });
+
+  it('parentID 없는 세션만 수집: 메인 세션 2개 모두 수집', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) {
+        return Promise.resolve([
+          makeSession('main-1', 'first chat', 1000),
+          makeSession('main-2', 'second chat', 2000),
+          { id: 'sub-1', title: 'Task 1: explore', time: 3000, parentID: 'main-1' },
+        ]);
+      }
+      if (url.includes('main-1')) {
+        return Promise.resolve([makeMessage('user', 'question from main-1')]);
+      }
+      if (url.includes('main-2')) {
+        return Promise.resolve([makeMessage('user', 'question from main-2')]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(2);
+    const sessionIds = entries.map((e) => e.sessionId);
+    expect(sessionIds).toContain('main-1');
+    expect(sessionIds).toContain('main-2');
+    expect(sessionIds).not.toContain('sub-1');
+  });
 });
+
