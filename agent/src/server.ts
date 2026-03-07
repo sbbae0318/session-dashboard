@@ -29,6 +29,7 @@ import { JsonlReader } from './jsonl-reader.js';
 import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeConnection } from './oc-serve-proxy.js';
 import { SessionCache } from './session-cache.js';
 import { OcQueryCollector } from './oc-query-collector.js';
+import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
 import type { AgentConfig, HealthResponse, CardsResponse, QueriesResponse, TokenRequest } from './types.js';
@@ -51,6 +52,7 @@ function getVersion(): string {
 
 const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 50;
+const PROMPT_COLLECTION_INTERVAL_MS = 30_000; // 30 seconds
 const OC_SERVE_CACHE_TTL = 10_000; // 10 seconds
 
 /**
@@ -84,7 +86,7 @@ function parseLimit(raw: unknown): number {
 /**
  * Create and configure the Fastify server
  */
-export async function createServer(config: AgentConfig): Promise<{ app: FastifyInstance; sessionCache: SessionCache | null }> {
+export async function createServer(config: AgentConfig): Promise<{ app: FastifyInstance; sessionCache: SessionCache | null; promptStore: PromptStore | null }> {
   const version = getVersion();
   const startTime = Date.now();
   const ocServePort = config.ocServePort ?? 4096;
@@ -108,6 +110,33 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       // lastPrompt가 있는 세션은 oc-serve message fetch 없이 직접 QueryEntry로 변환됨
       () => sessionCache!.getSessionDetails(),
     );
+  }
+
+  // Conditionally create PromptStore + background collection (depends on oc-serve)
+  let promptStore: PromptStore | null = null;
+  let bgCollectionInterval: NodeJS.Timeout | null = null;
+  if (ocServeEnabled && ocQueryCollector) {
+    promptStore = new PromptStore();
+
+    const doCollection = async (): Promise<void> => {
+      try {
+        const entries = await ocQueryCollector!.collectQueries(200);
+        const inserted = promptStore!.upsertMany(entries);
+        if (inserted > 0) console.log(`[prompt-store] Stored ${inserted} new prompts`);
+        promptStore!.evict();
+        promptStore!.trimToMax();
+      } catch (err) {
+        console.error('[prompt-store] Collection error:', err);
+      }
+    };
+
+    // Initial collection (non-blocking)
+    void doCollection();
+
+    // Background collection every 30s
+    bgCollectionInterval = setInterval(() => {
+      void doCollection();
+    }, PROMPT_COLLECTION_INTERVAL_MS);
   }
 
   // Conditionally create Claude modules
@@ -169,12 +198,22 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   // GET /api/queries?limit=50
   app.get<{ Querystring: { limit?: string } }>('/api/queries', async (request) => {
     const limit = parseLimit(request.query.limit);
+
+    // 1) Instant response from SQLite (persistent store)
+    if (promptStore && promptStore.count() > 0) {
+      const queries = promptStore.getRecent(limit);
+      const response: QueriesResponse = { queries };
+      return response;
+    }
+
+    // 2) Fallback: live collection from oc-serve (before bg collection completes)
     if (ocQueryCollector) {
       const queries = await ocQueryCollector.collectQueries(limit);
       const response: QueriesResponse = { queries };
       return response;
     }
-    // fallback: queries.jsonl (Claude Code source)
+
+    // 3) Final fallback: queries.jsonl (Claude Code source)
     const filePath = join(config.historyDir, 'queries.jsonl');
     const reader = new JsonlReader<Record<string, unknown>>(filePath);
     const queries = await reader.tailLines(limit);
@@ -243,10 +282,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 
   // Graceful shutdown
   app.addHook('onClose', async () => {
+    if (bgCollectionInterval) clearInterval(bgCollectionInterval);
+    if (promptStore) promptStore.close();
     if (sessionCache) sessionCache.stop();
     if (claudeHeartbeat) claudeHeartbeat.stop();
     if (claudeSource) claudeSource.stop();
   });
 
-  return { app, sessionCache };
+  return { app, sessionCache, promptStore };
 }

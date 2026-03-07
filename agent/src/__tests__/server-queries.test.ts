@@ -20,6 +20,19 @@ vi.mock('../oc-query-collector.js', () => {
   return { OcQueryCollector };
 });
 
+// PromptStore mock — return count=0 so queries always fall through to OcQueryCollector
+vi.mock('../prompt-store.js', () => {
+  const PromptStore = vi.fn(function (this: { count: () => number; upsertMany: () => number; evict: () => number; trimToMax: () => number; getRecent: () => never[]; close: () => void }) {
+    this.count = () => 0;
+    this.upsertMany = () => 0;
+    this.evict = () => 0;
+    this.trimToMax = () => 0;
+    this.getRecent = () => [];
+    this.close = () => {};
+  });
+  return { PromptStore };
+});
+
 // Import after mock setup
 import { createServer } from '../server.js';
 

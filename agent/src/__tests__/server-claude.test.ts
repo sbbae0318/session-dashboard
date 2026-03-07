@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createServer } from '../server.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { AgentConfig } from '../types.js';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
@@ -7,6 +6,20 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
+// PromptStore mock — prevent real SQLite access during tests
+vi.mock('../prompt-store.js', () => {
+  const PromptStore = vi.fn(function (this: { count: () => number; upsertMany: () => number; evict: () => number; trimToMax: () => number; getRecent: () => never[]; close: () => void }) {
+    this.count = () => 0;
+    this.upsertMany = () => 0;
+    this.evict = () => 0;
+    this.trimToMax = () => 0;
+    this.getRecent = () => [];
+    this.close = () => {};
+  });
+  return { PromptStore };
+});
+
+import { createServer } from '../server.js';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
