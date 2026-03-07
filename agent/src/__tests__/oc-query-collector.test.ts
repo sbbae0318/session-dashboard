@@ -6,7 +6,7 @@ vi.mock('../oc-serve-proxy.js', () => ({
   fetchJson: (...args: unknown[]) => mockFetchJson(...args),
 }));
 
-import { OcQueryCollector, type QueryEntry } from '../oc-query-collector.js';
+import { OcQueryCollector, type QueryEntry, type SupplementData } from '../oc-query-collector.js';
 
 // ── Helpers ──
 
@@ -94,9 +94,36 @@ describe('OcQueryCollector', () => {
 
     expect(entries).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('oc-serve unreachable'),
+      expect.stringContaining('session list fetch failed'),
     );
     warnSpy.mockRestore();
+  });
+
+  it('session list 실패 시 SessionCache 콜백으로 폴백 수집', async () => {
+    const activeSessionId = 'ses_active123';
+    const supplementData: Record<string, SupplementData> = {
+      [activeSessionId]: { lastPrompt: 'SessionCache에서 수집된 프롬프트', lastPromptTime: 5000 },
+    };
+    const collectorWithCallback = new OcQueryCollector(4321, () => supplementData);
+
+    mockFetchJson.mockImplementation((url: string) => {
+      // session list 실패
+      if (url.includes('/session?limit=')) {
+        return Promise.reject(new Error('ETIMEDOUT'));
+      }
+      return Promise.resolve([]);
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const entries = await collectorWithCallback.collectQueries(50);
+
+    warnSpy.mockRestore();
+    // 개별 /session/{id} fetch 없이 lastPrompt로 직접 QueryEntry 생성
+    expect(entries).toHaveLength(1);
+    expect(entries[0].sessionId).toBe(activeSessionId);
+    expect(entries[0].query).toBe('SessionCache에서 수집된 프롬프트');
+    expect(entries[0].sessionTitle).toBeNull();
+    expect(entries[0].isBackground).toBe(false);
   });
 
   it('isBackground: "Background:" title → isBackground: true', async () => {
@@ -233,10 +260,10 @@ describe('OcQueryCollector', () => {
 
   it('활성 세션이 session limit 밖에 있어도 콜백으로 보완하여 수집', async () => {
     const currentSessionId = 'ses_337ed4466ffeZEOR';
-    const collectorWithCallback = new OcQueryCollector(
-      4321,
-      () => [currentSessionId],  // SessionCache 콜백 시뮬레이션
-    );
+    const supplementData: Record<string, SupplementData> = {
+      [currentSessionId]: { lastPrompt: '실제 유저 질문', lastPromptTime: 9999 },
+    };
+    const collectorWithCallback = new OcQueryCollector(4321, () => supplementData);
 
     mockFetchJson.mockImplementation((url: string) => {
       // /session?limit= → 현재 세션 미포함
@@ -245,28 +272,19 @@ describe('OcQueryCollector', () => {
           makeSession('newer-session-1', 'other chat', 9000),
         ]);
       }
-      // /session/{currentSessionId} → 개별 조회
-      if (url.includes(`/session/${currentSessionId}`) && !url.includes('/message')) {
-        return Promise.resolve({
-          id: currentSessionId,
-          title: 'Session Dashboard 드릴다운',
-          time: { created: 1000, updated: Date.now() },
-        });
-      }
-      // 메시지 조회
+      // 메시지 조회 (newer-session-1 용)
       if (url.includes('/message')) {
-        if (url.includes(currentSessionId)) {
-          return Promise.resolve([makeMessage('user', '실제 유저 질문')]);
-        }
         return Promise.resolve([makeMessage('user', 'other message')]);
       }
       return Promise.resolve([]);
     });
 
     const entries = await collectorWithCallback.collectQueries(50);
+    // 현재 세션은 SessionCache lastPrompt로 직접 수집 (개별 /session fetch 불필요)
     const currentSessionEntries = entries.filter(e => e.sessionId === currentSessionId);
     expect(currentSessionEntries).toHaveLength(1);
     expect(currentSessionEntries[0].query).toBe('실제 유저 질문');
+    expect(currentSessionEntries[0].timestamp).toBe(9999);
   });
 
   it('콜백 없을 때 기본 수집 동작', async () => {

@@ -3,12 +3,15 @@
  *
  * oc-serve REST API를 폴링하여 사용자 프롬프트를 QueryEntry 배열로 수집.
  * Promise.allSettled로 개별 세션 실패를 격리하고,
- * oc-serve 다운 시 빈 배열을 반환 (throw 금지).
+ * oc-serve 다운 시 SessionCache 데이터로 폴백 (수집 계속).
+ *
+ * 개선된 아키텍첲:
+ * - oc-serve 세션 목록: 실패/타임아웃 시 SessionCache로 폴백
+ * - SessionCache 보완 세션: lastPrompt 데이터 직접 사용 (oc-serve message fetch 불필요)
  */
 
 import { fetchJson } from './oc-serve-proxy.js';
 import { extractUserPrompt, isBackgroundSession } from './prompt-extractor.js';
-
 // ── oc-serve API 응답 타입 ──
 
 interface OcServeSession {
@@ -34,20 +37,35 @@ export interface QueryEntry {
   source: 'opencode';
 }
 
+// SessionCache에서 보완 세션의 데이터 다양한 형식 지원 (SessionDetail 하위호환)
+// oc-query-collector.ts가 session-cache.ts에 의존하지 않도록 간단한 인터페이스로 정의
+export interface SupplementData {
+  lastPrompt: string | null;
+  lastPromptTime: number;
+}
+
 const QUERY_MAX_LENGTH = 2000;
 
 // output limit과 분리된 내부 세션 fetch 한도
 // oc-serve에 200+ 세션이 있을 때 활성 세션이 누락되지 않도록 충분히 크게
 const INTERNAL_SESSION_FETCH_LIMIT = 500;
 
+// oc-serve가 부하 상태일 때 충분히 기다리기 위한 타임아웃
+// /session?limit=500 실측: ~5초, /session/{id}/message 실측: ~8초
+const SESSION_LIST_TIMEOUT_MS = 10_000;
+const MESSAGE_FETCH_TIMEOUT_MS = 10_000;
+
 export class OcQueryCollector {
   private readonly ocServePort: number;
 
-
-
   constructor(
     ocServePort: number,
-    private readonly getExtraSessionIds?: () => string[],
+    /**
+     * SessionCache에서 활성 세션 데이터를 제공하는 콜백.
+     * 반환된 데이터는 oc-serve 세션 목록에 없는 세션에 대해
+     * lastPrompt를 직접 QueryEntry로 변환함 (속도 + 신뢰성 향상).
+     */
+    private readonly getSupplementData?: () => Record<string, SupplementData>,
   ) {
     this.ocServePort = ocServePort;
   }
@@ -57,34 +75,38 @@ export class OcQueryCollector {
    * oc-serve 다운 시 빈 배열 + console.warn.
    */
   async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
-    let sessions: OcServeSession[];
+    // oc-serve session list를 가져오되, 실패/타임아웃 시에도 SessionCache 콜백으로 계속 진행
+    let sessions: OcServeSession[] = [];
     try {
       const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
-      const data = await fetchJson(url, {}, 3000);
-      if (!Array.isArray(data)) return [];
-      sessions = data as OcServeSession[];
+      const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
+      if (Array.isArray(data)) {
+        sessions = data as OcServeSession[];
+      }
     } catch {
-      console.warn('[oc-query-collector] oc-serve unreachable, returning empty');
-      return [];
+      console.warn('[oc-query-collector] session list fetch failed, falling back to SessionCache only');
+      // return하지 않음 — SessionCache 콜백으로 계속 진행
     }
 
-    // 콜백으로 보완 세션 ID 가져오기 (SessionCache 등 외부 소스)
-    const extraIds = this.getExtraSessionIds?.() ?? [];
-    const existingIds = new Set(sessions.map((s) => s.id));
-    const missingIds = extraIds.filter((id) => !existingIds.has(id));
-
-    const supplementResults = await Promise.allSettled(
-      missingIds.map((id) =>
-        fetchJson(
-          `http://127.0.0.1:${this.ocServePort}/session/${id}`,
-          {},
-          3000,
-        ),
-      ),
-    );
-    for (const result of supplementResults) {
-      if (result.status === 'fulfilled' && result.value && typeof result.value === 'object') {
-        sessions.push(result.value as OcServeSession);
+    // SessionCache 보완: oc-serve 목록에 없는 활성 세션의 lastPrompt를 직접 사용
+    // oc-serve message 엔드포인트를 호출하지 않아선 응답 속도와 안정성이 크게 상승
+    const supplementEntries: QueryEntry[] = [];
+    if (this.getSupplementData) {
+      const supplementData = this.getSupplementData();
+      const existingIds = new Set(sessions.map((s) => s.id));
+      for (const [sessionId, data] of Object.entries(supplementData)) {
+        if (existingIds.has(sessionId)) continue;   // oc-serve에도 있는 세션은 스킵
+        if (!data.lastPrompt) continue;             // 프롬프트 없는 세션 스킵
+        const extracted = extractUserPrompt(data.lastPrompt);
+        if (extracted === null) continue;            // 시스템 프롬프트 필터
+        supplementEntries.push({
+          sessionId,
+          sessionTitle: null,
+          timestamp: data.lastPromptTime || Date.now(),
+          query: extracted.slice(0, QUERY_MAX_LENGTH),
+          isBackground: false,
+          source: 'opencode',
+        });
       }
     }
 
@@ -96,12 +118,15 @@ export class OcQueryCollector {
       mainSessions.map((session) => this.collectFromSession(session)),
     );
 
-    const entries: QueryEntry[] = [];
+    const ocServeEntries: QueryEntry[] = [];
     for (const result of results) {
       if (result.status === 'fulfilled') {
-        entries.push(...result.value);
+        ocServeEntries.push(...result.value);
       }
     }
+
+    // oc-serve 엔트리 + SessionCache 보완 엔트리 합치지
+    const entries = [...ocServeEntries, ...supplementEntries];
 
     // 최신순 정렬 후 limit 적용
     entries.sort((a, b) => b.timestamp - a.timestamp);
@@ -111,7 +136,7 @@ export class OcQueryCollector {
   /** 단일 세션에서 user 프롬프트를 추출 */
   private async collectFromSession(session: OcServeSession): Promise<QueryEntry[]> {
     const url = `http://127.0.0.1:${this.ocServePort}/session/${session.id}/message`;
-    const data = await fetchJson(url, {}, 3000);
+    const data = await fetchJson(url, {}, MESSAGE_FETCH_TIMEOUT_MS);
     if (!Array.isArray(data)) return [];
 
     const messages = data as OcServeMessage[];
