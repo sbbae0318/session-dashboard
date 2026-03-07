@@ -28,6 +28,7 @@ import { authPreHandler, createAuthToken } from './auth.js';
 import { JsonlReader } from './jsonl-reader.js';
 import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeConnection } from './oc-serve-proxy.js';
 import { SessionCache } from './session-cache.js';
+import { OcQueryCollector } from './oc-query-collector.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
 import type { AgentConfig, HealthResponse, CardsResponse, QueriesResponse, TokenRequest } from './types.js';
@@ -98,6 +99,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     sessionCache = new SessionCache(ocServePort);
   }
 
+  // Conditionally create OcQueryCollector (depends on oc-serve)
+  let ocQueryCollector: OcQueryCollector | null = null;
+  if (ocServeEnabled) {
+    ocQueryCollector = new OcQueryCollector(ocServePort);
+  }
+
   // Conditionally create Claude modules
   let claudeHeartbeat: ClaudeHeartbeat | null = null;
   let claudeSource: ClaudeSource | null = null;
@@ -157,6 +164,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   // GET /api/queries?limit=50
   app.get<{ Querystring: { limit?: string } }>('/api/queries', async (request) => {
     const limit = parseLimit(request.query.limit);
+    if (ocQueryCollector) {
+      const queries = await ocQueryCollector.collectQueries(limit);
+      const response: QueriesResponse = { queries };
+      return response;
+    }
+    // fallback: queries.jsonl (Claude Code source)
     const filePath = join(config.historyDir, 'queries.jsonl');
     const reader = new JsonlReader<Record<string, unknown>>(filePath);
     const queries = await reader.tailLines(limit);

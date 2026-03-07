@@ -28,7 +28,7 @@ export interface CardsResponse {
 }
 
 export interface QueriesResponse {
-  queries: Record<string, unknown>[];
+  queries: Record<string, unknown>[] | import('./oc-query-collector.js').QueryEntry[];
 }
 
 export interface TokenRequest {
