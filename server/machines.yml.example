@@ -1,0 +1,27 @@
+# Session Dashboard - Machine Configuration
+#
+# Each machine entry corresponds to a dashboard-agent running on a remote (or local) machine.
+# The dashboard server polls these agents to aggregate session data.
+#
+# Required fields:
+#   id      - Unique machine identifier (alphanumeric + hyphens)
+#   alias   - Human-readable display name
+#   host    - Agent hostname or IP (use host.docker.internal for local agent when running in Docker)
+#   port    - Agent port (default: 3098)
+#   apiKey  - Shared secret for Bearer authentication (must match agent's API_KEY)
+#   source  - Data source type: opencode | claude-code | both
+
+machines:
+  - id: macbook
+    alias: MacBook Pro
+    host: 192.168.0.63        # LAN IP of the MacBook
+    port: 3101
+    apiKey: your-macbook-agent-key
+    source: both
+
+  - id: workstation-local
+    alias: Workstation
+    host: host.docker.internal  # Docker bridge → host machine
+    port: 3100
+    apiKey: your-workstation-agent-key
+    source: opencode

@@ -1,0 +1,20 @@
+{
+  "name": "dashboard-tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.tsx",
+    "dev": "bun --watch src/index.tsx",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "ink": "^5.0.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.8.0"
+  }
+}

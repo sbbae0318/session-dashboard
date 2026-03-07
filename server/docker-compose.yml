@@ -1,0 +1,21 @@
+services:
+  session-dashboard:
+    build: .
+    container_name: session-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3097}:3097"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./machines.yml:/app/machines.yml:ro
+    env_file:
+      - .env
+    environment:
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-3097}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3097/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
