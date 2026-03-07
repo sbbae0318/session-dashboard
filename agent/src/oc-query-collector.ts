@@ -36,12 +36,19 @@ export interface QueryEntry {
 
 const QUERY_MAX_LENGTH = 2000;
 
+// output limit과 분리된 내부 세션 fetch 한도
+// oc-serve에 200+ 세션이 있을 때 활성 세션이 누락되지 않도록 충분히 크게
+const INTERNAL_SESSION_FETCH_LIMIT = 500;
+
 export class OcQueryCollector {
   private readonly ocServePort: number;
 
 
 
-  constructor(ocServePort: number) {
+  constructor(
+    ocServePort: number,
+    private readonly getExtraSessionIds?: () => string[],
+  ) {
     this.ocServePort = ocServePort;
   }
 
@@ -52,13 +59,33 @@ export class OcQueryCollector {
   async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
     let sessions: OcServeSession[];
     try {
-      const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${limit}`;
+      const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
       const data = await fetchJson(url, {}, 3000);
       if (!Array.isArray(data)) return [];
       sessions = data as OcServeSession[];
     } catch {
       console.warn('[oc-query-collector] oc-serve unreachable, returning empty');
       return [];
+    }
+
+    // 콜백으로 보완 세션 ID 가져오기 (SessionCache 등 외부 소스)
+    const extraIds = this.getExtraSessionIds?.() ?? [];
+    const existingIds = new Set(sessions.map((s) => s.id));
+    const missingIds = extraIds.filter((id) => !existingIds.has(id));
+
+    const supplementResults = await Promise.allSettled(
+      missingIds.map((id) =>
+        fetchJson(
+          `http://127.0.0.1:${this.ocServePort}/session/${id}`,
+          {},
+          3000,
+        ),
+      ),
+    );
+    for (const result of supplementResults) {
+      if (result.status === 'fulfilled' && result.value && typeof result.value === 'object') {
+        sessions.push(result.value as OcServeSession);
+      }
     }
 
     // parentID가 있는 세션 = 서브에이전트/툴 생성 세션 → 제외
