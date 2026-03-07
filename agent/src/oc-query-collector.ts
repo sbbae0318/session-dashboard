@@ -37,8 +37,8 @@ const QUERY_MAX_LENGTH = 2000;
 
 export class OcQueryCollector {
   private readonly ocServePort: number;
-  /** 세션별 마지막으로 처리한 메시지 수 캐시 (incremental 용) */
-  private lastSeenMessageCount: Map<string, number> = new Map();
+
+
 
   constructor(ocServePort: number) {
     this.ocServePort = ocServePort;
@@ -84,11 +84,11 @@ export class OcQueryCollector {
     if (!Array.isArray(data)) return [];
 
     const messages = data as OcServeMessage[];
-    const previousCount = this.lastSeenMessageCount.get(session.id) ?? 0;
+    // 모든 메시지 처리 (incremental 제거 - 서버가 전체 목록을 기대함)
 
-    // incremental: 이전에 처리한 메시지 이후의 것만 처리
-    const newMessages = messages.slice(previousCount);
-    this.lastSeenMessageCount.set(session.id, messages.length);
+
+    const newMessages = messages;
+
 
     const entries: QueryEntry[] = [];
     const background = isBackgroundSession(session.title);

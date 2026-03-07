@@ -132,7 +132,7 @@ describe('OcQueryCollector', () => {
     expect(entries[0].query).toHaveLength(2000);
   });
 
-  it('incremental: 같은 세션 두 번 호출 시 새 메시지만 추가', async () => {
+  it('incremental 제거: 같은 세션 두 번 호출 시 전체 메시지 반환 (서버가 중복 제거)', async () => {
     const messages = [
       makeMessage('user', 'first question'),
     ];
@@ -152,10 +152,11 @@ describe('OcQueryCollector', () => {
     // 새 메시지 추가
     messages.push(makeMessage('user', 'second question'));
 
-    // 두 번째 호출 → 새 메시지만 반환
+    // 두 번째 호출 → 전체 메시지 반환 (서버가 중복 제거 담당)
     const second = await collector.collectQueries();
-    expect(second).toHaveLength(1);
-    expect(second[0].query).toBe('second question');
+    expect(second).toHaveLength(2);
+    expect(second.map(q => q.query)).toContain('first question');
+    expect(second.map(q => q.query)).toContain('second question');
   });
 
   it('개별 세션 실패 격리: 하나 실패해도 나머지 수집', async () => {
