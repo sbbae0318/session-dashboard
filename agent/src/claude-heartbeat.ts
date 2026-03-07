@@ -1,6 +1,6 @@
 
 import { watch, type FSWatcher } from 'node:fs';
-import { readdir, readFile, mkdir } from 'node:fs/promises';
+import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -34,6 +34,7 @@ export class ClaudeHeartbeat {
   private readonly heartbeatsDir: string;
   private readonly claudeProjectsDir: string;
   private watcher: FSWatcher | null = null;
+  private projectsWatcher: FSWatcher | null = null;
   private sessions: Map<string, ClaudeSessionInfo> = new Map();
   private evictionInterval: NodeJS.Timeout | null = null;
 
@@ -47,6 +48,7 @@ export class ClaudeHeartbeat {
   start(): void {
     void this.initialScan();
     this.startWatcher();
+    this.startProjectsWatcher();
     this.evictionInterval = setInterval(
       () => this.evictStale(),
       EVICTION_INTERVAL_MS,
@@ -57,6 +59,10 @@ export class ClaudeHeartbeat {
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;
+    }
+    if (this.projectsWatcher) {
+      this.projectsWatcher.close();
+      this.projectsWatcher = null;
     }
     if (this.evictionInterval) {
       clearInterval(this.evictionInterval);
@@ -83,6 +89,8 @@ export class ClaudeHeartbeat {
     } catch {
       // Directory doesn't exist yet — silently ignore
     }
+    // Also scan projects directory for active sessions
+    await this.scanProjectsForActiveSessions();
   }
 
   private async scanDirectory(): Promise<void> {
@@ -191,6 +199,122 @@ export class ClaudeHeartbeat {
       return 'busy';
     } catch {
       return 'busy';
+    }
+  }
+
+  /**
+   * ~/.claude/projects/ 디렉토리를 스캔하여 최근 수정된 JSONL 파일로 활성 세션 감지.
+   * heartbeats 디렉토리가 비어있을 때 폴백으로 동작.
+   */
+  private async scanProjectsForActiveSessions(): Promise<void> {
+    try {
+      const projectDirs = await readdir(this.claudeProjectsDir);
+      const now = Date.now();
+      const activeSessionIds = new Set<string>();
+
+      for (const encodedDir of projectDirs) {
+        const dirPath = join(this.claudeProjectsDir, encodedDir);
+        try {
+          const files = await readdir(dirPath);
+          for (const file of files) {
+            if (!file.endsWith('.jsonl')) continue;
+            const filePath = join(dirPath, file);
+            try {
+              const fileStat = await statFile(filePath);
+              if (now - fileStat.mtimeMs > STALE_TTL_MS) continue;
+
+              const sessionId = file.replace('.jsonl', '');
+              activeSessionIds.add(sessionId);
+
+              // heartbeat 파일로 이미 추적 중인 세션은 건드리지 않음
+              if (this.sessions.has(sessionId)) continue;
+
+              const status = await this.detectStatusFromFile(filePath);
+              this.sessions.set(sessionId, {
+                sessionId,
+                pid: 0,
+                cwd: this.decodePath(encodedDir),
+                project: encodedDir,
+                startTime: fileStat.birthtimeMs,
+                lastHeartbeat: fileStat.mtimeMs,
+                source: 'claude-code',
+                status,
+              });
+            } catch {
+              continue;
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      // 프로젝트 스캔으로 추가된 세션 중 더 이상 활성이 아닌 것 제거
+      // (pid === 0 인 세션 = 프로젝트 스캔으로 추가된 세션)
+      for (const [sessionId, session] of this.sessions) {
+        if (session.pid === 0 && !activeSessionIds.has(sessionId)) {
+          this.sessions.delete(sessionId);
+        }
+      }
+    } catch {
+      // claudeProjectsDir doesn't exist — silently ignore
+    }
+  }
+
+  /** JSONL 파일 경로를 직접 받아 상태 감지 */
+  private async detectStatusFromFile(filePath: string): Promise<'busy' | 'idle'> {
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      const lines = content.trimEnd().split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+          if (entry.type === 'user') return 'busy';
+          if (entry.type === 'assistant') {
+            const msg = entry.message as Record<string, unknown> | undefined;
+            const msgContent = msg?.content;
+            if (
+              Array.isArray(msgContent) &&
+              msgContent.some(
+                (c: Record<string, unknown>) => c.type === 'tool_use',
+              )
+            ) {
+              return 'busy';
+            }
+            return 'idle';
+          }
+        } catch {
+          continue;
+        }
+      }
+      return 'busy';
+    } catch {
+      return 'busy';
+    }
+  }
+
+  /** -Users-sbbae-project-foo → /Users/sbbae/project/foo (best-effort) */
+  private decodePath(encodedDir: string): string {
+    return encodedDir.replace(/^-/, '/').replace(/-/g, '/');
+  }
+
+  private startProjectsWatcher(): void {
+    try {
+      this.projectsWatcher = watch(
+        this.claudeProjectsDir,
+        { recursive: true },
+        (_eventType, _filename) => {
+          void this.scanProjectsForActiveSessions();
+        },
+      );
+      this.projectsWatcher.on('error', () => {
+        if (this.projectsWatcher) {
+          this.projectsWatcher.close();
+          this.projectsWatcher = null;
+        }
+      });
+    } catch {
+      // claudeProjectsDir doesn't exist — silently ignore
     }
   }
 
