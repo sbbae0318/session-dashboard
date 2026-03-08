@@ -21,6 +21,40 @@ session-dashboard server (Docker, :3097)
 The **server** polls each **agent** for session data and presents a unified web UI.
 Each **agent** runs on its machine, exposing local session history via authenticated HTTP API.
 
+## Prerequisites
+
+| Component | Requirement |
+|-----------|-------------|
+| Node.js | 18+ |
+| npm | (bundled with Node.js) |
+| Docker | Required for server only |
+
+## Quick Start
+
+### Option A: Unified Install (Recommended)
+
+```bash
+./install/install.sh
+```
+
+The installer auto-detects your data source (`~/.opencode/history` or `~/.claude/projects`),
+generates an API key, configures `agent/.env` and `server/machines.yml`, then installs both
+agent and server in one shot. Re-running preserves your existing API key.
+
+```bash
+./install/install.sh --agent-only    # Agent only (no Docker server)
+./install/install.sh --server-only   # Server only (skip agent)
+./install/install.sh --dry-run       # Preview detection results, no changes
+```
+
+After install, open: `http://localhost:3097`
+
+For remote machines, edit `server/machines.yml` manually to add additional agents.
+
+### Option B: Manual Setup
+
+See [Advanced Setup](#advanced-setup) below.
+
 ## Repository Structure
 
 ```
@@ -29,39 +63,11 @@ session-dashboard/
 ├── agent/           # Data collection agent (Node.js, Fastify)
 ├── tui/             # Terminal UI client (Bun, Ink/React)
 ├── install/
+│   ├── install.sh   # Unified installer (auto-detect + configure + install)
 │   ├── server.sh    # Server install/manage (Docker compose)
 │   └── agent.sh     # Agent install/manage (nohup)
 ├── docs/            # Architecture & ops documentation
 └── README.md
-```
-
-## Quick Start
-
-### 1. Agent Setup (on each machine)
-
-```bash
-cd agent
-cp .env.example .env
-# Edit .env: set API_KEY
-
-./install/agent.sh
-```
-
-### 2. Server Setup (on the monitoring host)
-
-```bash
-cd server
-cp .env.example .env
-cp machines.yml.example machines.yml
-# Edit machines.yml: configure your machines
-
-./install/server.sh
-```
-
-### 3. Open Dashboard
-
-```
-http://localhost:3097
 ```
 
 ## Configuration
@@ -88,6 +94,7 @@ machines:
 | `API_KEY` | (required) | Shared secret for Bearer auth |
 | `OC_SERVE_PORT` | `4096` | Local oc-serve port |
 | `HISTORY_DIR` | `~/.opencode/history` | Path to OpenCode history |
+| `CLAUDE_HISTORY_DIR` | `~/.claude` | Claude Code history path (when SOURCE=claude-code) |
 | `SOURCE` | `opencode` | Data source: opencode, claude-code, both |
 
 ### Server .env
@@ -95,6 +102,7 @@ machines:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DASHBOARD_PORT` | `3097` | Dashboard web UI port |
+| `MACHINES_CONFIG` | `/app/machines.yml` | Path to machines config (Docker internal) |
 
 ## Management
 
@@ -103,6 +111,8 @@ machines:
 ```bash
 ./install/server.sh              # Install (build + start)
 ./install/server.sh --status     # Show status
+./install/server.sh --test       # Test health + machine connectivity
+./install/server.sh --start      # Start container
 ./install/server.sh --logs       # Tail logs
 ./install/server.sh --restart    # Restart
 ./install/server.sh --stop       # Stop
@@ -114,9 +124,34 @@ machines:
 ```bash
 ./install/agent.sh               # Install (npm install + build + start)
 ./install/agent.sh --status      # Show status
+./install/agent.sh --start       # Start agent
+./install/agent.sh --logs        # Show log info
 ./install/agent.sh --restart     # Restart
 ./install/agent.sh --stop        # Stop
 ./install/agent.sh --uninstall   # Remove
+```
+
+## Advanced Setup
+
+Manual per-component setup, run from repo root:
+
+### Agent (on each machine)
+
+```bash
+cp agent/.env.example agent/.env
+# Edit agent/.env: set API_KEY, SOURCE, HISTORY_DIR
+
+./install/agent.sh
+```
+
+### Server (on the monitoring host)
+
+```bash
+cp server/.env.example server/.env
+cp server/machines.yml.example server/machines.yml
+# Edit server/machines.yml: configure your machines
+
+./install/server.sh
 ```
 
 ## Development
