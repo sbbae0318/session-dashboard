@@ -17,13 +17,14 @@ export interface ClaudeSessionInfo {
   readonly lastHeartbeat: number;
   readonly source: 'claude-code';
   readonly status: 'busy' | 'idle';
+  readonly title: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const STALE_TTL_MS = 120_000;
+const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const EVICTION_INTERVAL_MS = 30_000;
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,15 @@ export class ClaudeHeartbeat {
       const cwd = String(data['cwd'] ?? '');
       const status = await this.detectSessionStatus(sessionId, cwd);
 
+      // title 추출을 위한 conversation path 구성
+      const encodedCwd = cwd.replace(/\//g, '-');
+      const conversationPath = join(
+        this.claudeProjectsDir,
+        encodedCwd,
+        `${sessionId}.jsonl`,
+      );
+      const title = await this.extractTitleFromFile(conversationPath);
+
       const info: ClaudeSessionInfo = {
         sessionId,
         pid: Number(data['pid'] ?? 0),
@@ -144,6 +154,7 @@ export class ClaudeHeartbeat {
         lastHeartbeat: Number(data['lastHeartbeat'] ?? 0),
         source: 'claude-code',
         status,
+        title,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -230,6 +241,7 @@ export class ClaudeHeartbeat {
               if (this.sessions.has(sessionId)) continue;
 
               const status = await this.detectStatusFromFile(filePath);
+              const title = await this.extractTitleFromFile(filePath);
               this.sessions.set(sessionId, {
                 sessionId,
                 pid: 0,
@@ -239,6 +251,7 @@ export class ClaudeHeartbeat {
                 lastHeartbeat: fileStat.mtimeMs,
                 source: 'claude-code',
                 status,
+                title,
               });
             } catch {
               continue;
@@ -290,6 +303,45 @@ export class ClaudeHeartbeat {
       return 'busy';
     } catch {
       return 'busy';
+    }
+  }
+
+  /** JSONL 파일에서 첫 번째 user 메시지의 content를 title로 추출 */
+  private async extractTitleFromFile(
+    filePath: string,
+  ): Promise<string | null> {
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      const lines = content.trimEnd().split('\n');
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as Record<string, unknown>;
+          if (entry.type === 'user') {
+            const msg = entry.message as Record<string, unknown> | undefined;
+            const msgContent = msg?.content;
+            if (typeof msgContent === 'string' && msgContent.trim()) {
+              return msgContent.slice(0, 100).trim();
+            }
+            if (Array.isArray(msgContent)) {
+              for (const part of msgContent) {
+                const p = part as Record<string, unknown>;
+                if (
+                  p.type === 'text' &&
+                  typeof p.text === 'string' &&
+                  p.text.trim()
+                ) {
+                  return (p.text as string).slice(0, 100).trim();
+                }
+              }
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 

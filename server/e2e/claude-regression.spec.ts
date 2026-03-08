@@ -328,14 +328,14 @@ test.describe('Scenario 6: Real-time update', () => {
 
 test.describe('Scenario 7: Stale session excluded', () => {
   test('JSONL file with old mtime is excluded from active sessions', async ({ request }) => {
-    // Write a session, then make it stale (mtime > 120s ago)
+    // Write a session, then make it stale (mtime > 7 days ago)
     const filePath = writeProjectSession(
       TEST_AGENT_HOME,
       '/tmp/testproject',
       'sess-stale-001',
       [{ type: 'user', content: 'Old work' }],
     );
-    makeFileStale(filePath, 180_000); // 3 minutes ago
+    makeFileStale(filePath, 8 * 24 * 60 * 60 * 1000); // 8 days ago (older than STALE_TTL_MS = 7 days)
 
     // Give agent time to scan
     await new Promise((r) => setTimeout(r, 2000));

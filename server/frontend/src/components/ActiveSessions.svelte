@@ -149,7 +149,7 @@
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
                 <span class="status-badge {ds.cssClass}">{ds.label}</span>
-                <span class="session-title">{session.title || "Untitled"}</span>
+                <span class="session-title">{session.title || session.sessionId.slice(0, 8)}</span>
                 <span class="header-badges">
                   <button
                     class="detail-btn"

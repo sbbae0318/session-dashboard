@@ -33,7 +33,7 @@ describe('ClaudeHeartbeat', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    heartbeat = new ClaudeHeartbeat(tmpDir);
+    heartbeat = new ClaudeHeartbeat(tmpDir, join(tmpDir, 'empty-projects'));
   });
 
   afterEach(() => {
@@ -121,14 +121,14 @@ describe('ClaudeHeartbeat', () => {
 
   it('should evict sessions with stale heartbeats', async () => {
     const now = Date.now();
-    // Heartbeat 3 minutes old → stale (TTL is 120s)
+    // Heartbeat 8 days old → stale (TTL is 7 days)
     writeHeartbeat(tmpDir, {
       sessionId: 'ses_stale',
       pid: 10,
       cwd: '/tmp',
       project: 'p',
-      startTime: now - 300_000,
-      lastHeartbeat: now - 180_000,
+      startTime: now - 9 * 24 * 60 * 60 * 1000,
+      lastHeartbeat: now - 8 * 24 * 60 * 60 * 1000,
     });
     // Fresh heartbeat
     writeHeartbeat(tmpDir, {
@@ -198,7 +198,7 @@ describe('ClaudeHeartbeat', () => {
 
   it('should not crash when heartbeats directory does not exist', async () => {
     const noDir = join(tmpDir, 'does-not-exist');
-    const hb = new ClaudeHeartbeat(noDir);
+    const hb = new ClaudeHeartbeat(noDir, join(tmpDir, 'empty-projects'));
 
     // Should not throw
     hb.start();
@@ -453,9 +453,9 @@ describe('ClaudeHeartbeat — project scanning', () => {
     const filePath = join(projectDir, `${sessionId}.jsonl`);
     writeFileSync(filePath, JSON.stringify({ type: 'assistant', message: { content: [] } }) + '\n', 'utf-8');
 
-    // Manually set mtime to 3 minutes ago (older than STALE_TTL_MS = 120s)
+    // Manually set mtime to 8 days ago (older than STALE_TTL_MS = 7 days)
     const { utimesSync } = await import('node:fs');
-    const oldTime = new Date(Date.now() - 180_000);
+    const oldTime = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     utimesSync(filePath, oldTime, oldTime);
 
     const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
@@ -463,6 +463,110 @@ describe('ClaudeHeartbeat — project scanning', () => {
     await new Promise((r) => setTimeout(r, 200));
 
     expect(hb.getActiveSessions()).toHaveLength(0);
+    hb.stop();
+  });
+});
+
+describe('ClaudeHeartbeat — title extraction', () => {
+  let tmpDir: string;
+  let projectsDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    projectsDir = join(tmpDir, 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should extract title from first user message in JSONL', async () => {
+    const sessionId = 'title-test-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-title');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'user', message: { content: 'Fix the login bug' } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Sure!' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.title).toBe('Fix the login bug');
+    hb.stop();
+  });
+
+  it('should extract title from array content with text part', async () => {
+    const sessionId = 'title-array-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-array');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({
+        type: 'user',
+        message: { content: [{ type: 'text', text: 'Deploy to production' }] },
+      }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'OK' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.title).toBe('Deploy to production');
+    hb.stop();
+  });
+
+  it('should return null title when no user message exists', async () => {
+    const sessionId = 'title-none-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-none');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.title).toBeNull();
+    hb.stop();
+  });
+
+  it('should truncate title to 100 characters', async () => {
+    const sessionId = 'title-long-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-long');
+    mkdirSync(projectDir, { recursive: true });
+
+    const longMessage = 'A'.repeat(200);
+    const conversation = [
+      JSON.stringify({ type: 'user', message: { content: longMessage } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.title).toBe('A'.repeat(100));
     hb.stop();
   });
 });
