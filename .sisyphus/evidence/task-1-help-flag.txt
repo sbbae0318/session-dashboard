@@ -1,0 +1,11 @@
+Usage: install/install.sh [--agent-only | --server-only | --dry-run | --help]
+
+Unified installer for session-dashboard (agent + server).
+Auto-detects OpenCode/Claude Code data sources and configures both.
+
+Options:
+  (no args)       Full install: detect, configure, install agent + server
+  --agent-only    Install agent only (skip Docker server)
+  --server-only   Install server only (skip agent)
+  --dry-run       Show detection results, no changes
+  --help, -h      Show this help
