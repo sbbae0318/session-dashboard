@@ -16,6 +16,25 @@ test.describe("Feature: Prompt Click Filtering", () => {
   });
 
   test("clicking a prompt filters by session", async ({ page }) => {
+    // Use API to check if multiple sessions exist with different prompt counts
+    const sessionData = await page.evaluate(async () => {
+      const r = await fetch('/api/queries?limit=100');
+      const body = await r.json() as { queries: Array<{ sessionId: string }> };
+      const queries = body.queries;
+      if (queries.length === 0) return null;
+
+      const firstSessionId = queries[0].sessionId;
+      const firstSessionCount = queries.filter(q => q.sessionId === firstSessionId).length;
+      const totalCount = queries.length;
+
+      return { firstSessionId, firstSessionCount, totalCount };
+    });
+
+    if (!sessionData || sessionData.firstSessionCount >= sessionData.totalCount) {
+      test.skip();
+      return;
+    }
+
     const beforeCount = await page.locator(".prompt-item").count();
     await page.locator(".prompt-item").first().click();
     await page.waitForTimeout(500);
