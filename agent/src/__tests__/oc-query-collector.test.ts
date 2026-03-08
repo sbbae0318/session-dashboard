@@ -49,11 +49,11 @@ describe('OcQueryCollector', () => {
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(1);  // 첫 번째 user 메시지만
+    expect(entries).toHaveLength(1);  // 마지막 user 메시지
     expect(entries[0].sessionId).toBe('s1');
     expect(entries[0].sessionTitle).toBe('my chat');
     expect(entries[0].source).toBe('opencode');
-    expect(entries[0].query).toBe('hello world');
+    expect(entries[0].query).toBe('second question');
   });
 
   it('[analyze-mode] prefix strip: 실제 user content만 추출', async () => {
@@ -162,7 +162,7 @@ describe('OcQueryCollector', () => {
     expect(entries[0].query).toHaveLength(2000);
   });
 
-  it('first-only: 두 번 호출해도 첫 번째 user 메시지만 반환', async () => {
+  it('last-message: 두 번 호출하면 마지막 user 메시지 반환', async () => {
     const messages = [
       makeMessage('user', 'first question'),
     ];
@@ -184,9 +184,9 @@ describe('OcQueryCollector', () => {
 
     // 두 번째 호출 → 전체 메시지 반환 (서버가 중복 제거 담당)
     const second = await collector.collectQueries();
-    expect(second).toHaveLength(1);  // 여전히 첫 번째 메시지만
-    expect(second[0].query).toBe('first question');
-    // 두 번째 메시지는 수집 안 됨 (break 적용)
+    expect(second).toHaveLength(1);  // 마지막 메시지
+    expect(second[0].query).toBe('second question');
+    // 두 번째 메시지(마지막)가 수집됨
   });
 
   it('개별 세션 실패 격리: 하나 실패해도 나머지 수집', async () => {
@@ -326,10 +326,10 @@ describe('OcQueryCollector — per-message timestamp', () => {
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(1);  // 첫 번째 user 메시지만
-    // 첫 번째 메시지('first' at 5000)만 반환
-    expect(entries[0].timestamp).toBe(5000);
-    expect(entries[0].query).toBe('first');
+    expect(entries).toHaveLength(1);  // 마지막 user 메시지
+    // 마지막 메시지('second' at 6000) 반환
+    expect(entries[0].timestamp).toBe(6000);
+    expect(entries[0].query).toBe('second');
   });
 
   it('info.time.created가 없으면 session 타임스탬프로 폴백', async () => {
@@ -382,7 +382,7 @@ describe('OcQueryCollector — per-message timestamp', () => {
   });
 });
 
-describe('OcQueryCollector — first-only collection', () => {
+describe('OcQueryCollector — last-message collection', () => {
   let collector: OcQueryCollector;
 
   beforeEach(() => {
@@ -390,20 +390,20 @@ describe('OcQueryCollector — first-only collection', () => {
     collector = new OcQueryCollector(4321);
   });
 
-  it('세션당 첫 번째 유효 user 메시지만 수집 (중간 응답 제외)', async () => {
+  it('세션당 마지막 유효 user 메시지 수집 (중간 응답 제외)', async () => {
     mockFetchJson.mockImplementation((url: string) => {
       if (url.includes('/session?')) return Promise.resolve([makeSession('s1')]);
       return Promise.resolve([
-        makeMessage('user', '프로젝트 설정해주세요'),    // ← 이것만 수집
+        makeMessage('user', '프로젝트 설정해주세요'),    // ← 건너뜀
         makeMessage('assistant', '...'),
         makeMessage('user', '핵심 질문 다시해주세요'),   // ← 건너뜀
         makeMessage('assistant', '...'),
-        makeMessage('user', '네 좋아요'),               // ← 건너뜀
+        makeMessage('user', '네 좋아요'),               // ← 이것만 수집
       ]);
     });
     const entries = await collector.collectQueries();
     expect(entries).toHaveLength(1);
-    expect(entries[0].query).toBe('프로젝트 설정해주세요');
+    expect(entries[0].query).toBe('네 좋아요');
   });
 
   it('첫 번째 user msg가 system이면 skip, 두 번째 유효 msg 수집', async () => {
@@ -417,5 +417,49 @@ describe('OcQueryCollector — first-only collection', () => {
     const entries = await collector.collectQueries();
     expect(entries).toHaveLength(1);
     expect(entries[0].query).toBe('실제 프롬프트');
+  });
+});
+
+describe('OcQueryCollector — long session latest prompt', () => {
+  let collector: OcQueryCollector;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collector = new OcQueryCollector(4321);
+  });
+
+  it('장기 세션에서 최신(마지막) user 메시지를 수집', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) return Promise.resolve([makeSession('long-sess', 'long running session', 1000)]);
+      return Promise.resolve([
+        makeMessage('user', 'Old first prompt from session start', 1000),
+        makeMessage('assistant', 'response 1'),
+        makeMessage('user', 'Middle prompt after some work', 2000),
+        makeMessage('assistant', 'response 2'),
+        makeMessage('user', 'Recent prompt after hours of work', 3000),
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('Recent prompt after hours of work');
+    expect(entries[0].timestamp).toBe(3000);
+  });
+
+  it('첫 번째 user msg가 system이면 skip, 마지막 유효 msg 수집', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) return Promise.resolve([makeSession('s-sys', 'chat', 1000)]);
+      return Promise.resolve([
+        makeMessage('user', '[SYSTEM DIRECTIVE: run this]'),  // ← null 반환, skip
+        makeMessage('user', '첫 번째 실제 프롬프트'),
+        makeMessage('user', '마지막 실제 프롬프트'),
+      ]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('마지막 실제 프롬프트');
   });
 });

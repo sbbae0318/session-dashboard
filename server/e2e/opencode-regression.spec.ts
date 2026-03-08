@@ -214,3 +214,36 @@ test.describe('Scenario 7: Large file handling', () => {
     ).toBe(50);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scenario 8: Recent prompt visibility (long session)
+// ---------------------------------------------------------------------------
+
+test.describe('Scenario 8: Recent prompt visibility (long session)', () => {
+  test('장기 세션에서 최신 user 메시지가 표시됨 (첫 번째가 아닌 마지막)', async ({ request }) => {
+    const now = Date.now();
+    writeQueriesToPromptStore(TEST_AGENT_HOME, [
+      {
+        query: 'Old first prompt from session start',
+        sessionId: 'oc-long-sess',
+        timestamp: now - 3_600_000,
+      },
+      {
+        query: 'Recent prompt after hours of work',
+        sessionId: 'oc-long-sess',
+        timestamp: now - 1_000,
+      },
+    ]);
+
+    await expect.poll(
+      async () => {
+        const r = await request.get(`${SERVER_URL}/api/queries?limit=50`);
+        const body = await r.json() as { queries?: Array<{ query: string; sessionId: string }> };
+        return (body.queries ?? []).filter((q) => q.sessionId === 'oc-long-sess');
+      },
+      { timeout: 15_000, intervals: [500] },
+    ).toSatisfy((entries: Array<{ query: string }>) =>
+      entries.some((e) => e.query === 'Recent prompt after hours of work'),
+    );
+  });
+});

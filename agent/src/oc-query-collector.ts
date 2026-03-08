@@ -150,7 +150,7 @@ export class OcQueryCollector {
     const newMessages = messages;
 
 
-    const entries: QueryEntry[] = [];
+    let lastEntry: QueryEntry | null = null;
     const background = isBackgroundSession(session.title);
 
     for (let i = 0; i < newMessages.length; i++) {
@@ -176,17 +176,17 @@ export class OcQueryCollector {
         : (rawTime || Date.now());
       const timestamp = msgTime ?? sessionTs;
 
-      entries.push({
+      lastEntry = {
         sessionId: session.id,
         sessionTitle: session.title,
         timestamp,
         query: extracted.slice(0, QUERY_MAX_LENGTH),
         isBackground: background,
         source: 'opencode',
-      });
-      break;  // 첫 번째 유효 user message만 수집 후 중단
+      };
+      // break 제거 — 계속 순회하여 마지막 유효 메시지를 찾음
     }
 
-    return entries;
+    return lastEntry ? [lastEntry] : [];
   }
 }
