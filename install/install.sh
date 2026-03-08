@@ -7,21 +7,23 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ACTION=""
 for arg in "$@"; do
   case "$arg" in
-    --agent-only)  ACTION="agent-only" ;;
-    --server-only) ACTION="server-only" ;;
-    --dry-run)     ACTION="dry-run" ;;
+    --agent-only)    ACTION="agent-only" ;;
+    --server-only)   ACTION="server-only" ;;
+    --oc-serve-only) ACTION="oc-serve-only" ;;
+    --dry-run)       ACTION="dry-run" ;;
     --help|-h)
-      echo "Usage: $0 [--agent-only | --server-only | --dry-run | --help]"
+      echo "Usage: $0 [--agent-only | --server-only | --oc-serve-only | --dry-run | --help]"
       echo ""
       echo "Unified installer for session-dashboard (agent + server)."
       echo "Auto-detects OpenCode/Claude Code data sources and configures both."
       echo ""
       echo "Options:"
-      echo "  (no args)       Full install: detect, configure, install agent + server"
-      echo "  --agent-only    Install agent only (skip Docker server)"
-      echo "  --server-only   Install server only (skip agent)"
-      echo "  --dry-run       Show detection results, no changes"
-      echo "  --help, -h      Show this help"
+      echo "  (no args)         Full install: detect, configure, install oc-serve + agent + server"
+      echo "  --agent-only      Install oc-serve + agent only (skip Docker server)"
+      echo "  --server-only     Install server only (skip oc-serve + agent)"
+      echo "  --oc-serve-only   Install oc-serve only (skip agent + server)"
+      echo "  --dry-run         Show detection results, no changes"
+      echo "  --help, -h        Show this help"
       exit 0
       ;;
   esac
@@ -64,12 +66,20 @@ check_prerequisites() {
     echo "❌ npm is required"; exit 1
   fi
   echo "✓ npm $(npm -v)"
-  if [[ "$ACTION" != "agent-only" ]]; then
+  if [[ "$ACTION" != "agent-only" && "$ACTION" != "oc-serve-only" ]]; then
     if ! command -v docker >/dev/null 2>&1; then
       echo "❌ Docker is required for server"
       echo "   Install: https://docs.docker.com/get-docker/"; exit 1
     fi
     echo "✓ Docker $(docker --version | cut -d' ' -f3)"
+  fi
+  if [[ "$ACTION" != "server-only" ]]; then
+    if command -v opencode >/dev/null 2>&1; then
+      echo "✓ opencode CLI found"
+    else
+      echo "⚠ opencode CLI not found (needed for oc-serve)"
+      echo "   Install: https://opencode.ai"
+    fi
   fi
 }
 
@@ -139,6 +149,8 @@ do_dry_run() {
   echo "  - id: local, host: host.docker.internal, port: 3098"
   echo "    apiKey: $api_key, source: $source"
   echo ""
+  echo "oc-serve would start on port 4096"
+  echo ""
   echo "No changes made (dry run)."
 }
 
@@ -162,27 +174,33 @@ do_install() {
   fi
   echo ""
   echo "─── Step 3: Configure ───"
-  if [[ "$ACTION" != "server-only" ]]; then
+  if [[ "$ACTION" != "server-only" && "$ACTION" != "oc-serve-only" ]]; then
     prepare_agent_config "$source" "$api_key"
   fi
-  if [[ "$ACTION" != "agent-only" ]]; then
+  if [[ "$ACTION" != "agent-only" && "$ACTION" != "oc-serve-only" ]]; then
     prepare_server_config "$source" "$api_key"
   fi
   if [[ "$ACTION" != "server-only" ]]; then
     echo ""
-    echo "─── Step 4: Install agent ───"
+    echo "─── Step 4: Start oc-serve ───"
+    bash "$SCRIPT_DIR/oc-serve.sh"
+  fi
+  if [[ "$ACTION" != "server-only" && "$ACTION" != "oc-serve-only" ]]; then
+    echo ""
+    echo "─── Step 5: Install agent ───"
     bash "$SCRIPT_DIR/agent.sh"
   fi
-  if [[ "$ACTION" != "agent-only" ]]; then
+  if [[ "$ACTION" != "agent-only" && "$ACTION" != "oc-serve-only" ]]; then
     echo ""
-    echo "─── Step 5: Install server ───"
+    echo "─── Step 6: Install server ───"
     bash "$SCRIPT_DIR/server.sh"
   fi
   echo ""
   echo "─── Summary ───"
   echo "  Source: $source | API Key: $api_key"
-  if [[ "$ACTION" != "server-only" ]]; then echo "  Agent:  http://127.0.0.1:3098"; fi
-  if [[ "$ACTION" != "agent-only" ]]; then echo "  Server: http://127.0.0.1:3097"; fi
+  if [[ "$ACTION" != "server-only" ]]; then echo "  oc-serve: http://127.0.0.1:4096"; fi
+  if [[ "$ACTION" != "server-only" && "$ACTION" != "oc-serve-only" ]]; then echo "  Agent:    http://127.0.0.1:3098"; fi
+  if [[ "$ACTION" != "agent-only" && "$ACTION" != "oc-serve-only" ]]; then echo "  Server:   http://127.0.0.1:3097"; fi
 }
 
 # ── Main ──

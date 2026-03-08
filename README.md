@@ -63,6 +63,7 @@ The **TUI** connects to the dashboard server from the terminal for real-time ses
 | Node.js | 18+ |
 | npm | (bundled with Node.js) |
 | Docker | Required for server only |
+| OpenCode CLI | Required for oc-serve (headless server) |
 | Bun | TUI only (optional) |
 
 ## Quick Start
@@ -78,9 +79,10 @@ generates an API key, configures `agent/.env` and `server/machines.yml`, then in
 agent and server in one shot. Re-running preserves your existing API key.
 
 ```bash
-./install/install.sh --agent-only    # Agent only (no Docker server)
-./install/install.sh --server-only   # Server only (skip agent)
-./install/install.sh --dry-run       # Preview detection results, no changes
+./install/install.sh --agent-only      # Agent + oc-serve only (no Docker server)
+./install/install.sh --server-only     # Server only (skip oc-serve + agent)
+./install/install.sh --oc-serve-only   # oc-serve only (skip agent + server)
+./install/install.sh --dry-run         # Preview detection results, no changes
 ```
 
 After install, open: `http://localhost:3097`
@@ -101,7 +103,8 @@ session-dashboard/
 ├── install/
 │   ├── install.sh   # Unified installer (auto-detect + configure + install)
 │   ├── server.sh    # Server install/manage (Docker Compose)
-│   └── agent.sh     # Agent install/manage (nohup)
+│   ├── agent.sh     # Agent install/manage (nohup)
+│   └── oc-serve.sh  # oc-serve (OpenCode headless) install/manage
 ├── docs/            # Architecture & ops documentation
 └── README.md
 ```
@@ -169,6 +172,18 @@ machines:
 ./install/agent.sh --uninstall   # Remove
 ```
 
+### oc-serve (OpenCode Headless)
+
+```bash
+./install/oc-serve.sh               # Install (check opencode + start)
+./install/oc-serve.sh --status      # Show status (PID + health check)
+./install/oc-serve.sh --start       # Start oc-serve
+./install/oc-serve.sh --logs        # Show recent logs (tail -50)
+./install/oc-serve.sh --restart     # Restart
+./install/oc-serve.sh --stop        # Stop
+./install/oc-serve.sh --uninstall   # Remove
+```
+
 ## Advanced Setup
 
 Manual per-component setup, run from repo root:
@@ -181,6 +196,8 @@ cp agent/.env.example agent/.env
 
 ./install/agent.sh
 ```
+
+> Start oc-serve first if not already running: `./install/oc-serve.sh`
 
 ### Server (on the monitoring host)
 
