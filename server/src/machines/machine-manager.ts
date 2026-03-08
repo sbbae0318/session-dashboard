@@ -23,6 +23,10 @@ export interface CachedSessionDetail {
   readonly currentTool: string | null;
   readonly directory: string | null;
   readonly updatedAt: number;
+  /** Claude Code only: last assistant response timestamp (ms) */
+  readonly lastResponseTime?: number | null;
+  /** Claude Code only: JSONL file mtime (ms) */
+  readonly lastFileModified?: number | null;
 }
 
 export class MachineManager {
@@ -407,15 +411,17 @@ export class MachineManager {
          const sessionId = String(session.sessionId ?? '');
            const sessionStatus = String(session.status ?? 'busy');
          if (sessionId) {
-           merged[sessionId] = {
-             status: sessionStatus === 'idle' ? 'idle' : 'busy',
-             lastPrompt: null,
-             lastPromptTime: (session.startTime as number) ?? Date.now(),
-             currentTool: null,
-             directory: (session.cwd as string) ?? null,
-             updatedAt: (session.lastHeartbeat as number) ?? Date.now(),
-             machineId: machine.id,
-           };
+          merged[sessionId] = {
+            status: sessionStatus === 'idle' ? 'idle' : 'busy',
+            lastPrompt: null,
+            lastPromptTime: (session.startTime as number) ?? Date.now(),
+            currentTool: null,
+            directory: (session.cwd as string) ?? null,
+            updatedAt: (session.lastHeartbeat as number) ?? Date.now(),
+            lastResponseTime: (session.lastResponseTime as number) ?? null,
+            lastFileModified: (session.lastFileModified as number) ?? null,
+            machineId: machine.id,
+          };
          }
        }
      }
