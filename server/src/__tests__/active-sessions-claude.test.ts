@@ -342,4 +342,43 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
       expect(sessions).toHaveLength(0);
     });
   });
+
+  describe('timestamp fields', () => {
+    it('should set startTime from Claude session startTime field', async () => {
+      setupUrlRouter({
+        'http://10.0.0.2:3100/api/claude/sessions': JSON.stringify({
+          sessions: [{
+            sessionId: 'ts-sess-1',
+            cwd: '/project',
+            startTime: 1000000,
+            lastHeartbeat: 2000000,
+          }],
+        }),
+      });
+
+      const sessions = await pollAndCapture([makeClaudeMachine()]);
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].startTime).toBe(1000000);
+    });
+
+    it('should set lastActivityTime from Claude session lastHeartbeat field', async () => {
+      setupUrlRouter({
+        'http://10.0.0.2:3100/api/claude/sessions': JSON.stringify({
+          sessions: [{
+            sessionId: 'ts-sess-2',
+            cwd: '/project',
+            startTime: 1000000,
+            lastHeartbeat: 2000000,
+          }],
+        }),
+      });
+
+      const sessions = await pollAndCapture([makeClaudeMachine()]);
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].lastActivityTime).toBe(2000000);
+    });
+  });
 });
+
