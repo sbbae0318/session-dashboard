@@ -19,8 +19,8 @@ describe('active-directories', () => {
 
   describe('parseAttachDir', () => {
     it('should extract --dir from opencode attach line', () => {
-      const line = 'sbbae 81264 7.5 1.8 485474128 296192 s007 S+ 수12AM 210:57.16 opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/project/vibescrolling';
-      expect(parseAttachDir(line)).toBe('/Users/sbbae/project/vibescrolling');
+      const line = 'user 81264 7.5 1.8 485474128 296192 s007 S+ 수12AM 210:57.16 opencode attach http://127.0.0.1:4096 --dir /Users/user/project/my-app';
+      expect(parseAttachDir(line)).toBe('/Users/user/project/my-app');
     });
 
     it('should extract --dir from minimal attach line', () => {
@@ -39,7 +39,7 @@ describe('active-directories', () => {
     });
 
     it('should handle opencode run processes (not attach)', () => {
-      const line = '/Users/sbbae/.opencode/bin/opencode run /path/to/server.js --stdio';
+      const line = '/Users/user/.opencode/bin/opencode run /path/to/server.js --stdio';
       expect(parseAttachDir(line)).toBeNull();
     });
   });
@@ -48,11 +48,11 @@ describe('active-directories', () => {
     it('should return unique directories from ps output', async () => {
       const psOutput = [
         'USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND',
-        'sbbae 81264 7.5 1.8 485474128 296192 s007 S+ 수12AM 210:57.16 opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/project/vibescrolling',
-        'sbbae 61267 24.5 3.4 486851904 567744 s014 S+ 수03AM 544:56.31 opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/project/bae-settings',
-        'sbbae 88309 12.1 2.6 485834672 428416 s018 S+ 토10AM 239:58.20 opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/mule',
-        'sbbae 61239 39.1 5.0 487108224 837504 s006 S+ 수03AM 150:14.76 opencode serve --port 4096',
-        'sbbae 19072 0.0 1.1 485061456 176464 s038 S+ 8:13AM 0:03.77 claude --dangerously-skip-permissions',
+        'user 81264 7.5 1.8 485474128 296192 s007 S+ 수12AM 210:57.16 opencode attach http://127.0.0.1:4096 --dir /Users/user/project/my-app',
+        'user 61267 24.5 3.4 486851904 567744 s014 S+ 수03AM 544:56.31 opencode attach http://127.0.0.1:4096 --dir /Users/user/project/web-server',
+        'user 88309 12.1 2.6 485834672 428416 s018 S+ 토10AM 239:58.20 opencode attach http://127.0.0.1:4096 --dir /Users/user/mule',
+        'user 61239 39.1 5.0 487108224 837504 s006 S+ 수03AM 150:14.76 opencode serve --port 4096',
+        'user 19072 0.0 1.1 485061456 176464 s038 S+ 8:13AM 0:03.77 claude --dangerously-skip-permissions',
       ].join('\n');
 
       mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
@@ -61,16 +61,16 @@ describe('active-directories', () => {
 
       const dirs = await detectActiveDirectoriesUncached();
       expect(dirs).toEqual([
-        '/Users/sbbae/mule',
-        '/Users/sbbae/project/bae-settings',
-        '/Users/sbbae/project/vibescrolling',
+        '/Users/user/mule',
+        '/Users/user/project/web-server',
+        '/Users/user/project/my-app',
       ]);
     });
 
     it('should deduplicate same directory from multiple processes', async () => {
       const psOutput = [
-        'opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/project/foo',
-        'opencode attach http://127.0.0.1:4096 --dir /Users/sbbae/project/foo',
+        'opencode attach http://127.0.0.1:4096 --dir /Users/user/project/foo',
+        'opencode attach http://127.0.0.1:4096 --dir /Users/user/project/foo',
       ].join('\n');
 
       mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
@@ -78,7 +78,7 @@ describe('active-directories', () => {
       });
 
       const dirs = await detectActiveDirectoriesUncached();
-      expect(dirs).toEqual(['/Users/sbbae/project/foo']);
+      expect(dirs).toEqual(['/Users/user/project/foo']);
     });
 
     it('should filter out root directory', async () => {

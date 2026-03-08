@@ -400,7 +400,7 @@ describe('ClaudeHeartbeat — project scanning', () => {
 
   it('should detect active sessions from recently modified project JSONL files', async () => {
     const sessionId = 'abc123-def456';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-foo');
+    const projectDir = join(projectsDir, '-Users-user-project-foo');
     mkdirSync(projectDir, { recursive: true });
 
     // Write a conversation JSONL (recently modified = active)
@@ -427,7 +427,7 @@ describe('ClaudeHeartbeat — project scanning', () => {
 
   it('should detect busy status from project JSONL when last entry is user message', async () => {
     const sessionId = 'busy-session-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-bar');
+    const projectDir = join(projectsDir, '-Users-user-project-bar');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -448,7 +448,7 @@ describe('ClaudeHeartbeat — project scanning', () => {
 
   it('should not detect sessions from project JSONL files older than STALE_TTL_MS', async () => {
     const sessionId = 'old-session-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-old');
+    const projectDir = join(projectsDir, '-Users-user-project-old');
     mkdirSync(projectDir, { recursive: true });
 
     const filePath = join(projectDir, `${sessionId}.jsonl`);
@@ -486,7 +486,7 @@ describe('ClaudeHeartbeat — title extraction', () => {
 
   it('should extract title from first user message in JSONL', async () => {
     const sessionId = 'title-test-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-title');
+    const projectDir = join(projectsDir, '-Users-user-project-title');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -508,7 +508,7 @@ describe('ClaudeHeartbeat — title extraction', () => {
 
   it('should extract title from array content with text part', async () => {
     const sessionId = 'title-array-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-array');
+    const projectDir = join(projectsDir, '-Users-user-project-array');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -532,7 +532,7 @@ describe('ClaudeHeartbeat — title extraction', () => {
 
   it('should return null title when no user message exists', async () => {
     const sessionId = 'title-none-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-none');
+    const projectDir = join(projectsDir, '-Users-user-project-none');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -552,7 +552,7 @@ describe('ClaudeHeartbeat — title extraction', () => {
 
   it('should truncate title to 100 characters', async () => {
     const sessionId = 'title-long-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-long');
+    const projectDir = join(projectsDir, '-Users-user-project-long');
     mkdirSync(projectDir, { recursive: true });
 
     const longMessage = 'A'.repeat(200);
@@ -590,7 +590,7 @@ describe('ClaudeHeartbeat — lastPromptTime extraction', () => {
 
   it('should extract lastPromptTime from last user entry timestamp in ms', async () => {
     const sessionId = 'prompt-time-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-pt');
+    const projectDir = join(projectsDir, '-Users-user-project-pt');
     mkdirSync(projectDir, { recursive: true });
 
     const ts1 = '2026-03-08T16:08:50.930Z';
@@ -616,7 +616,7 @@ describe('ClaudeHeartbeat — lastPromptTime extraction', () => {
 
   it('should return null lastPromptTime when no user entry exists', async () => {
     const sessionId = 'prompt-time-none';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-ptn');
+    const projectDir = join(projectsDir, '-Users-user-project-ptn');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -636,7 +636,7 @@ describe('ClaudeHeartbeat — lastPromptTime extraction', () => {
 
   it('should return null lastPromptTime when user entry has no timestamp field', async () => {
     const sessionId = 'prompt-time-nots';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-ptnt');
+    const projectDir = join(projectsDir, '-Users-user-project-ptnt');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -755,7 +755,7 @@ describe('ClaudeHeartbeat — lastResponseTime extraction', () => {
 
   it('should extract lastResponseTime from last assistant entry timestamp', async () => {
     const sessionId = 'resp-time-001';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-rt');
+    const projectDir = join(projectsDir, '-Users-user-project-rt');
     mkdirSync(projectDir, { recursive: true });
 
     const assistantTs = '2026-03-08T15:35:09.082Z';
@@ -779,7 +779,7 @@ describe('ClaudeHeartbeat — lastResponseTime extraction', () => {
 
   it('should return null when no assistant entry exists', async () => {
     const sessionId = 'resp-time-none';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-rtn');
+    const projectDir = join(projectsDir, '-Users-user-project-rtn');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [
@@ -799,7 +799,7 @@ describe('ClaudeHeartbeat — lastResponseTime extraction', () => {
 
   it('should return null when assistant entry has no timestamp', async () => {
     const sessionId = 'resp-time-nots';
-    const projectDir = join(projectsDir, '-Users-sbbae-project-rtnt');
+    const projectDir = join(projectsDir, '-Users-user-project-rtnt');
     mkdirSync(projectDir, { recursive: true });
 
     const conversation = [

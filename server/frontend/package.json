@@ -1,5 +1,5 @@
 {
-  "name": "@bae-settings/session-dashboard-frontend",
+  "name": "@session-dashboard/session-dashboard-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",

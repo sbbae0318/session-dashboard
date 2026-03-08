@@ -232,4 +232,4 @@ bun test
 
 ## 라이선스
 
-Private repository.
+MIT License. [LICENSE](LICENSE) 참조.

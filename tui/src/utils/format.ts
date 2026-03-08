@@ -116,7 +116,7 @@ export function statusBadge(apiStatus: string | null): string {
 
 /**
  * Extract project name from cwd path (basename).
- * Example: '/Users/sbbae/project/bae-settings' → 'bae-settings'
+ * Example: '/Users/john/project/my-app' → 'my-app'
  */
 export function projectName(cwd: string | null): string {
   if (!cwd) return '';

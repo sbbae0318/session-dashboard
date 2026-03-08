@@ -1,5 +1,5 @@
 {
-  "name": "@bae-settings/session-dashboard",
+  "name": "@session-dashboard/session-dashboard",
   "version": "1.0.0",
   "description": "Web-based session monitoring dashboard daemon",
   "type": "module",

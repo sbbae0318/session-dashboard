@@ -192,7 +192,7 @@ export class ClaudeHeartbeat {
     cwd: string,
   ): Promise<'busy' | 'idle'> {
     try {
-      // Encode cwd: /Users/sbbae/project/foo → -Users-sbbae-project-foo
+      // Encode cwd: /Users/john/project/foo → -Users-john-project-foo
       const encodedCwd = cwd.replace(/\//g, '-');
       const conversationPath = join(
         this.claudeProjectsDir,
@@ -422,7 +422,7 @@ export class ClaudeHeartbeat {
     }
   }
 
-  /** -Users-sbbae-project-foo → /Users/sbbae/project/foo (best-effort) */
+  /** -Users-john-project-foo → /Users/john/project/foo (best-effort) */
   private decodePath(encodedDir: string): string {
     return encodedDir.replace(/^-/, '/').replace(/-/g, '/');
   }

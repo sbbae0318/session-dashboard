@@ -2,7 +2,7 @@
 
 ## 1. 요약 (Executive Summary)
 
-- `bae-settings` 프로젝트의 세션은 정상적으로 "Working"/"Waiting" 상태가 표시됨
+- `my-project` 프로젝트의 세션은 정상적으로 "Working"/"Waiting" 상태가 표시됨
 - 다른 프로젝트(예: `doomcode`)의 세션은 "Waiting" 상태가 감지되지 않고 "Stale" 또는 "Idle"로 표시됨
 - 근본 원인: `oc-serve`가 다른 프로젝트의 세션 상태를 반환하지 않아 `apiStatus`가 `null`이 됨
 
@@ -80,15 +80,15 @@ Frontend (ActiveSessions.svelte)
 실제 API 호출 결과:
 
 ```bash
-# directory 파라미터 없음 → bae-settings 세션 6개만 반환 (모두 type: "busy")
+# directory 파라미터 없음 → my-project 세션 6개만 반환 (모두 type: "busy")
 GET /session/status
 
 # doomcode 프로젝트 → 빈 결과
-GET /session/status?directory=/Users/sbbae/project/doomcode
+GET /session/status?directory=/Users/user/project/doomcode
 # 응답: {}
 
-# bae-settings 프로젝트 → 정상 반환
-GET /session/status?directory=/Users/sbbae/project/bae-settings
+# my-project 프로젝트 → 정상 반환
+GET /session/status?directory=/Users/user/project/my-project
 # 응답: { "session-id-1": { "type": "busy" }, ... }
 ```
 
@@ -112,7 +112,7 @@ GET /session/status?directory=/Users/sbbae/project/bae-settings
 
 | 프로젝트 | 세션 목록 표시 | 상태 배지 |
 |---------|-------------|---------|
-| `bae-settings` | 정상 | 정상 (oc-serve가 상태 반환) |
+| `my-project` | 정상 | 정상 (oc-serve가 상태 반환) |
 | 다른 프로젝트 (예: `doomcode`) | 정상 | 부정확 ("Stale"/"Idle"로 표시) |
 
 세션 목록 자체는 `/proxy/session?directory=`로 가져오므로 정상 표시된다. 상태 배지만 부정확하다. `apiStatus`가 `null`이 되어 "Waiting" 대신 "Stale" 또는 "Idle"로 표시된다.
@@ -168,12 +168,12 @@ SSE 캐시에 없는 active 세션에 대해 주기적으로 REST `/session/stat
 `oc-serve` API를 직접 호출하여 문제를 재현할 수 있다:
 
 ```bash
-# bae-settings (정상 동작)
-curl http://127.0.0.1:4096/session/status?directory=/Users/sbbae/project/bae-settings
+# my-project (정상 동작)
+curl http://127.0.0.1:4096/session/status?directory=/Users/user/project/my-project
 # 응답: { "session-id-1": { "type": "busy" }, "session-id-2": { "type": "busy" }, ... }
 
 # doomcode (문제 재현)
-curl http://127.0.0.1:4096/session/status?directory=/Users/sbbae/project/doomcode
+curl http://127.0.0.1:4096/session/status?directory=/Users/user/project/doomcode
 # 응답: {}
 ```
 
@@ -183,7 +183,7 @@ curl http://127.0.0.1:4096/session/status?directory=/Users/sbbae/project/doomcod
 
 ## 9. 결론
 
-이 문제의 근본 원인은 `oc-serve`가 `bae-settings` 외 프로젝트의 세션 상태를 반환하지 않는 것이다.
+이 문제의 근본 원인은 `oc-serve`가 `my-project` 외 프로젝트의 세션 상태를 반환하지 않는 것이다.
 
 대시보드 코드 자체에는 크로스 프로젝트 지원이 올바르게 구현되어 있다. 프로젝트별 `directory` 파라미터 사용, 병렬 수집, 머지 로직 모두 정상이다. `oc-serve`의 응답이 비어있어 `apiStatus`가 `null`이 되고, 프론트엔드에서 "Waiting" 대신 "Stale"/"Idle"로 표시되는 것이다.
 

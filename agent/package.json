@@ -1,5 +1,5 @@
 {
-  "name": "@bae-settings/dashboard-agent",
+  "name": "@session-dashboard/dashboard-agent",
   "version": "1.0.0",
   "description": "Lightweight HTTP agent exposing session history and proxying oc-serve",
   "type": "module",

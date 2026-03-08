@@ -232,4 +232,4 @@ For agents on remote machines, use their LAN IP directly in `machines.yml`.
 
 ## License
 
-Private repository.
+MIT License. See [LICENSE](LICENSE).

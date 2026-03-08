@@ -113,7 +113,7 @@ describe('statusBadge()', () => {
 
 describe('projectName()', () => {
   test('full path returns basename', () => {
-    expect(projectName('/Users/sbbae/project/bae-settings')).toBe('bae-settings');
+    expect(projectName('/Users/john/project/my-app')).toBe('my-app');
   });
 
   test('null returns empty string', () => {
