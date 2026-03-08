@@ -9,6 +9,7 @@ mkdirSync(join(TEST_HOME, ".opencode", "history"), { recursive: true });
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["**/claude-regression.spec.ts"],  // Has own config: playwright.claude-regression.config.ts
   timeout: 30_000,
   expect: {
     timeout: 10_000,
