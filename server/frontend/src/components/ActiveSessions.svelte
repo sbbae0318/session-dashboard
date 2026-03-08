@@ -51,8 +51,12 @@
     if (session.source === 'claude-code') {
       return `cd ${cwd} && claude --resume ${session.sessionId}`;
     }
-    // OpenCode
-    return `cd ${cwd} && opencode --session ${session.sessionId}`;
+    // OpenCode → attach to oc-serve
+    const rawHost = session.machineHost ?? 'localhost';
+    const host = (rawHost === 'host.docker.internal' || rawHost === '127.0.0.1')
+      ? 'localhost'
+      : rawHost;
+    return `opencode attach http://${host}:4096 --session ${session.sessionId}`;
   }
 
   async function copySessionCommand(session: DashboardSession): Promise<void> {

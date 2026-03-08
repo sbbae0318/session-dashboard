@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getQueries } from "../lib/stores/queries.svelte";
+  import PromptDetailModal from "./PromptDetailModal.svelte";
   import { getSelectedSessionId, getSourceFilter } from "../lib/stores/filter.svelte";
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
   import { getCards } from "../lib/stores/cards.svelte";
@@ -21,9 +22,12 @@
   let sessions = $derived(getSessions());
   let sourceFilter = $derived(getSourceFilter());
 
+  // --- State ---
+  let showBackground = $state(false);
+
   let filteredQueries = $derived(
     queries
-      .filter(q => !q.isBackground)
+      .filter(q => showBackground || !q.isBackground)
       .filter(q => !machineFilter || q.machineId === machineFilter)
       .filter(q => {
         if (sourceFilter === "all") return true;
@@ -37,8 +41,25 @@
       .toSorted((a, b) => b.timestamp - a.timestamp)
   );
 
+  let backgroundCount = $derived(
+    queries
+      .filter(q => q.isBackground)
+      .filter(q => !machineFilter || q.machineId === machineFilter)
+      .filter(q => {
+        if (sourceFilter === "all") return true;
+        if (sourceFilter === "opencode") return !q.source || q.source === "opencode";
+        return q.source === sourceFilter;
+      })
+      .filter(q => {
+        const sid = sessionIdFilter ?? selectedSessionId;
+        return !sid || q.sessionId === sid;
+      })
+      .length
+  );
+
   // --- Clipboard copy ---
   let toastMessage = $state<string | null>(null);
+  let modalEntry = $state<{ sessionId: string; source?: string; query: string; sessionTitle?: string; timestamp: number } | null>(null);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function buildCommandFromQuery(entry: { sessionId: string; source?: string }): string {
@@ -51,10 +72,8 @@
     return `cd ${cwd} && opencode --session ${entry.sessionId}`;
   }
 
-  async function handlePromptClick(entry: { sessionId: string; source?: string }): Promise<void> {
-    const cmd = buildCommandFromQuery(entry);
-    const ok = await copyToClipboard(cmd);
-    showToast(ok ? 'Copied!' : 'Copy failed');
+  function handlePromptClick(entry: typeof filteredQueries[number]): void {
+    modalEntry = entry;
   }
 
   function showToast(msg: string): void {
@@ -65,6 +84,21 @@
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
+  {#if backgroundCount > 0}
+    <div class="bg-toggle-bar">
+      <button
+        class="bg-toggle-btn"
+        class:active={showBackground}
+        onclick={() => { showBackground = !showBackground; }}
+      >
+        {#if showBackground}
+          bg 숨김
+        {:else}
+          bg 포함 ({backgroundCount})
+        {/if}
+      </button>
+    </div>
+  {/if}
   {#if filteredQueries.length === 0}
     <div class="empty-state">{selectedSessionId ? '선택된 세션의 프롬프트 없음' : '최근 프롬프트 없음'}</div>
   {:else}
@@ -124,6 +158,18 @@
     </div>
   {/if}
 </div>
+
+{#if modalEntry}
+  <PromptDetailModal
+    entry={modalEntry}
+    buildCommand={buildCommandFromQuery}
+    onClose={() => { modalEntry = null; }}
+    onCopy={async (cmd) => {
+      const ok = await copyToClipboard(cmd);
+      showToast(ok ? 'Copied!' : 'Copy failed');
+    }}
+  />
+{/if}
 
 {#if toastMessage}
   <div class="copy-toast">{toastMessage}</div>
@@ -287,6 +333,35 @@
     font-style: italic;
   }
 
+  .bg-toggle-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 0 0.4rem 0;
+    flex-shrink: 0;
+  }
+
+  .bg-toggle-btn {
+    background: none;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    border-radius: 9999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .bg-toggle-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .bg-toggle-btn.active {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--accent);
+  }
   @media (max-width: 599px) {
     .prompts-list {
       max-height: 60vh;
