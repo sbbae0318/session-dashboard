@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:claude-e2e": "playwright test --config playwright.claude-regression.config.ts --reporter=list"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.0",

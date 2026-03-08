@@ -1,0 +1,7 @@
+machines:
+  - id: test-claude-agent
+    alias: Test Claude Agent E2E
+    host: 127.0.0.1
+    port: 3199
+    apiKey: e2e-test-key-12345
+    source: claude-code
