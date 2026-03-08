@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { dismissSession, isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { getDetailSessionId, pushSessionDetail } from '../lib/stores/navigation.svelte';
-  import { relativeTime, copyToClipboard } from "../lib/utils";
+  import { relativeTime, copyToClipboard, formatTimestamp } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -173,7 +173,24 @@
               </div>
               <!-- Row 2: time · machine · source -->
               <div class="session-header-meta">
-                <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
+                {#if session.lastPromptTime}
+                  {@const isBusy = ds.cssClass === 'status-working'}
+                  {@const showCompletion = !isBusy && session.lastActivityTime > session.lastPromptTime}
+                  <span class="session-time-range">
+                    {formatTimestamp(session.lastPromptTime)}
+                    <span class="time-arrow">→</span>
+                    {#if isBusy}
+                      <span class="dot-loader-session"><span></span><span></span><span></span></span>
+                    {:else if showCompletion}
+                      {formatTimestamp(session.lastActivityTime)}
+                      <span class="time-ago">({(tick, relativeTime(session.lastActivityTime))})</span>
+                    {:else}
+                      {(tick, relativeTime(session.lastPromptTime))}
+                    {/if}
+                  </span>
+                {:else}
+                  <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
+                {/if}
                 {#if session.machineAlias}
                   <span class="meta-sep">·</span>
                   <span class="machine-meta">{session.machineAlias}</span>
@@ -519,6 +536,46 @@
     color: var(--text-secondary);
     white-space: nowrap;
     flex-shrink: 0;
+  }
+
+  .session-time-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .time-arrow {
+    opacity: 0.4;
+  }
+
+  .time-ago {
+    font-size: 0.6rem;
+    opacity: 0.6;
+  }
+
+  .dot-loader-session {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    vertical-align: middle;
+  }
+
+  .dot-loader-session span {
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot-bounce-session 1.4s ease-in-out infinite;
+  }
+
+  .dot-loader-session span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader-session span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce-session {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7) translateY(0); }
+    40% { opacity: 1; transform: scale(1.2) translateY(-3px); }
   }
 
   .empty-state {
