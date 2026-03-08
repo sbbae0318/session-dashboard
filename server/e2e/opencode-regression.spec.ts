@@ -1,18 +1,20 @@
 /**
  * OpenCode E2E Regression Tests — Real Pipeline
  *
- * Pipeline: Playwright browser → Test Server (3099) → Test Agent (3198) → JSONL files
+ * Pipeline: Playwright browser → Test Server (3099) → Test Agent (3198) → JSONL/SQLite
  *
- * These tests write JSONL files, wait for the real agent to detect them,
- * then verify data flows through the real server API and renders in the browser.
+ * Cards: written to cards.jsonl → agent reads directly → server polls agent
+ * Queries: written to PromptStore SQLite DB → agent reads from DB → server polls agent
+ * (Agent's /api/queries uses SQLite-first strategy, NOT JSONL, when source='opencode')
  */
 
 import { test, expect } from '@playwright/test';
 import {
   TEST_AGENT_HOME,
   cleanAgentHome,
+  cleanPromptStore,
   writeCards,
-  writeQueries,
+  writeQueriesToPromptStore,
 } from './helpers/opencode-data.js';
 
 const AGENT_URL = 'http://127.0.0.1:3198';
@@ -32,6 +34,7 @@ async function agentGet(path: string): Promise<Response> {
 
 test.beforeEach(async () => {
   cleanAgentHome(TEST_AGENT_HOME);
+  cleanPromptStore(TEST_AGENT_HOME);
   // Brief pause for FS watcher to process the cleanup
   await new Promise((r) => setTimeout(r, 300));
 });
@@ -43,8 +46,8 @@ test.beforeEach(async () => {
 test.describe('Scenario 1: Cards in API', () => {
   test('cards.jsonl entries appear in agent /api/cards and server /api/history', async ({ request }) => {
     writeCards(TEST_AGENT_HOME, [
-      { sessionId: 'oc-sess-001', title: 'Build the auth module' },
-      { sessionId: 'oc-sess-002', title: 'Refactor database layer' },
+      { sessionId: 'oc-sess-001', title: 'Build the auth module', source: 'opencode' },
+      { sessionId: 'oc-sess-002', title: 'Refactor database layer', source: 'opencode' },
     ]);
 
     // Poll agent /api/cards until data appears
@@ -57,12 +60,13 @@ test.describe('Scenario 1: Cards in API', () => {
       { timeout: 15_000, intervals: [500] },
     ).toBeGreaterThanOrEqual(2);
 
-    // Server /api/history should also have them
+    // Server /api/history should also have them (response is { cards: [...] })
     await expect.poll(
       async () => {
         const r = await request.get(`${SERVER_URL}/api/history?limit=50`);
-        const body = await r.json() as { sessions: Array<{ sessionId: string; source: string }> };
-        return body.sessions.filter((s) => s.source === 'opencode').length;
+        const body = await r.json() as { cards?: Array<{ sessionId?: string; source?: string }> };
+        if (!body.cards) return 0;
+        return body.cards.filter((s) => s.source === 'opencode').length;
       },
       { timeout: 15_000, intervals: [500] },
     ).toBeGreaterThanOrEqual(2);
@@ -74,8 +78,8 @@ test.describe('Scenario 1: Cards in API', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Scenario 2: Queries in Recent Prompts', () => {
-  test('queries.jsonl entries appear in agent /api/queries and server /api/queries', async ({ page, request }) => {
-    writeQueries(TEST_AGENT_HOME, [
+  test('query entries appear in agent /api/queries and server /api/queries', async ({ page, request }) => {
+    writeQueriesToPromptStore(TEST_AGENT_HOME, [
       { query: 'Implement the login flow', sessionId: 'oc-sess-q-001', timestamp: Date.now() - 2000 },
       { query: 'Add error handling to API', sessionId: 'oc-sess-q-002', timestamp: Date.now() - 1000 },
     ]);
@@ -83,7 +87,8 @@ test.describe('Scenario 2: Queries in Recent Prompts', () => {
     await expect.poll(
       async () => {
         const r = await request.get(`${SERVER_URL}/api/queries?limit=50`);
-        const body = await r.json() as { queries: Array<{ query: string; source: string }> };
+        const body = await r.json() as { queries?: Array<{ query: string; source: string }> };
+        if (!body.queries) return 0;
         return body.queries.filter((q) => q.source === 'opencode').length;
       },
       { timeout: 15_000, intervals: [500] },
@@ -121,16 +126,17 @@ test.describe('Scenario 3: oc-serve down graceful degradation', () => {
 test.describe('Scenario 4: Source filter OpenCode', () => {
   test('clicking OpenCode filter shows only opencode data', async ({ page, request }) => {
     writeCards(TEST_AGENT_HOME, [
-      { sessionId: 'oc-filter-001', title: 'OpenCode session' },
+      { sessionId: 'oc-filter-001', title: 'OpenCode session', source: 'opencode' },
     ]);
-    writeQueries(TEST_AGENT_HOME, [
+    writeQueriesToPromptStore(TEST_AGENT_HOME, [
       { query: 'Run the OpenCode pipeline', sessionId: 'oc-filter-001', timestamp: Date.now() },
     ]);
 
     await expect.poll(
       async () => {
         const r = await request.get(`${SERVER_URL}/api/queries?limit=50`);
-        const body = await r.json() as { queries: Array<{ query: string; source: string }> };
+        const body = await r.json() as { queries?: Array<{ query: string; source: string }> };
+        if (!body.queries) return false;
         return body.queries.some((q) => q.query === 'Run the OpenCode pipeline');
       },
       { timeout: 15_000, intervals: [500] },

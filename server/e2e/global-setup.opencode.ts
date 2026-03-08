@@ -78,7 +78,9 @@ export default async function globalSetup(): Promise<void> {
         API_KEY: AGENT_KEY,
         SOURCE: 'opencode',
         HISTORY_DIR: join(TEST_AGENT_HOME, '.opencode', 'history'),
+        OC_SERVE_PORT: '59999',  // Dead port — isolate from real oc-serve
       },
+      cwd: TEST_AGENT_HOME,  // Isolate promptStore DB from production
       stdio: 'pipe',
       detached: false,
     },
