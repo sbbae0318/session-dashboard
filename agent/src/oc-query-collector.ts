@@ -74,22 +74,67 @@ export class OcQueryCollector {
     this.ocServePort = ocServePort;
   }
 
+  /** 모든 프로젝트 worktree 경로를 가져옴 */
+  private async fetchProjectWorktrees(): Promise<string[]> {
+    try {
+      const url = `http://127.0.0.1:${this.ocServePort}/project`;
+      const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
+      if (!Array.isArray(data)) return [];
+      return (data as Array<{ worktree?: string }>)
+        .map(p => p.worktree)
+        .filter((w): w is string => typeof w === 'string' && w !== '/');
+    } catch {
+      return [];
+    }
+  }
+
+  /** 모든 프로젝트에서 세션 병렬 수집 후 deduplicate */
+  private async fetchSessionsFromAllProjects(worktrees: string[]): Promise<OcServeSession[]> {
+    const PER_PROJECT_LIMIT = 20;
+    const results = await Promise.allSettled(
+      worktrees.map(async (worktree) => {
+        const url = `http://127.0.0.1:${this.ocServePort}/session?directory=${encodeURIComponent(worktree)}&limit=${PER_PROJECT_LIMIT}`;
+        const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
+        return Array.isArray(data) ? (data as OcServeSession[]) : [];
+      }),
+    );
+    // Deduplicate by session ID
+    const seen = new Set<string>();
+    const sessions: OcServeSession[] = [];
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      for (const session of result.value) {
+        if (!seen.has(session.id)) {
+          seen.add(session.id);
+          sessions.push(session);
+        }
+      }
+    }
+    return sessions;
+  }
+
   /**
    * oc-serve에서 최근 세션들의 user 프롬프트를 수집하여 QueryEntry 배열로 반환.
    * oc-serve 다운 시 빈 배열 + console.warn.
    */
   async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
-    // oc-serve session list를 가져오되, 실패/타임아웃 시에도 SessionCache 콜백으로 계속 진행
+    // Step 1: 모든 프로젝트 worktree에서 세션 수집 (multi-project)
     let sessions: OcServeSession[] = [];
-    try {
-      const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
-      const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
-      if (Array.isArray(data)) {
-        sessions = data as OcServeSession[];
+    const worktrees = await this.fetchProjectWorktrees();
+    if (worktrees.length > 0) {
+      sessions = await this.fetchSessionsFromAllProjects(worktrees);
+    }
+    // Fallback: /project 실패 시 기존 동작 (directory 없이)
+    if (sessions.length === 0) {
+      try {
+        const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
+        const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
+        if (Array.isArray(data)) {
+          sessions = data as OcServeSession[];
+        }
+      } catch {
+        console.warn('[oc-query-collector] session list fetch failed, falling back to SessionCache only');
       }
-    } catch {
-      console.warn('[oc-query-collector] session list fetch failed, falling back to SessionCache only');
-      // return하지 않음 — SessionCache 콜백으로 계속 진행
     }
 
     // SessionCache 보완: oc-serve 목록에 없는 활성 세션의 lastPrompt를 직접 사용
@@ -114,10 +159,15 @@ export class OcQueryCollector {
       }
     }
 
-    // parentID가 있는 세션 = 서브에이전트/툴 생성 세션 → 제외
-    const mainSessions = sessions.filter((s) => !s.parentID);
-
-    // 각 세션의 메시지를 병렬로 가져오기 (개별 실패 격리)
+    // parentID 필터 + 최신 limit*2개만 message fetch (성능 제한)
+    const mainSessions = sessions
+      .filter((s) => !s.parentID)
+      .sort((a, b) => {
+        const timeA = typeof a.time === 'object' && a.time !== null ? a.time.updated ?? a.time.created : (a.time || 0);
+        const timeB = typeof b.time === 'object' && b.time !== null ? b.time.updated ?? b.time.created : (b.time || 0);
+        return timeB - timeA;
+      })
+      .slice(0, limit * 2);
     const results = await Promise.allSettled(
       mainSessions.map((session) => this.collectFromSession(session)),
     );

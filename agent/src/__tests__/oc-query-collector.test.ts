@@ -463,3 +463,111 @@ describe('OcQueryCollector — long session latest prompt', () => {
     expect(entries[0].query).toBe('마지막 실제 프롬프트');
   });
 });
+
+describe('OcQueryCollector — multi-project collection', () => {
+  let collector: OcQueryCollector;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collector = new OcQueryCollector(4321);
+  });
+
+  it('모든 프로젝트의 세션을 수집', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      // /project 엔드포인트
+      if (url.includes('/project')) {
+        return Promise.resolve([
+          { worktree: '/project/alpha' },
+          { worktree: '/project/beta' },
+        ]);
+      }
+      // /session?directory=/project/alpha
+      if (url.includes('directory=%2Fproject%2Falpha')) {
+        return Promise.resolve([makeSession('alpha-s1', 'Alpha Session', 2000)]);
+      }
+      // /session?directory=/project/beta
+      if (url.includes('directory=%2Fproject%2Fbeta')) {
+        return Promise.resolve([makeSession('beta-s1', 'Beta Session', 3000)]);
+      }
+      // /session/:id/message
+      if (url.includes('alpha-s1/message')) {
+        return Promise.resolve([makeMessage('user', 'alpha question')]);
+      }
+      if (url.includes('beta-s1/message')) {
+        return Promise.resolve([makeMessage('user', 'beta question')]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(2);
+    const queries = entries.map(e => e.query).sort();
+    expect(queries).toEqual(['alpha question', 'beta question']);
+  });
+
+  it('/project 실패 시 기존 fallback 동작', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/project')) {
+        return Promise.reject(new Error('not available'));
+      }
+      if (url.includes('/session?')) {
+        return Promise.resolve([makeSession('fallback-s1', 'Fallback', 1000)]);
+      }
+      return Promise.resolve([makeMessage('user', 'fallback question')]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('fallback question');
+  });
+
+  it('세션 ID 중복 제거', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/project')) {
+        return Promise.resolve([
+          { worktree: '/project/alpha' },
+          { worktree: '/project/beta' },
+        ]);
+      }
+      // 양쪽 프로젝트에서 같은 세션 반환
+      if (url.includes('/session?directory=')) {
+        return Promise.resolve([makeSession('shared-s1', 'Shared Session', 2000)]);
+      }
+      if (url.includes('shared-s1/message')) {
+        return Promise.resolve([makeMessage('user', 'shared question')]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('shared question');
+  });
+
+  it('worktree가 / 인 프로젝트는 건너뜀', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/project')) {
+        return Promise.resolve([
+          { worktree: '/' },
+          { worktree: '/project/valid' },
+        ]);
+      }
+      if (url.includes('directory=%2Fproject%2Fvalid')) {
+        return Promise.resolve([makeSession('valid-s1', 'Valid', 1000)]);
+      }
+      if (url.includes('valid-s1/message')) {
+        return Promise.resolve([makeMessage('user', 'valid question')]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const entries = await collector.collectQueries();
+
+    // '/' worktree는 건너뛰고 /project/valid만 수집
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('valid question');
+  });
+});

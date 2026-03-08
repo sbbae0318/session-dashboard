@@ -10,6 +10,7 @@ import { get as httpGet, type IncomingMessage } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import { fetchJson } from './oc-serve-proxy.js';
 import { SessionStore } from './session-store.js';
+import { extractUserPrompt } from './prompt-extractor.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -313,6 +314,9 @@ export class SessionCache {
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
+
+    // idle = turn 완료 → 최신 user prompt 갱신
+    void this.fetchLatestUserPrompt(sessionID, directory);
   }
 
   private handleMessageUpdated(props: Record<string, unknown>, directory: string | null): void {
@@ -320,7 +324,7 @@ export class SessionCache {
     if (!info?.sessionID || info.role !== 'user') return;
 
     // REST fallback — message.updated has no text
-    void this.fetchFirstUserPrompt(info.sessionID, directory);
+    void this.fetchLatestUserPrompt(info.sessionID, directory);
   }
 
   private handleMessagePartUpdated(props: Record<string, unknown>, directory: string | null): void {
@@ -358,27 +362,34 @@ export class SessionCache {
   // REST Fallback for Prompt Text
   // -------------------------------------------------------------------------
 
-  private async fetchFirstUserPrompt(sessionID: string, directory: string | null): Promise<void> {
-    // 이미 lastPrompt가 저장된 세션은 REST 재호출 skip (멱등성 최적화)
-    const existing = this.store.get(sessionID);
-    if (existing?.lastPrompt) return;
-
+  private async fetchLatestUserPrompt(sessionID: string, directory: string | null): Promise<void> {
     try {
       const url = `http://127.0.0.1:${this.ocServePort}/session/${sessionID}/message`;
       const data = (await fetchJson(url, {}, 3000)) as OcServeMessage[];
       if (!Array.isArray(data)) return;
 
-      const firstUserMsg = data.find((m) => m.info?.role === 'user');
-      if (!firstUserMsg) return;
+      // 역순 순회로 마지막 유효 user message 찾기
+      let lastUserMsg: OcServeMessage | undefined;
+      for (let i = data.length - 1; i >= 0; i--) {
+        const m = data[i];
+        if (m.info?.role !== 'user') continue;
+        const text = m.parts?.[0]?.text;
+        if (!text) continue;
+        if (extractUserPrompt(text) !== null) {
+          lastUserMsg = m;
+          break;
+        }
+      }
+      if (!lastUserMsg) return;
 
-      const text = firstUserMsg.parts?.[0]?.text;
-      if (!text || isSystemPrompt(text)) return;
+      const text = lastUserMsg.parts?.[0]?.text;
+      if (!text) return;
 
       const existingDetail = this.store.get(sessionID) ?? defaultSessionDetail(directory);
       this.store.upsert(sessionID, {
         ...existingDetail,
         lastPrompt: text.slice(0, PROMPT_MAX_LENGTH),
-        lastPromptTime: firstUserMsg.info?.time?.created ?? Date.now(),
+        lastPromptTime: lastUserMsg.info?.time?.created ?? Date.now(),
         directory: directory ?? existingDetail.directory,
         updatedAt: Date.now(),
       });

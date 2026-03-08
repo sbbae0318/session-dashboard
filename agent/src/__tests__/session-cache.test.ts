@@ -190,7 +190,7 @@ describe('SessionCache', () => {
 
   // ── 6. message.updated(role=user) → REST fallback → lastPrompt ──
 
-  it('여러 user 메시지 중 첫 번째를 lastPrompt로 저장', async () => {
+  it('여러 user 메시지 중 마지막을 lastPrompt로 저장', async () => {
     const userMessages = [
       {
         info: { role: 'user', sessionID: 'sess-1', time: { created: 11111 } },
@@ -227,10 +227,10 @@ describe('SessionCache', () => {
 
     const entry = cache.getSessionDetails()['sess-1'];
     expect(entry).toBeDefined();
-    // 첫 번째 user 메시지가 선택되어야 함
-    expect(entry.lastPrompt).toBe('Build a todo app');
-    // 메시지 원래 타임스탬프 사용
-    expect(entry.lastPromptTime).toBe(11111);
+    // 마지막 user 메시지가 선택되어야 함 (fetchLatestUserPrompt)
+    expect(entry.lastPrompt).toBe('Add dark mode');
+    // 마지막 메시지 타임스탬프 사용
+    expect(entry.lastPromptTime).toBe(22222);
   });
 
   // ── 7. isSystemPrompt filter ──
@@ -456,8 +456,8 @@ describe('SessionCache', () => {
 
   // ── 14. 멱등성 — 이미 lastPrompt가 있는 세션은 REST 호출 skip ──
 
-  it('이미 lastPrompt가 저장된 세션은 REST 호출 skip', async () => {
-    // bootstrap 호출에만 응답 (fetchFirstUserPrompt는 호출되지 않아야 함)
+  it('lastPrompt가 저장된 세션도 message.updated 시 REST 재호출', async () => {
+    // bootstrap 호출에만 응답
     mockFetchJson.mockResolvedValueOnce([]);
 
     const mockRes = createMockResponse();
@@ -494,10 +494,11 @@ describe('SessionCache', () => {
     // 첫 번째 이벤트로 lastPrompt 저장됨
     expect(cache.getSessionDetails()['sess-idem']?.lastPrompt).toBe('First prompt');
 
-    // fetchJson 호출 횟수 기록 (bootstrap 1회 + fetchFirstUserPrompt 1회 = 2회)
+    // fetchJson 호출 횟수 기록 (bootstrap 1회 + fetchLatestUserPrompt 1회 = 2회)
     const callCountAfterFirst = mockFetchJson.mock.calls.length;
 
-    // 두 번째 message.updated 이벤트 — 이미 lastPrompt가 있으므로 REST skip되어야 함
+    // 두 번째 message.updated 이벤트 — guard 제거됨, REST 재호출 발생
+    mockFetchJson.mockResolvedValueOnce(userMessages);
     simulateSseEvent(mockRes, {
       directory: '/project/idempotent',
       payload: {
@@ -507,8 +508,8 @@ describe('SessionCache', () => {
     });
     await flushPromises();
 
-    // fetchJson 호출 횟수가 늘지 않아야 함 (REST skip 확인)
-    expect(mockFetchJson.mock.calls.length).toBe(callCountAfterFirst);
+    // guard 제거로 fetchJson이 한 번 더 호출됨
+    expect(mockFetchJson.mock.calls.length).toBe(callCountAfterFirst + 1);
   });
 
   // ── 15. message timestamp를 lastPromptTime으로 사용 (Date.now() 대신) ──
