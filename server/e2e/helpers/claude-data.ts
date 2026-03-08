@@ -32,6 +32,7 @@ export function writeProjectSession(
   entries: Array<{
     type: 'user' | 'assistant';
     content: string | Array<{ type: string; [k: string]: unknown }>;
+    timestamp?: string;
   }>,
 ): string {
   const encoded = encodePath(cwd);
@@ -39,10 +40,9 @@ export function writeProjectSession(
   mkdirSync(dir, { recursive: true });
 
   const lines = entries.map((e) => {
-    if (e.type === 'user') {
-      return JSON.stringify({ type: 'user', message: { content: e.content } });
-    }
-    return JSON.stringify({ type: 'assistant', message: { content: e.content } });
+    const base: Record<string, unknown> = { type: e.type, message: { content: e.content } };
+    if (e.timestamp) base.timestamp = e.timestamp;
+    return JSON.stringify(base);
   });
 
   const filePath = join(dir, `${sessionId}.jsonl`);

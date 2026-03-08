@@ -58,18 +58,25 @@ describe('PromptStore', () => {
     expect(store.count()).toBe(3);
   });
 
-  // ── 3. upsertMany() — 중복 무시 (INSERT OR IGNORE) ──
+  // ── 3. upsertMany() — 동일 id 덮어쓰기 (INSERT OR REPLACE) ──
 
-  it('upsertMany() ignores duplicates (same sessionId:timestamp)', () => {
-    const entry = makeEntry({ sessionId: 'ses-dup', timestamp: 5000 });
+  it('upsertMany() replaces existing entry with same id (sessionId:timestamp)', () => {
+    const entry = makeEntry({ sessionId: 'ses-dup', timestamp: 5000, query: 'original', isBackground: false });
 
     const first = store.upsertMany([entry]);
     expect(first).toBe(1);
 
-    const second = store.upsertMany([entry]);
-    expect(second).toBe(0);
+    // Same id but updated fields
+    const updated = makeEntry({ sessionId: 'ses-dup', timestamp: 5000, query: 'updated', isBackground: true });
+    const second = store.upsertMany([updated]);
+    expect(second).toBe(1); // replaced, not ignored
 
     expect(store.count()).toBe(1);
+
+    // Verify the entry was updated
+    const [result] = store.getRecent(1);
+    expect(result.query).toBe('updated');
+    expect(result.isBackground).toBe(true);
   });
 
   // ── 4. upsertMany() — 빈 배열 ──

@@ -19,6 +19,8 @@ export interface ClaudeSessionInfo {
   readonly status: 'busy' | 'idle';
   readonly title: string | null;
   readonly lastPromptTime: number | null;
+  readonly lastResponseTime: number | null;
+  readonly lastFileModified: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +148,17 @@ export class ClaudeHeartbeat {
       );
       const title = await this.extractTitleFromFile(conversationPath);
       const lastPromptTime = await this.extractLastPromptTimeFromFile(conversationPath);
+      const lastResponseTime = await this.extractLastResponseTimeFromFile(conversationPath);
+
+      // JSONL 파일의 mtime을 실제 활동 시간으로 사용 (lastHeartbeat는 프로세스 생존 확인용)
+      let lastFileModified: number;
+      try {
+        const jsonlStat = await statFile(conversationPath);
+        lastFileModified = jsonlStat.mtimeMs;
+      } catch {
+        // JSONL 파일이 없으면 lastHeartbeat를 폴백으로 사용
+        lastFileModified = Number(data['lastHeartbeat'] ?? 0);
+      }
 
       const info: ClaudeSessionInfo = {
         sessionId,
@@ -158,6 +171,8 @@ export class ClaudeHeartbeat {
         status,
         title,
         lastPromptTime,
+        lastFileModified,
+        lastResponseTime,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -246,6 +261,7 @@ export class ClaudeHeartbeat {
               const status = await this.detectStatusFromFile(filePath);
               const title = await this.extractTitleFromFile(filePath);
               const lastPromptTime = await this.extractLastPromptTimeFromFile(filePath);
+              const lastResponseTime = await this.extractLastResponseTimeFromFile(filePath);
               this.sessions.set(sessionId, {
                 sessionId,
                 pid: 0,
@@ -257,6 +273,8 @@ export class ClaudeHeartbeat {
                 status,
                 title,
                 lastPromptTime,
+                lastFileModified: fileStat.mtimeMs,
+                lastResponseTime,
               });
             } catch {
               continue;
@@ -361,6 +379,33 @@ export class ClaudeHeartbeat {
         try {
           const entry = JSON.parse(lines[i]) as Record<string, unknown>;
           if (entry.type === 'user') {
+            const ts = entry.timestamp;
+            if (typeof ts !== 'string') return null;
+            const ms = new Date(ts).getTime();
+            if (Number.isNaN(ms)) return null;
+            return ms;
+          }
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** JSONL 파일에서 마지막 assistant 엔트리의 timestamp를 ms로 추출 */
+  private async extractLastResponseTimeFromFile(
+    filePath: string,
+  ): Promise<number | null> {
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      const lines = content.trimEnd().split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+          if (entry.type === 'assistant') {
             const ts = entry.timestamp;
             if (typeof ts !== 'string') return null;
             const ms = new Date(ts).getTime();

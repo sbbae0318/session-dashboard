@@ -353,3 +353,46 @@ test.describe('Scenario 7: Stale session excluded', () => {
     expect(serverStale).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scenario 8: lastActivityTime uses last assistant response timestamp
+// ---------------------------------------------------------------------------
+
+test.describe('Scenario 8: lastActivityTime from assistant response timestamp', () => {
+  test('lastActivityTime equals last assistant timestamp, not file mtime or heartbeat', async ({ request }) => {
+    // Write a session with known assistant timestamps
+    writeProjectSession(
+      TEST_AGENT_HOME,
+      '/tmp/timestamp-test',
+      'sess-ts-order-001',
+      [
+        { type: 'user', content: 'first prompt', timestamp: '2026-03-08T10:00:00.000Z' },
+        { type: 'assistant', content: 'first reply', timestamp: '2026-03-08T10:00:05.000Z' },
+        { type: 'user', content: 'second prompt', timestamp: '2026-03-08T11:00:00.000Z' },
+        { type: 'assistant', content: 'second reply', timestamp: '2026-03-08T11:00:10.000Z' },
+      ],
+    );
+
+    // Give agent time to scan
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // Check agent returns lastResponseTime
+    const agentResp = await agentGet('/api/claude/sessions');
+    const agentBody = (await agentResp.json()) as {
+      sessions: Array<{ sessionId: string; lastResponseTime: number | null }>;
+    };
+    const session = agentBody.sessions.find((s) => s.sessionId === 'sess-ts-order-001');
+    expect(session).toBeDefined();
+    // lastResponseTime = last assistant timestamp = 2026-03-08T11:00:10.000Z
+    expect(session!.lastResponseTime).toBe(new Date('2026-03-08T11:00:10.000Z').getTime());
+
+    // Check server lastActivityTime matches lastResponseTime
+    const serverResp = await request.get(`${SERVER_URL}/api/sessions`);
+    const serverBody = (await serverResp.json()) as {
+      sessions: Array<{ sessionId: string; lastActivityTime: number }>;
+    };
+    const serverSession = serverBody.sessions.find((s) => s.sessionId === 'sess-ts-order-001');
+    expect(serverSession).toBeDefined();
+    expect(serverSession!.lastActivityTime).toBe(new Date('2026-03-08T11:00:10.000Z').getTime());
+  });
+});

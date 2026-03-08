@@ -2,7 +2,7 @@
   import type { DashboardSession, QueryEntry } from "../types";
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { getQueries } from "../lib/stores/queries.svelte";
-  import { relativeTime, truncate } from "../lib/utils";
+  import { relativeTime, truncate, isBackgroundQuery } from "../lib/utils";
 
   let {
     open,
@@ -45,9 +45,9 @@
 
   let filteredPrompts: QueryEntry[] = $derived(
     query.trim() === ""
-      ? allQueries.filter((q) => !q.isBackground).slice(0, 10)
+      ? allQueries.filter((q) => !isBackgroundQuery(q, allSessions)).slice(0, 10)
       : allQueries
-          .filter((q) => !q.isBackground)
+          .filter((q) => !isBackgroundQuery(q, allSessions))
           .filter((q) =>
             fuzzyMatch(
               [q.query, q.sessionTitle ?? "", q.sessionId].join(" "),

@@ -5,7 +5,7 @@
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
   import { getCards } from "../lib/stores/cards.svelte";
   import { getSessions } from "../lib/stores/sessions.svelte";
-  import { relativeTime, truncate, getQueryResult, getCompletionTime, formatTimestamp, copyToClipboard } from "../lib/utils";
+  import { relativeTime, truncate, getQueryResult, getCompletionTime, formatTimestamp, copyToClipboard, isBackgroundQuery } from "../lib/utils";
   import type { DashboardSession } from "../types";
 
   let {
@@ -27,7 +27,7 @@
 
   let filteredQueries = $derived(
     queries
-      .filter(q => showBackground || !q.isBackground)
+      .filter(q => showBackground || !isBackgroundQuery(q, sessions))
       .filter(q => !machineFilter || q.machineId === machineFilter)
       .filter(q => {
         if (sourceFilter === "all") return true;
@@ -43,7 +43,7 @@
 
   let backgroundCount = $derived(
     queries
-      .filter(q => q.isBackground)
+      .filter(q => isBackgroundQuery(q, sessions))
       .filter(q => !machineFilter || q.machineId === machineFilter)
       .filter(q => {
         if (sourceFilter === "all") return true;

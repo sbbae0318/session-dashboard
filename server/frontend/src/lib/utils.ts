@@ -106,3 +106,32 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     previousFocus?.focus({ preventScroll: true });
   }
 }
+
+/**
+ * Determine if a query is from a background session.
+ * Checks q.isBackground flag first, then cross-references session metadata.
+ * Used to filter out explore/librarian subagent queries from the main feed.
+ */
+export function isBackgroundQuery(
+  q: { isBackground: boolean; sessionId: string; sessionTitle?: string | null },
+  sessions: Array<{ sessionId: string; parentSessionId?: string | null; title?: string | null }>,
+): boolean {
+  // Explicit flag from backend
+  if (q.isBackground) return true;
+
+  // Cross-reference session metadata
+  const session = sessions.find(s => s.sessionId === q.sessionId);
+
+  // If the session has a parent, it is a child/subagent session
+  if (session?.parentSessionId) return true;
+
+  // Title-based detection (matches isBackgroundSession() in prompt-extractor.ts)
+  const title = q.sessionTitle || session?.title || null;
+  if (title !== null) {
+    if (title.startsWith('Background:') || title.startsWith('Task:') || title.includes('@')) {
+      return true;
+    }
+  }
+
+  return false;
+}

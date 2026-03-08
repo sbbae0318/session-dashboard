@@ -69,7 +69,7 @@ export class PromptStore {
 
     // Prepared statements — 생성자에서 한 번만 준비
     this.stmtUpsert = this.db.prepare(`
-      INSERT OR IGNORE INTO prompt_history
+      INSERT OR REPLACE INTO prompt_history
         (id, session_id, session_title, timestamp, query, is_background, source, collected_at)
       VALUES
         (@id, @session_id, @session_title, @timestamp, @query, @is_background, @source, @collected_at)
@@ -98,9 +98,9 @@ export class PromptStore {
   }
 
   /**
-   * QueryEntry 배열을 INSERT OR IGNORE로 저장.
-   * 이미 존재하는 id는 무시됨 (중복 방지).
-   * @returns 실제 삽입된 행 수
+   * QueryEntry 배열을 INSERT OR REPLACE로 저장.
+   * 동일 id가 이미 존재하면 새 데이터로 덮어씀 (isBackground 등 수정된 값 반영).
+   * @returns 실제 삽입/갱신된 행 수
    */
   upsertMany(entries: ReadonlyArray<QueryEntry>): number {
     const now = Date.now();
