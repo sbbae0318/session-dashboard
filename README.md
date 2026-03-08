@@ -1,25 +1,60 @@
 # Session Dashboard
 
+**English** | [한국어](README.ko.md)
+
 Multi-machine session monitoring dashboard for OpenCode and Claude Code.
 
 ## Architecture
 
 ```
-session-dashboard server (Docker, :3097)
-    │
-    │ polls via HTTP (Bearer auth, every 2s)
-    │
-    ├──→ dashboard-agent (MacBook, 192.168.0.63:3101)
-    │       ├── reads cards.jsonl, queries.jsonl
-    │       └── proxies → oc-serve :4096
-    │
-    └──→ dashboard-agent (Workstation, localhost:3100)
-            ├── reads cards.jsonl, queries.jsonl
-            └── proxies → oc-serve :4096
+┌─────────────────────────────────────────────────────────┐
+│                   Clients (Browser / TUI)                │
+│                                                         │
+│  Svelte SPA (:3097)          Terminal UI (Ink/React)    │
+│       │                            │                    │
+│       └────── SSE /api/events ─────┘                    │
+│               + REST API polling                        │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+         ┌─────────────┴─────────────┐
+         │   Dashboard Server        │
+         │   (Docker, Fastify :3097) │
+         │                           │
+         │  ┌─ ActiveSessions ────┐  │
+         │  ├─ SessionCards ──────┤  │  ← Backend modules (poll every 2s)
+         │  └─ RecentPrompts ─────┘  │
+         │                           │
+         └─────┬──────────┬──────────┘
+               │          │
+      HTTP poll│          │HTTP poll
+   (Bearer auth)          │(Bearer auth)
+               │          │
+        ┌──────┴──┐  ┌────┴─────┐
+        │ Agent A │  │ Agent B  │    ← One per machine
+        │ (:3098) │  │ (:3098)  │
+        └────┬────┘  └────┬─────┘
+             │             │
+     ┌───────┴───────┐    │
+     │               │    │
+  OpenCode        Claude Code
+  ├─ cards.jsonl     └─ history.jsonl
+  ├─ queries.jsonl
+  └─ oc-serve (:4096)
+     ├─ REST API proxy
+     └─ SSE event subscription
 ```
 
 The **server** polls each **agent** for session data and presents a unified web UI.
 Each **agent** runs on its machine, exposing local session history via authenticated HTTP API.
+The **TUI** connects to the dashboard server from the terminal for real-time session display.
+
+### Key Data Flows
+
+1. **Server → Agent**: HTTP polling every 2s (Bearer token auth)
+2. **Agent → OpenCode**: Reads `cards.jsonl`, `queries.jsonl` + proxies oc-serve REST/SSE
+3. **Agent → Claude Code**: Reads `history.jsonl`
+4. **Server → Client**: Real-time updates via SSE (`/api/events`)
+5. **Agent internal cache**: Subscribes to oc-serve SSE → stores session state in SQLite
 
 ## Prerequisites
 
@@ -28,6 +63,7 @@ Each **agent** runs on its machine, exposing local session history via authentic
 | Node.js | 18+ |
 | npm | (bundled with Node.js) |
 | Docker | Required for server only |
+| Bun | TUI only (optional) |
 
 ## Quick Start
 
@@ -59,12 +95,12 @@ See [Advanced Setup](#advanced-setup) below.
 
 ```
 session-dashboard/
-├── server/          # Dashboard web server (Docker, Svelte + Node.js)
-├── agent/           # Data collection agent (Node.js, Fastify)
-├── tui/             # Terminal UI client (Bun, Ink/React)
+├── server/          # Dashboard web server (Docker, Svelte 5 + Fastify)
+├── agent/           # Data collection agent (Fastify + SQLite)
+├── tui/             # Terminal UI client (Bun, Ink 5 + React)
 ├── install/
 │   ├── install.sh   # Unified installer (auto-detect + configure + install)
-│   ├── server.sh    # Server install/manage (Docker compose)
+│   ├── server.sh    # Server install/manage (Docker Compose)
 │   └── agent.sh     # Agent install/manage (nohup)
 ├── docs/            # Architecture & ops documentation
 └── README.md
@@ -80,11 +116,13 @@ Register each agent in `server/machines.yml`:
 machines:
   - id: macbook
     alias: MacBook Pro
-    host: 192.168.0.63      # Agent's IP or hostname
-    port: 3101               # Agent's PORT
+    host: 192.168.0.63        # Agent's IP or hostname
+    port: 3101                # Agent's PORT
     apiKey: your-key          # Must match agent's API_KEY
     source: both              # opencode | claude-code | both
 ```
+
+> **Note**: When running the server in Docker on the same host as the agent, use `host.docker.internal` as the host.
 
 ### Agent .env
 
@@ -94,8 +132,8 @@ machines:
 | `API_KEY` | (required) | Shared secret for Bearer auth |
 | `OC_SERVE_PORT` | `4096` | Local oc-serve port |
 | `HISTORY_DIR` | `~/.opencode/history` | Path to OpenCode history |
-| `CLAUDE_HISTORY_DIR` | `~/.claude` | Claude Code history path (when SOURCE=claude-code) |
-| `SOURCE` | `opencode` | Data source: opencode, claude-code, both |
+| `CLAUDE_HISTORY_DIR` | `~/.claude` | Claude Code history path |
+| `SOURCE` | `opencode` | Data source: `opencode` \| `claude-code` \| `both` |
 
 ### Server .env
 
