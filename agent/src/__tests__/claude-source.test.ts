@@ -165,4 +165,34 @@ describe('ClaudeSource', () => {
     expect(() => source.start()).not.toThrow();
     expect(() => source.stop()).not.toThrow();
   });
+
+  // ── slash command filtering ──
+
+  it('should filter out slash commands from history', async () => {
+    writeHistory(tmpDir, [
+      { display: '/exit', timestamp: Date.now() - 3000, sessionId: 'ses_cmd1' },
+      { display: '/help', timestamp: Date.now() - 2000, sessionId: 'ses_cmd2' },
+      { display: 'real query here', timestamp: Date.now() - 1000, sessionId: 'ses_real' },
+      { display: '/clear', timestamp: Date.now(), sessionId: 'ses_cmd3' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.query).toBe('real query here');
+  });
+
+  it('should filter out empty display strings', async () => {
+    writeHistory(tmpDir, [
+      { display: '', timestamp: Date.now() - 2000, sessionId: 'ses_empty1' },
+      { display: '   ', timestamp: Date.now() - 1000, sessionId: 'ses_empty2' },
+      { display: 'valid prompt', timestamp: Date.now(), sessionId: 'ses_valid' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.query).toBe('valid prompt');
+  });
+
 });

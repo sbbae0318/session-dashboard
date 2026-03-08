@@ -381,3 +381,88 @@ describe('ClaudeHeartbeat', () => {
     hb.stop();
   });
 });
+
+describe('ClaudeHeartbeat — project scanning', () => {
+  let tmpDir: string;
+  let projectsDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    projectsDir = join(tmpDir, 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should detect active sessions from recently modified project JSONL files', async () => {
+    const sessionId = 'abc123-def456';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-foo');
+    mkdirSync(projectDir, { recursive: true });
+
+    // Write a conversation JSONL (recently modified = active)
+    const conversation = [
+      JSON.stringify({ type: 'user', message: { content: 'hello' } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hi!' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    // No heartbeat files — only project JSONL
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.sessionId).toBe(sessionId);
+    expect(session.source).toBe('claude-code');
+    expect(session.status).toBe('idle'); // last entry is assistant text
+    hb.stop();
+  });
+
+  it('should detect busy status from project JSONL when last entry is user message', async () => {
+    const sessionId = 'busy-session-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-bar');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Done!' }] } }),
+      JSON.stringify({ type: 'user', message: { content: 'do more work' } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.status).toBe('busy');
+    hb.stop();
+  });
+
+  it('should not detect sessions from project JSONL files older than STALE_TTL_MS', async () => {
+    const sessionId = 'old-session-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-old');
+    mkdirSync(projectDir, { recursive: true });
+
+    const filePath = join(projectDir, `${sessionId}.jsonl`);
+    writeFileSync(filePath, JSON.stringify({ type: 'assistant', message: { content: [] } }) + '\n', 'utf-8');
+
+    // Manually set mtime to 3 minutes ago (older than STALE_TTL_MS = 120s)
+    const { utimesSync } = await import('node:fs');
+    const oldTime = new Date(Date.now() - 180_000);
+    utimesSync(filePath, oldTime, oldTime);
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(hb.getActiveSessions()).toHaveLength(0);
+    hb.stop();
+  });
+});

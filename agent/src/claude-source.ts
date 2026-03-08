@@ -46,13 +46,23 @@ export class ClaudeSource {
 
   async getRecentQueries(limit: number = 50): Promise<ClaudeQueryEntry[]> {
     const entries = await this.reader.tailLines(limit);
-    return entries.map((entry) => ({
-      sessionId: entry.sessionId,
-      sessionTitle: null,
-      timestamp: entry.timestamp,
-      query: entry.display,
-      isBackground: false,
-      source: 'claude-code' as const,
-    }));
+    return entries
+      .filter((entry) => this.isRealQuery(entry.display))
+      .map((entry) => ({
+        sessionId: entry.sessionId,
+        sessionTitle: null,
+        timestamp: entry.timestamp,
+        query: entry.display,
+        isBackground: false,
+        source: 'claude-code' as const,
+      }));
+  }
+
+  /** 슬래시 커맨드, 빈 문자열, XML 태그로 시작하는 항목 제외 */
+  private isRealQuery(display: string): boolean {
+    if (!display || display.trim().length === 0) return false;
+    if (display.startsWith('/')) return false;  // /exit, /help, /clear 등
+    if (display.startsWith('<')) return false;  // XML 시스템 메시지
+    return true;
   }
 }
