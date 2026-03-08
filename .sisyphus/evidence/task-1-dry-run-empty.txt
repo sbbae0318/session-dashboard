@@ -1,0 +1,19 @@
+═══════════════════════════════════════════════════════════
+ Session Dashboard Unified Installer
+═══════════════════════════════════════════════════════════
+
+Detected: SOURCE=opencode
+Generated: API_KEY=8006dd2d5f51b8dcd9add75ffddce7da
+
+agent/.env would contain:
+  PORT=3098 | API_KEY=8006dd2d5f51b8dcd9add75ffddce7da | SOURCE=opencode | HISTORY_DIR=~/.opencode/history
+
+server/machines.yml would contain:
+  - id: local, host: host.docker.internal, port: 3098
+    apiKey: 8006dd2d5f51b8dcd9add75ffddce7da, source: opencode
+
+No changes made (dry run).
+
+═══════════════════════════════════════════════════════════
+ Session Dashboard Setup Complete
+═══════════════════════════════════════════════════════════
