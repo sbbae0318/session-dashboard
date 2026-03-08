@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getQueries } from "../lib/stores/queries.svelte";
   import PromptDetailModal from "./PromptDetailModal.svelte";
-  import { getSelectedSessionId, getSourceFilter } from "../lib/stores/filter.svelte";
+  import { getSelectedSessionId, getSourceFilter, selectSession } from "../lib/stores/filter.svelte";
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
   import { getCards } from "../lib/stores/cards.svelte";
   import { getSessions } from "../lib/stores/sessions.svelte";
@@ -73,6 +73,11 @@
   }
 
   function handlePromptClick(entry: typeof filteredQueries[number]): void {
+    selectSession(entry.sessionId);
+  }
+
+  function handleDetailClick(entry: typeof filteredQueries[number], event: Event): void {
+    event.stopPropagation();
     modalEntry = entry;
   }
 
@@ -149,6 +154,11 @@
             {:else}
               <span class="source-badge opencode">OpenCode</span>
             {/if}
+            <button
+              class="prompt-detail-btn"
+              onclick={(e) => handleDetailClick(entry, e)}
+              title="프롬프트 전문 보기"
+            >전문</button>
           </div>
           <p class="prompt-text" title={entry.query}>
             {truncate(entry.query, 200)}
@@ -322,6 +332,27 @@
     background: rgba(63, 185, 80, 0.15);
     color: #3fb950;
     border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+
+  .prompt-detail-btn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    border-radius: 9999px;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .prompt-detail-btn:hover {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--accent);
   }
   .empty-state {
     display: flex;
