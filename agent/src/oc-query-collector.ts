@@ -184,6 +184,7 @@ export class OcQueryCollector {
         isBackground: background,
         source: 'opencode',
       });
+      break;  // 첫 번째 유효 user message만 수집 후 중단
     }
 
     return entries;

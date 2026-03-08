@@ -190,15 +190,23 @@ describe('SessionCache', () => {
 
   // ── 6. message.updated(role=user) → REST fallback → lastPrompt ──
 
-  it('fetches last user prompt via REST on message.updated', async () => {
+  it('여러 user 메시지 중 첫 번째를 lastPrompt로 저장', async () => {
     const userMessages = [
       {
-        info: { role: 'user', sessionID: 'sess-1' },
+        info: { role: 'user', sessionID: 'sess-1', time: { created: 11111 } },
         parts: [{ type: 'text', text: 'Build a todo app' }],
+      },
+      {
+        info: { role: 'assistant', sessionID: 'sess-1' },
+        parts: [{ type: 'text', text: 'Sure, I will build it' }],
+      },
+      {
+        info: { role: 'user', sessionID: 'sess-1', time: { created: 22222 } },
+        parts: [{ type: 'text', text: 'Add dark mode' }],
       },
     ];
 
-    // bootstrap /project → [], then fetchLastUserPrompt → messages
+    // bootstrap /project → [], then fetchFirstUserPrompt → messages
     mockFetchJson
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(userMessages);
@@ -219,8 +227,10 @@ describe('SessionCache', () => {
 
     const entry = cache.getSessionDetails()['sess-1'];
     expect(entry).toBeDefined();
+    // 첫 번째 user 메시지가 선택되어야 함
     expect(entry.lastPrompt).toBe('Build a todo app');
-    expect(entry.lastPromptTime).toBeGreaterThan(0);
+    // 메시지 원래 타임스탬프 사용
+    expect(entry.lastPromptTime).toBe(11111);
   });
 
   // ── 7. isSystemPrompt filter ──
@@ -442,5 +452,97 @@ describe('SessionCache', () => {
 
     // After stop(), the store is closed — getSessionDetails() should throw
     expect(() => stoppedCache.getSessionDetails()).toThrow();
+  });
+
+  // ── 14. 멱등성 — 이미 lastPrompt가 있는 세션은 REST 호출 skip ──
+
+  it('이미 lastPrompt가 저장된 세션은 REST 호출 skip', async () => {
+    // bootstrap 호출에만 응답 (fetchFirstUserPrompt는 호출되지 않아야 함)
+    mockFetchJson.mockResolvedValueOnce([]);
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // 세션을 lastPrompt가 있는 상태로 사전 설정
+    simulateSseEvent(mockRes, {
+      directory: '/project/idempotent',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-idem', status: { type: 'busy' } },
+      },
+    });
+
+    // lastPrompt를 직접 주입하기 위해 message.updated 시뮬레이션 후 REST 응답 설정
+    const userMessages = [
+      {
+        info: { role: 'user', sessionID: 'sess-idem', time: { created: 99999 } },
+        parts: [{ type: 'text', text: 'First prompt' }],
+      },
+    ];
+    mockFetchJson.mockResolvedValueOnce(userMessages);
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/idempotent',
+      payload: {
+        type: 'message.updated',
+        properties: { info: { role: 'user', sessionID: 'sess-idem' } },
+      },
+    });
+    await flushPromises();
+
+    // 첫 번째 이벤트로 lastPrompt 저장됨
+    expect(cache.getSessionDetails()['sess-idem']?.lastPrompt).toBe('First prompt');
+
+    // fetchJson 호출 횟수 기록 (bootstrap 1회 + fetchFirstUserPrompt 1회 = 2회)
+    const callCountAfterFirst = mockFetchJson.mock.calls.length;
+
+    // 두 번째 message.updated 이벤트 — 이미 lastPrompt가 있으므로 REST skip되어야 함
+    simulateSseEvent(mockRes, {
+      directory: '/project/idempotent',
+      payload: {
+        type: 'message.updated',
+        properties: { info: { role: 'user', sessionID: 'sess-idem' } },
+      },
+    });
+    await flushPromises();
+
+    // fetchJson 호출 횟수가 늘지 않아야 함 (REST skip 확인)
+    expect(mockFetchJson.mock.calls.length).toBe(callCountAfterFirst);
+  });
+
+  // ── 15. message timestamp를 lastPromptTime으로 사용 (Date.now() 대신) ──
+
+  it('message timestamp를 lastPromptTime으로 사용 (Date.now() 대신)', async () => {
+    const fixedTimestamp = 1700000000000;
+    const userMessages = [
+      {
+        info: { role: 'user', sessionID: 'sess-ts', time: { created: fixedTimestamp } },
+        parts: [{ type: 'text', text: 'Hello with timestamp' }],
+      },
+    ];
+
+    mockFetchJson
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(userMessages);
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/ts',
+      payload: {
+        type: 'message.updated',
+        properties: { info: { role: 'user', sessionID: 'sess-ts' } },
+      },
+    });
+    await flushPromises();
+
+    const entry = cache.getSessionDetails()['sess-ts'];
+    expect(entry).toBeDefined();
+    expect(entry.lastPrompt).toBe('Hello with timestamp');
+    // Date.now()가 아닌 메시지 원래 타임스탬프여야 함
+    expect(entry.lastPromptTime).toBe(fixedTimestamp);
   });
 });

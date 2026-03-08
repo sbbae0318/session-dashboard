@@ -43,7 +43,7 @@ interface OcServeProject {
 }
 
 interface OcServeMessage {
-  info: { role: string; sessionID: string };
+  info: { role: string; sessionID: string; time?: { created: number } };
   parts?: Array<{ type: string; text?: string }>;
 }
 
@@ -320,7 +320,7 @@ export class SessionCache {
     if (!info?.sessionID || info.role !== 'user') return;
 
     // REST fallback — message.updated has no text
-    void this.fetchLastUserPrompt(info.sessionID, directory);
+    void this.fetchFirstUserPrompt(info.sessionID, directory);
   }
 
   private handleMessagePartUpdated(props: Record<string, unknown>, directory: string | null): void {
@@ -358,24 +358,28 @@ export class SessionCache {
   // REST Fallback for Prompt Text
   // -------------------------------------------------------------------------
 
-  private async fetchLastUserPrompt(sessionID: string, directory: string | null): Promise<void> {
+  private async fetchFirstUserPrompt(sessionID: string, directory: string | null): Promise<void> {
+    // 이미 lastPrompt가 저장된 세션은 REST 재호출 skip (멱등성 최적화)
+    const existing = this.store.get(sessionID);
+    if (existing?.lastPrompt) return;
+
     try {
       const url = `http://127.0.0.1:${this.ocServePort}/session/${sessionID}/message`;
       const data = (await fetchJson(url, {}, 3000)) as OcServeMessage[];
       if (!Array.isArray(data)) return;
 
-      const lastUserMsg = data.filter((m) => m.info?.role === 'user').pop();
-      if (!lastUserMsg) return;
+      const firstUserMsg = data.find((m) => m.info?.role === 'user');
+      if (!firstUserMsg) return;
 
-      const text = lastUserMsg.parts?.[0]?.text;
+      const text = firstUserMsg.parts?.[0]?.text;
       if (!text || isSystemPrompt(text)) return;
 
-      const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
+      const existingDetail = this.store.get(sessionID) ?? defaultSessionDetail(directory);
       this.store.upsert(sessionID, {
-        ...existing,
+        ...existingDetail,
         lastPrompt: text.slice(0, PROMPT_MAX_LENGTH),
-        lastPromptTime: Date.now(),
-        directory: directory ?? existing.directory,
+        lastPromptTime: firstUserMsg.info?.time?.created ?? Date.now(),
+        directory: directory ?? existingDetail.directory,
         updatedAt: Date.now(),
       });
     } catch {
