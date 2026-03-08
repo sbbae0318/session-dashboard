@@ -150,9 +150,16 @@ do_install() {
   echo "─── Step 2: Detect data source ───"
   local source api_key
   source=$(detect_source)
-  api_key=$(generate_api_key)
-  echo "Detected: SOURCE=$source"
-  echo "Generated: API_KEY=$api_key"
+  local env_file="$REPO_ROOT/agent/.env"
+  if [[ -f "$env_file" ]] && grep -q '^API_KEY=[^[:space:]]' "$env_file"; then
+    api_key=$(grep '^API_KEY=' "$env_file" | cut -d'=' -f2)
+    echo "Detected: SOURCE=$source"
+    echo "Reusing:  API_KEY=$api_key (from existing agent/.env)"
+  else
+    api_key=$(generate_api_key)
+    echo "Detected: SOURCE=$source"
+    echo "Generated: API_KEY=$api_key"
+  fi
   echo ""
   echo "─── Step 3: Configure ───"
   if [[ "$ACTION" != "server-only" ]]; then
