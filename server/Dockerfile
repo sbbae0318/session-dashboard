@@ -46,6 +46,9 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 USER nodejs
 
+# Use /tmp for lock file in Docker (prevents PID 1 restart loop)
+ENV LOCK_FILE_PATH=/tmp/session-dashboard.lock
+
 EXPOSE 3097
 
 # Health check

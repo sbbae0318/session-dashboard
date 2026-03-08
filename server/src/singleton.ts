@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-const LOCK_FILE = join(homedir(), '.opencode', 'session-dashboard.lock');
+const LOCK_FILE = process.env.LOCK_FILE_PATH ?? join(homedir(), '.opencode', 'session-dashboard.lock');
 
 /**
  * Check if a process with the given PID exists
@@ -49,6 +49,13 @@ export async function acquireLock(): Promise<boolean> {
         if (isNaN(pid)) {
           // Invalid PID, take over
           console.log('[Singleton] Invalid lock file, taking over');
+          await unlink(LOCK_FILE);
+          return acquireLock();
+        }
+
+        if (pid === process.pid) {
+          // Same PID as us — stale lock from previous run (common in Docker where PID is always 1)
+          console.log(`[Singleton] Stale lock (same PID ${pid}), taking over`);
           await unlink(LOCK_FILE);
           return acquireLock();
         }
