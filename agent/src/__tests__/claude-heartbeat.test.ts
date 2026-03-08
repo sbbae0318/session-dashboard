@@ -570,3 +570,87 @@ describe('ClaudeHeartbeat — title extraction', () => {
     hb.stop();
   });
 });
+
+describe('ClaudeHeartbeat — lastPromptTime extraction', () => {
+  let tmpDir: string;
+  let projectsDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    projectsDir = join(tmpDir, 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should extract lastPromptTime from last user entry timestamp in ms', async () => {
+    const sessionId = 'prompt-time-001';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-pt');
+    mkdirSync(projectDir, { recursive: true });
+
+    const ts1 = '2026-03-08T16:08:50.930Z';
+    const ts2 = '2026-03-08T17:30:00.000Z';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: ts1, message: { content: 'first prompt' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-08T16:10:00.000Z', message: { content: [{ type: 'text', text: 'reply' }] } }),
+      JSON.stringify({ type: 'user', timestamp: ts2, message: { content: 'second prompt' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-08T17:31:00.000Z', message: { content: [{ type: 'text', text: 'reply2' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.lastPromptTime).toBe(new Date(ts2).getTime());
+    hb.stop();
+  });
+
+  it('should return null lastPromptTime when no user entry exists', async () => {
+    const sessionId = 'prompt-time-none';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-ptn');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-08T16:10:00.000Z', message: { content: [{ type: 'text', text: 'hello' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.lastPromptTime).toBeNull();
+    hb.stop();
+  });
+
+  it('should return null lastPromptTime when user entry has no timestamp field', async () => {
+    const sessionId = 'prompt-time-nots';
+    const projectDir = join(projectsDir, '-Users-sbbae-project-ptnt');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'user', message: { content: 'no timestamp here' } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    expect(hb.getActiveSessions()[0]!.lastPromptTime).toBeNull();
+    hb.stop();
+  });
+});

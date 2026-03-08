@@ -18,6 +18,7 @@ interface DashboardSession {
   summary: string | null;
   apiStatus: "idle" | "busy" | "retry" | null;
   lastPrompt: string | null;
+  lastPromptTime: number | null;
 
   source?: "opencode" | "claude-code";
 
@@ -143,6 +144,9 @@ export class ActiveSessionsModule implements BackendModule {
         summary: null,
         apiStatus,
         lastPrompt: cached?.lastPrompt ?? null,
+        lastPromptTime: isClaudeCode
+          ? (s.lastPromptTime as number | null) ?? null
+          : cached?.lastPromptTime ?? null,
         source: isClaudeCode ? 'claude-code' : 'opencode',
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
@@ -173,6 +177,7 @@ export class ActiveSessionsModule implements BackendModule {
         summary: null,
         apiStatus: cached.status as DashboardSession['apiStatus'],
         lastPrompt: cached.lastPrompt,
+        lastPromptTime: cached?.lastPromptTime ?? null,
         machineId: cached.machineId,
         machineHost: machine?.host ?? '',
         machineAlias: machine?.alias ?? '',

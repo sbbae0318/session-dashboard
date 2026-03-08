@@ -57,6 +57,7 @@ export interface DashboardSession {
   summary: string | null;
   apiStatus: "idle" | "busy" | "retry" | null;
   lastPrompt: string | null;
+  lastPromptTime: number | null;
 
   source?: "opencode" | "claude-code";
 
