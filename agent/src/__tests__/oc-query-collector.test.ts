@@ -49,12 +49,11 @@ describe('OcQueryCollector', () => {
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);  // 첫 번째 user 메시지만
     expect(entries[0].sessionId).toBe('s1');
     expect(entries[0].sessionTitle).toBe('my chat');
     expect(entries[0].source).toBe('opencode');
     expect(entries[0].query).toBe('hello world');
-    expect(entries[1].query).toBe('second question');
   });
 
   it('[analyze-mode] prefix strip: 실제 user content만 추출', async () => {
@@ -163,7 +162,7 @@ describe('OcQueryCollector', () => {
     expect(entries[0].query).toHaveLength(2000);
   });
 
-  it('incremental 제거: 같은 세션 두 번 호출 시 전체 메시지 반환 (서버가 중복 제거)', async () => {
+  it('first-only: 두 번 호출해도 첫 번째 user 메시지만 반환', async () => {
     const messages = [
       makeMessage('user', 'first question'),
     ];
@@ -185,9 +184,9 @@ describe('OcQueryCollector', () => {
 
     // 두 번째 호출 → 전체 메시지 반환 (서버가 중복 제거 담당)
     const second = await collector.collectQueries();
-    expect(second).toHaveLength(2);
-    expect(second.map(q => q.query)).toContain('first question');
-    expect(second.map(q => q.query)).toContain('second question');
+    expect(second).toHaveLength(1);  // 여전히 첫 번째 메시지만
+    expect(second[0].query).toBe('first question');
+    // 두 번째 메시지는 수집 안 됨 (break 적용)
   });
 
   it('개별 세션 실패 격리: 하나 실패해도 나머지 수집', async () => {
@@ -327,12 +326,10 @@ describe('OcQueryCollector — per-message timestamp', () => {
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(2);
-    // 최신순 정렬: second(6000) 먼저, first(5000) 나중
-    expect(entries[0].timestamp).toBe(6000);
-    expect(entries[0].query).toBe('second');
-    expect(entries[1].timestamp).toBe(5000);
-    expect(entries[1].query).toBe('first');
+    expect(entries).toHaveLength(1);  // 첫 번째 user 메시지만
+    // 첫 번째 메시지('first' at 5000)만 반환
+    expect(entries[0].timestamp).toBe(5000);
+    expect(entries[0].query).toBe('first');
   });
 
   it('info.time.created가 없으면 session 타임스탬프로 폴백', async () => {
@@ -385,3 +382,40 @@ describe('OcQueryCollector — per-message timestamp', () => {
   });
 });
 
+describe('OcQueryCollector — first-only collection', () => {
+  let collector: OcQueryCollector;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collector = new OcQueryCollector(4321);
+  });
+
+  it('세션당 첫 번째 유효 user 메시지만 수집 (중간 응답 제외)', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) return Promise.resolve([makeSession('s1')]);
+      return Promise.resolve([
+        makeMessage('user', '프로젝트 설정해주세요'),    // ← 이것만 수집
+        makeMessage('assistant', '...'),
+        makeMessage('user', '핵심 질문 다시해주세요'),   // ← 건너뜀
+        makeMessage('assistant', '...'),
+        makeMessage('user', '네 좋아요'),               // ← 건너뜀
+      ]);
+    });
+    const entries = await collector.collectQueries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('프로젝트 설정해주세요');
+  });
+
+  it('첫 번째 user msg가 system이면 skip, 두 번째 유효 msg 수집', async () => {
+    mockFetchJson.mockImplementation((url: string) => {
+      if (url.includes('/session?')) return Promise.resolve([makeSession('s1')]);
+      return Promise.resolve([
+        makeMessage('user', '[SYSTEM DIRECTIVE: run this]'),  // ← null 반환, skip
+        makeMessage('user', '실제 프롬프트'),                  // ← 이것 수집
+      ]);
+    });
+    const entries = await collector.collectQueries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].query).toBe('실제 프롬프트');
+  });
+});
