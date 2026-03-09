@@ -25,7 +25,7 @@ interface OcServeMessage {
   info: {
     role: string;
     id: string;
-    time?: { created: number };
+    time?: { created: number; completed?: number };
   };
   parts?: Array<{ type: string; text?: string }>;
 }
@@ -39,6 +39,7 @@ export interface QueryEntry {
   query: string;
   isBackground: boolean;
   source: 'opencode';
+  completedAt: number | null;
 }
 
 // SessionCache에서 보완 세션의 데이터 다양한 형식 지원 (SessionDetail 하위호환)
@@ -155,6 +156,7 @@ export class OcQueryCollector {
           query: extracted.slice(0, QUERY_MAX_LENGTH),
           isBackground: false,
           source: 'opencode',
+          completedAt: null,
         });
       }
     }
@@ -202,6 +204,7 @@ export class OcQueryCollector {
 
     let lastEntry: QueryEntry | null = null;
     const background = isBackgroundSession(session.title);
+    let lastUserMsgIndex = -1;
 
     for (let i = 0; i < newMessages.length; i++) {
       const msg = newMessages[i];
@@ -226,6 +229,7 @@ export class OcQueryCollector {
         : (rawTime || Date.now());
       const timestamp = msgTime ?? sessionTs;
 
+      lastUserMsgIndex = i;
       lastEntry = {
         sessionId: session.id,
         sessionTitle: session.title,
@@ -233,8 +237,20 @@ export class OcQueryCollector {
         query: extracted.slice(0, QUERY_MAX_LENGTH),
         isBackground: background,
         source: 'opencode',
+        completedAt: null,
       };
       // break 제거 — 계속 순회하여 마지막 유효 메시지를 찾음
+    }
+
+    // 마지막 user 메시지 이후의 assistant 메시지에서 completedAt 추출
+    if (lastEntry && lastUserMsgIndex >= 0) {
+      for (let i = newMessages.length - 1; i > lastUserMsgIndex; i--) {
+        const msg = newMessages[i];
+        if (msg.info?.role === 'assistant' && msg.info?.time?.completed) {
+          lastEntry.completedAt = msg.info.time.completed;
+          break;
+        }
+      }
     }
 
     return lastEntry ? [lastEntry] : [];

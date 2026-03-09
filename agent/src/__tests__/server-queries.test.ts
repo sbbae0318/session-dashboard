@@ -65,6 +65,7 @@ function makeQueryEntry(overrides: Partial<QueryEntry> = {}): QueryEntry {
     query: 'What is the meaning of life?',
     isBackground: false,
     source: 'opencode',
+    completedAt: null,
     ...overrides,
   };
 }

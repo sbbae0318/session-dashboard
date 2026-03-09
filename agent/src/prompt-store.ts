@@ -59,6 +59,13 @@ export class PromptStore {
       )
     `);
 
+    // completed_at 컬럼 추가 (기존 DB 호환)
+    try {
+      this.db.exec('ALTER TABLE prompt_history ADD COLUMN completed_at INTEGER');
+    } catch {
+      // 이미 존재하면 무시
+    }
+
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_ph_timestamp ON prompt_history(timestamp DESC)
     `);
@@ -70,9 +77,9 @@ export class PromptStore {
     // Prepared statements — 생성자에서 한 번만 준비
     this.stmtUpsert = this.db.prepare(`
       INSERT OR REPLACE INTO prompt_history
-        (id, session_id, session_title, timestamp, query, is_background, source, collected_at)
+        (id, session_id, session_title, timestamp, query, is_background, source, collected_at, completed_at)
       VALUES
-        (@id, @session_id, @session_title, @timestamp, @query, @is_background, @source, @collected_at)
+        (@id, @session_id, @session_title, @timestamp, @query, @is_background, @source, @collected_at, @completed_at)
     `);
 
     this.stmtGetRecent = this.db.prepare(
@@ -118,6 +125,7 @@ export class PromptStore {
           is_background: entry.isBackground ? 1 : 0,
           source: entry.source,
           collected_at: now,
+          completed_at: entry.completedAt ?? null,
         });
         inserted += info.changes;
       }
@@ -181,6 +189,7 @@ interface PromptRow {
   is_background: number;
   source: string;
   collected_at: number;
+  completed_at: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,5 +204,6 @@ function rowToQueryEntry(row: PromptRow): QueryEntry {
     query: row.query,
     isBackground: row.is_background === 1,
     source: row.source as 'opencode',
+    completedAt: row.completed_at ?? null,
   };
 }

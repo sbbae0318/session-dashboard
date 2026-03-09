@@ -10,6 +10,7 @@ interface RawQueryEntry {
   query: string;           // User prompt text
   isBackground: boolean;   // true for background/subagent tasks
   source?: string;          // "opencode" | "claude-code"
+  completedAt?: number | null;  // Unix ms, completion timestamp
 }
 
 /** QueryEntry — normalized internal type with machine fields added */
@@ -20,6 +21,7 @@ export interface QueryEntry {
   query: string;           // User prompt text
   isBackground: boolean;   // true for background/subagent tasks
   source: "opencode" | "claude-code";
+  completedAt: number | null;  // Unix ms, completion timestamp
 
   // Machine fields — runtime-injected by MachineManager (not in JSONL)
   machineId: string;
@@ -34,6 +36,7 @@ function normalizeQuery(raw: RawQueryEntry): QueryEntry {
   return {
     ...raw,
     source: raw.source === 'claude-code' ? 'claude-code' as const : 'opencode' as const,
+    completedAt: raw.completedAt ?? null,
     machineId: '',
     machineHost: '',
     machineAlias: '',

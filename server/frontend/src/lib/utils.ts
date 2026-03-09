@@ -33,18 +33,11 @@ export function formatDuration(ms: number): string {
 }
 
 export function getQueryResult(
-  query: { sessionId: string; timestamp: number },
-  cards: Array<{ sessionId: string; endTime: number; endReason?: string }>,
+  query: { sessionId: string; timestamp: number; completedAt?: number | null },
   sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }>
 ): string | null {
-  // Find matching cards: same sessionId AND endTime > query.timestamp
-  const matchingCards = cards
-    .filter((c) => c.sessionId === query.sessionId && c.endTime > query.timestamp)
-    .sort((a, b) => b.endTime - a.endTime); // most recent first
-
-  if (matchingCards.length > 0) {
-    return matchingCards[0].endReason ?? null;
-  }
+  // completedAt이 있으면 완료된 것
+  if (query.completedAt) return 'completed';
 
   // Fallback to session status
   const session = sessions.find((s) => s.sessionId === query.sessionId);
@@ -58,18 +51,13 @@ export function getQueryResult(
 }
 
 /**
- * Get the completion timestamp for a query from matching cards.
- * Returns endTime (Unix ms) if a matching card exists, null otherwise.
+ * Get the completion timestamp for a query.
+ * Returns completedAt (Unix ms) if available, null otherwise.
  */
 export function getCompletionTime(
-  query: { sessionId: string; timestamp: number },
-  cards: Array<{ sessionId: string; endTime: number }>,
+  query: { completedAt?: number | null },
 ): number | null {
-  const matchingCards = cards
-    .filter((c) => c.sessionId === query.sessionId && c.endTime > query.timestamp)
-    .sort((a, b) => a.endTime - b.endTime); // earliest completion first
-
-  return matchingCards.length > 0 ? matchingCards[0].endTime : null;
+  return query.completedAt ?? null;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

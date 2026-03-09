@@ -5,6 +5,7 @@ export interface QueryEntry {
   query: string;
   isBackground: boolean;
   source?: "opencode" | "claude-code";
+  completedAt: number | null;
 
   // Machine fields — runtime-injected by MachineManager (not in JSONL)
   machineId: string;

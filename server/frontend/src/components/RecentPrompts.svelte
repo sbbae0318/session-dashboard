@@ -109,8 +109,8 @@
 
       {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp + '-' + i)}
         {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
-        {@const result = getQueryResult(entry, [], sessions)}
-        {@const completionTs = getCompletionTime(entry, [])}
+        {@const result = getQueryResult(entry, sessions)}
+        {@const completionTs = getCompletionTime(entry)}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           class="prompt-item" class:in-progress={!completionTs}
