@@ -27,6 +27,8 @@ export interface CachedSessionDetail {
   readonly lastResponseTime?: number | null;
   /** Claude Code only: JSONL file mtime (ms) */
   readonly lastFileModified?: number | null;
+  /** Whether the agent's SSE connection to oc-serve is active */
+  readonly sseConnected?: boolean;
 }
 
 export class MachineManager {
@@ -412,7 +414,22 @@ export class MachineManager {
    const url = `http://${machine.host}:${machine.port}/proxy/session/details`;
    const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
    const raw = await this.httpGet(url, headers, machine.timeout);
-   return JSON.parse(raw) as Record<string, CachedSessionDetail>;
+   const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+   // New wrapper format: { meta: {...}, sessions: {...} }
+   if (parsed && typeof parsed === 'object' && 'meta' in parsed && 'sessions' in parsed) {
+     const meta = parsed.meta as { sseConnected?: boolean } | undefined;
+     const sseConnected = meta?.sseConnected ?? false;
+     const sessions = parsed.sessions as Record<string, CachedSessionDetail>;
+     const result: Record<string, CachedSessionDetail> = {};
+     for (const [id, detail] of Object.entries(sessions)) {
+       result[id] = { ...detail, sseConnected };
+     }
+     return result;
+   }
+
+   // Backward compat: old flat format (no meta wrapper)
+   return parsed as Record<string, CachedSessionDetail>;
  }
 
   /**

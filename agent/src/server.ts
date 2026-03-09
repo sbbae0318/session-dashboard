@@ -107,7 +107,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       ocServePort,
       // SessionCache의 모든 세션 데이터 전달
       // lastPrompt가 있는 세션은 oc-serve message fetch 없이 직접 QueryEntry로 변환됨
-      () => sessionCache!.getSessionDetails(),
+      () => sessionCache!.getSessionDetails().sessions,
     );
   }
 

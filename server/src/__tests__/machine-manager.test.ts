@@ -405,6 +405,51 @@ describe('MachineManager', () => {
 
       expect(result).toEqual({});
     });
+
+    it('should parse new wrapper format with meta and inject sseConnected', async () => {
+      const wrappedResponse = {
+        meta: { sseConnected: true, lastSseEventAt: 1700000000000, sseConnectedAt: 1700000000000 },
+        sessions: {
+          'sess-1': { status: 'busy', lastPrompt: 'Hello', lastPromptTime: 1000, currentTool: 'bash', directory: '/proj1', updatedAt: 1000 },
+          'sess-2': { status: 'idle', lastPrompt: null, lastPromptTime: 0, currentTool: null, directory: '/proj2', updatedAt: 2000 },
+        },
+      };
+      setupUrlRouter({
+        'http://192.168.1.10:3100/proxy/session/details': JSON.stringify(wrappedResponse),
+        'http://192.168.1.11:3100/proxy/session/details': JSON.stringify({
+          meta: { sseConnected: false, lastSseEventAt: 0, sseConnectedAt: 0 },
+          sessions: {
+            'sess-3': { status: 'idle', lastPrompt: null, lastPromptTime: 0, currentTool: null, directory: '/proj3', updatedAt: 3000 },
+          },
+        }),
+      });
+
+      const result = await manager.pollSessionDetails();
+
+      expect(result['sess-1']?.sseConnected).toBe(true);
+      expect(result['sess-2']?.sseConnected).toBe(true);
+      expect(result['sess-3']?.sseConnected).toBe(false);
+    });
+
+    it('should handle old flat format without meta (backward compat)', async () => {
+      // Old format: flat Record<string, SessionDetail> without meta wrapper
+      setupUrlRouter({
+        'http://192.168.1.10:3100/proxy/session/details': JSON.stringify({
+          'sess-1': { status: 'busy', lastPrompt: 'Hello', lastPromptTime: 1000, currentTool: null, directory: '/proj1', updatedAt: 1000 },
+        }),
+        'http://192.168.1.11:3100/proxy/session/details': JSON.stringify({
+          'sess-2': { status: 'idle', lastPrompt: null, lastPromptTime: 0, currentTool: null, directory: '/proj2', updatedAt: 2000 },
+        }),
+      });
+
+      const result = await manager.pollSessionDetails();
+
+      expect(Object.keys(result)).toHaveLength(2);
+      expect(result['sess-1']).toMatchObject({ status: 'busy', lastPrompt: 'Hello' });
+      expect(result['sess-2']).toMatchObject({ status: 'idle', lastPrompt: null });
+      // No sseConnected field in old format
+      expect(result['sess-1']?.sseConnected).toBeUndefined();
+    });
   });
 
   describe('grace period (consecutiveFailures)', () => {
