@@ -111,9 +111,10 @@
         {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
+        {@const isWorking = !completionTs || result === 'busy' || result === 'active'}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
-          class="prompt-item" class:in-progress={!completionTs}
+          class="prompt-item" class:in-progress={isWorking}
           class:background={entry.isBackground}
           class:clickable={true}
           onclick={() => handlePromptClick(entry)}
@@ -126,7 +127,7 @@
             <span class="prompt-time">
               {formatTimestamp(entry.timestamp)}
               <span class="time-arrow">→</span>
-              {#if completionTs}
+              {#if completionTs && !isWorking}
                 {formatTimestamp(completionTs)}
                 <span class="time-ago">({relativeTime(completionTs)})</span>
               {:else}
