@@ -25,6 +25,11 @@ export interface SessionDetail {
   updatedAt: number;
 }
 
+interface SessionDetailsMeta {
+  sseConnected: boolean;
+  lastSseEventAt: number;
+  sseConnectedAt: number;
+}
 type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
 
 interface SseEvent {
@@ -106,6 +111,8 @@ export class SessionCache {
   private reconnectDelay: number = INITIAL_RECONNECT_DELAY;
   private sseBuffer = '';
   private sseDataLines: string[] = [];
+  private sseConnectedAt: number = 0;
+  private lastSseEventAt: number = 0;
 
   constructor(private ocServePort: number = 4096, dbPath?: string) {
     this.store = new SessionStore(dbPath);
@@ -138,12 +145,23 @@ export class SessionCache {
     this.store.close();
   }
 
-  getSessionDetails(): Record<string, SessionDetail> {
-    return this.store.getAll();
+  getSessionDetails(): { meta: SessionDetailsMeta; sessions: Record<string, SessionDetail> } {
+    return {
+      meta: {
+        sseConnected: this.connectionState === 'connected',
+        lastSseEventAt: this.lastSseEventAt,
+        sseConnectedAt: this.sseConnectedAt,
+      },
+      sessions: this.store.getAll(),
+    };
   }
 
   getConnectionState(): ConnectionState {
     return this.connectionState;
+  }
+
+  getSseConnectedAt(): number {
+    return this.sseConnectedAt;
   }
 
   registerRoutes(app: FastifyInstance): void {
@@ -164,6 +182,7 @@ export class SessionCache {
     const request = httpGet(url, (res) => {
       this.response = res;
       this.connectionState = 'connected';
+      this.sseConnectedAt = Date.now();
       this.reconnectDelay = INITIAL_RECONNECT_DELAY;
       this.resetHeartbeat();
 
@@ -243,6 +262,7 @@ export class SessionCache {
   }
 
   private resetHeartbeat(): void {
+    this.lastSseEventAt = Date.now();
     if (this.heartbeatTimer) clearTimeout(this.heartbeatTimer);
     this.heartbeatTimer = setTimeout(() => {
       console.log('[SessionCache] Heartbeat timeout — reconnecting');
@@ -411,6 +431,8 @@ export class SessionCache {
 
       const validProjects = projects.filter((p) => p.worktree && p.worktree !== '/');
 
+      if (this.connectionState !== 'connected') return;
+
       const statusPromises = validProjects.map((project) =>
         this.bootstrapProject(baseUrl, project.worktree),
       );
@@ -434,6 +456,8 @@ export class SessionCache {
       if (!statusType) continue;
 
       const existing = this.store.get(sessionID);
+      if (existing && existing.updatedAt >= this.sseConnectedAt) continue;
+
       this.store.upsert(sessionID, {
         status: statusType,
         lastPrompt: existing?.lastPrompt ?? null,

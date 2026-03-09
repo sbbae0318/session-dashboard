@@ -118,7 +118,7 @@ describe('SessionCache', () => {
     });
 
     // Parsed without error; server.connected has no handler — cache stays empty
-    expect(Object.keys(cache.getSessionDetails())).toHaveLength(0);
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
   });
 
   // ── 3. SSE malformed JSON ──
@@ -133,7 +133,7 @@ describe('SessionCache', () => {
       handler(badChunk);
     }
 
-    expect(Object.keys(cache.getSessionDetails())).toHaveLength(0);
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
   });
 
   // ── 4. session.status → cache ──
@@ -151,7 +151,7 @@ describe('SessionCache', () => {
       },
     });
 
-    const entry = cache.getSessionDetails()['sess-abc'];
+    const entry = cache.getSessionDetails().sessions['sess-abc'];
     expect(entry).toBeDefined();
     expect(entry.status).toBe('busy');
     expect(entry.directory).toBe('/project/foo');
@@ -182,7 +182,7 @@ describe('SessionCache', () => {
       },
     });
 
-    const entry = cache.getSessionDetails()['sess-1'];
+    const entry = cache.getSessionDetails().sessions['sess-1'];
     expect(entry.status).toBe('idle');
     expect(entry.currentTool).toBeNull();
     expect(entry.directory).toBe('/project/bar');
@@ -225,7 +225,7 @@ describe('SessionCache', () => {
 
     await flushPromises();
 
-    const entry = cache.getSessionDetails()['sess-1'];
+    const entry = cache.getSessionDetails().sessions['sess-1'];
     expect(entry).toBeDefined();
     // 마지막 user 메시지가 선택되어야 함 (fetchLatestUserPrompt)
     expect(entry.lastPrompt).toBe('Add dark mode');
@@ -268,7 +268,7 @@ describe('SessionCache', () => {
 
     await flushPromises();
 
-    const entry = cache.getSessionDetails()['sess-2'];
+    const entry = cache.getSessionDetails().sessions['sess-2'];
     expect(entry).toBeDefined();
     expect(entry.lastPrompt).toBeNull();
   });
@@ -293,14 +293,14 @@ describe('SessionCache', () => {
       },
     });
 
-    expect(Object.keys(cache.getSessionDetails())).toHaveLength(2);
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(2);
 
     // TTL=86_400_000ms, eviction interval=60_000ms
     // At 86_460_000ms the eviction runs and entries exceed 24h TTL
     vi.advanceTimersByTime(86_460_000);
     await flushPromises();
 
-    expect(Object.keys(cache.getSessionDetails())).toHaveLength(0);
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
   });
 
   // ── 9. getSessionDetails() format ──
@@ -310,8 +310,9 @@ describe('SessionCache', () => {
     cache = startCache(mockRes);
     await flushPromises();
 
-    const empty: Record<string, SessionDetail> = cache.getSessionDetails();
-    expect(empty).toEqual({});
+    const result = cache.getSessionDetails();
+    expect(result.sessions).toEqual({});
+    expect(result.meta).toBeDefined();
 
     simulateSseEvent(mockRes, {
       directory: '/project/test',
@@ -322,7 +323,7 @@ describe('SessionCache', () => {
     });
 
     const details = cache.getSessionDetails();
-    const entry = details['sess-fmt'];
+    const entry = details.sessions['sess-fmt'];
     expect(entry).toMatchObject({
       status: 'idle',
       lastPrompt: null,
@@ -370,7 +371,7 @@ describe('SessionCache', () => {
       },
     });
 
-    expect(cache.getSessionDetails()['sess-t']?.currentTool).toBe('bash');
+    expect(cache.getSessionDetails().sessions['sess-t']?.currentTool).toBe('bash');
 
     // Tool completed
     simulateSseEvent(mockRes, {
@@ -387,7 +388,7 @@ describe('SessionCache', () => {
       },
     });
 
-    expect(cache.getSessionDetails()['sess-t']?.currentTool).toBeNull();
+    expect(cache.getSessionDetails().sessions['sess-t']?.currentTool).toBeNull();
   });
 
   // ── 12. Persistence across recreations ──
@@ -408,7 +409,7 @@ describe('SessionCache', () => {
       },
     });
 
-    expect(cache.getSessionDetails()['sess-persist']?.status).toBe('busy');
+    expect(cache.getSessionDetails().sessions['sess-persist']?.status).toBe('busy');
     cache.stop();
 
     // Recreate with same DB path
@@ -418,7 +419,7 @@ describe('SessionCache', () => {
     cache.start();
     await flushPromises();
 
-    const entry = cache.getSessionDetails()['sess-persist'];
+    const entry = cache.getSessionDetails().sessions['sess-persist'];
     expect(entry).toBeDefined();
     expect(entry.status).toBe('busy');
     expect(entry.directory).toBe('/project/persist');
@@ -492,7 +493,7 @@ describe('SessionCache', () => {
     await flushPromises();
 
     // 첫 번째 이벤트로 lastPrompt 저장됨
-    expect(cache.getSessionDetails()['sess-idem']?.lastPrompt).toBe('First prompt');
+    expect(cache.getSessionDetails().sessions['sess-idem']?.lastPrompt).toBe('First prompt');
 
     // fetchJson 호출 횟수 기록 (bootstrap 1회 + fetchLatestUserPrompt 1회 = 2회)
     const callCountAfterFirst = mockFetchJson.mock.calls.length;
@@ -540,10 +541,118 @@ describe('SessionCache', () => {
     });
     await flushPromises();
 
-    const entry = cache.getSessionDetails()['sess-ts'];
+    const entry = cache.getSessionDetails().sessions['sess-ts'];
     expect(entry).toBeDefined();
     expect(entry.lastPrompt).toBe('Hello with timestamp');
     // Date.now()가 아닌 메시지 원래 타임스탬프여야 함
     expect(entry.lastPromptTime).toBe(fixedTimestamp);
+  });
+
+  // ── 16. Bootstrap race condition — SSE data fresher than REST ──
+
+  it('bootstrap skips upsert when SSE already has fresher data', async () => {
+    // Bootstrap will fetch projects, then session/status for each project
+    mockFetchJson
+      .mockResolvedValueOnce([
+        { id: 'proj-1', worktree: '/project/race', vcs: null, time: null, sandboxes: null },
+      ])
+      .mockResolvedValueOnce({ 'sess-race': { type: 'idle' } });
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    // bootstrap() is now pending (async, fire-and-forget)
+
+    // SSE event arrives BEFORE bootstrap completes — sets fresher data
+    simulateSseEvent(mockRes, {
+      directory: '/project/race',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-race', status: { type: 'busy' } },
+      },
+    });
+
+    // Flush lets bootstrap resolve — it should skip upsert for sess-race
+    await flushPromises();
+
+    const entry = cache.getSessionDetails().sessions['sess-race'];
+    expect(entry).toBeDefined();
+    // SSE set 'busy'; bootstrap tried 'idle' but should have been skipped
+    expect(entry.status).toBe('busy');
+  });
+
+  // ── 17. Bootstrap stores data on first boot (no existing cache) ──
+
+  it('bootstrap stores data on first boot when no existing cache', async () => {
+    mockFetchJson
+      .mockResolvedValueOnce([
+        { id: 'proj-1', worktree: '/project/fresh', vcs: null, time: null, sandboxes: null },
+      ])
+      .mockResolvedValueOnce({ 'sess-fresh': { type: 'busy' } });
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    // No SSE events — first boot scenario
+    await flushPromises();
+
+    const entry = cache.getSessionDetails().sessions['sess-fresh'];
+    expect(entry).toBeDefined();
+    expect(entry.status).toBe('busy');
+    expect(entry.directory).toBe('/project/fresh');
+  });
+
+  // ── 18. Bootstrap early returns when connection drops mid-execution ──
+
+  it('bootstrap early returns when connection drops mid-execution', async () => {
+    const mockRes = createMockResponse();
+
+    // Use a deferred promise to control when fetchJson resolves
+    let resolveProjectsFetch!: (value: unknown) => void;
+    const projectsFetchPromise = new Promise((resolve) => {
+      resolveProjectsFetch = resolve;
+    });
+    mockFetchJson.mockReturnValueOnce(projectsFetchPromise);
+
+    cache = startCache(mockRes);
+
+    // SSE disconnect happens WHILE bootstrap is awaiting fetchJson('/project')
+    for (const handler of mockRes.handlers['end'] ?? []) {
+      handler();
+    }
+    // Prevent reconnect from re-establishing SSE
+    mockHttpGet.mockImplementation(() => ({ on: vi.fn() }));
+
+    // Now resolve the projects fetch — bootstrap resumes with connectionState='reconnecting'
+    resolveProjectsFetch([
+      { id: 'proj-1', worktree: '/project/dropped', vcs: null, time: null, sandboxes: null },
+    ]);
+    await flushPromises();
+
+    // Early return prevented bootstrapProject from running
+    expect(cache.getSessionDetails().sessions['sess-dropped']).toBeUndefined();
+  });
+
+  // ── 19. getSessionDetails returns meta with sseConnected=true when connected ──
+
+  it('getSessionDetails returns meta with sseConnected=true when connected', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    const result = cache.getSessionDetails();
+    expect(result.meta).toBeDefined();
+    expect(result.meta.sseConnected).toBe(true);
+    expect(result.meta.sseConnectedAt).toBeGreaterThan(0);
+    expect(typeof result.meta.lastSseEventAt).toBe('number');
+  });
+
+  // ── 20. getSessionDetails returns meta with sseConnected=false when disconnected ──
+
+  it('getSessionDetails returns meta with sseConnected=false when disconnected', () => {
+    cache = new SessionCache(4096, ':memory:');
+    const result = cache.getSessionDetails();
+    expect(result.meta).toBeDefined();
+    expect(result.meta.sseConnected).toBe(false);
+    expect(result.meta.sseConnectedAt).toBe(0);
+    expect(result.meta.lastSseEventAt).toBe(0);
   });
 });
