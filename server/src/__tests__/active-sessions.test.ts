@@ -299,3 +299,193 @@ describe('ActiveSessionsModule - buildSessionMap() orphan session synthesis', ()
     expect(sessions.find((s: any) => s.sessionId === 'ses_sse_orphan')).toBeUndefined();
   });
 });
+
+describe('ActiveSessionsModule — sseConnected staleness handling', () => {
+  let module: ActiveSessionsModule;
+
+  afterEach(async () => {
+    if (module) {
+      await module.stop();
+    }
+    vi.clearAllMocks();
+  });
+
+  // ── Test G: sseConnected=false falls back to REST status ──
+  it('Test G: sseConnected=false falls back to REST status for apiStatus', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_stale',
+            sessionId: 'ses_stale',
+            title: 'Stale Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_stale': { type: 'idle', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_stale': {
+          status: 'busy',
+          lastPrompt: 'stale prompt',
+          lastPromptTime: 1000,
+          currentTool: 'bash',
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          sseConnected: false,  // SSE disconnected — cache is stale
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_stale');
+
+    expect(session).toBeDefined();
+    // Should use REST status ('idle'), NOT stale cache ('busy')
+    expect(session.apiStatus).toBe('idle');
+  });
+
+  // ── Test H: sseConnected=false skips orphan synthesis ──
+  it('Test H: sseConnected=false skips orphan session synthesis', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [],
+        statuses: {},
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_ghost': {
+          status: 'busy',
+          lastPrompt: 'ghost prompt',
+          lastPromptTime: 1000,
+          currentTool: 'bash',
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          sseConnected: false,  // SSE disconnected — should NOT synthesize orphan
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+
+    // Ghost session should NOT be synthesized because sseConnected=false
+    expect(sessions.find((s: any) => s.sessionId === 'ses_ghost')).toBeUndefined();
+    expect(sessions).toHaveLength(0);
+  });
+
+  // ── Test I: sseConnected=true preserves existing cache-trusting behavior ──
+  it('Test I: sseConnected=true uses cache status (existing behavior preserved)', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_live',
+            sessionId: 'ses_live',
+            title: 'Live Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_live': { type: 'idle', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_live': {
+          status: 'busy',
+          lastPrompt: 'live prompt',
+          lastPromptTime: 1000,
+          currentTool: 'Edit',
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          sseConnected: true,  // SSE connected — trust cache
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_live');
+
+    expect(session).toBeDefined();
+    // Should use cache status ('busy'), NOT REST ('idle')
+    expect(session.apiStatus).toBe('busy');
+    expect(session.currentTool).toBe('Edit');
+  });
+
+  // ── Test J: sseConnected=undefined (backward compat) trusts cache ──
+  it('Test J: sseConnected=undefined (backward compat) trusts cache status', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_compat',
+            sessionId: 'ses_compat',
+            title: 'Compat Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_compat': { type: 'idle', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_compat': {
+          status: 'retry',
+          lastPrompt: 'compat prompt',
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          // sseConnected NOT set — old agent without Wave 2 changes
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_compat');
+
+    expect(session).toBeDefined();
+    // sseConnected is undefined → !== false → trust cache (backward compat)
+    expect(session.apiStatus).toBe('retry');
+  });
+});

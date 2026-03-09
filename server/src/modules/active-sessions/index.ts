@@ -116,12 +116,14 @@ export class ActiveSessionsModule implements BackendModule {
       const isActive = activeIds.has(id) || cached?.status === 'busy';
       const isClaudeCode = (s.source as string) === 'claude-code';
 
-      // apiStatus: prefer cache (SSE-sourced) over REST polling
+      // apiStatus: prefer cache (SSE-sourced) over REST polling — but ONLY if SSE is connected
       let apiStatus: DashboardSession['apiStatus'] = null;
       if (!isClaudeCode) {
-        if (cached) {
+        if (cached && cached.sseConnected !== false) {
+          // SSE connected (or sseConnected not present for backward compat) — trust cache
           apiStatus = cached.status as DashboardSession['apiStatus'];
         } else if (isActive) {
+          // No cache or SSE disconnected — use REST polling status
           apiStatus = (allStatuses[id]?.type ?? null) as DashboardSession['apiStatus'];
         }
       }
@@ -160,6 +162,8 @@ export class ActiveSessionsModule implements BackendModule {
 
     for (const [id, cached] of Object.entries(cachedDetails)) {
       if (sessionMap.has(id)) continue;
+      // Skip stale cache entries — don't synthesize ghost sessions
+      if (cached.sseConnected === false) continue;
 
       const machine = machineLookup.get(cached.machineId);
 
