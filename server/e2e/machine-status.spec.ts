@@ -57,7 +57,7 @@ test.describe("Machine Status Badges", () => {
 
     if (machines.length > 1) {
       // Machine tags should appear in session cards
-      const machineTags = page.locator('[data-testid="session-cards"] .machine-tag');
+      const machineTags = page.locator('[data-testid="recent-prompts"] .machine-tag');
       // This may or may not have tags depending on data, so just check the count >= 0
       const count = await machineTags.count();
       expect(count).toBeGreaterThanOrEqual(0);

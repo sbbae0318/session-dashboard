@@ -6,7 +6,7 @@
  *   GET /api/events      — SSE stream
  *   GET /                — Static files (Svelte SPA)
  *   GET /*               — SPA fallback → index.html
- *   + module-registered routes (/api/history, /api/queries, /api/sessions)
+ *   + module-registered routes (/api/queries, /api/sessions)
  */
 
 import Fastify, { type FastifyInstance } from "fastify";

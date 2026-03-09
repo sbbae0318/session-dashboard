@@ -23,9 +23,6 @@ export interface HealthResponse {
   claudeSourceConnected?: boolean;
 }
 
-export interface CardsResponse {
-  cards: Record<string, unknown>[];
-}
 
 export interface QueriesResponse {
   queries: Record<string, unknown>[] | import('./oc-query-collector.js').QueryEntry[];

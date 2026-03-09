@@ -61,7 +61,7 @@ describe('authPreHandler', () => {
 
   it('should pass through with valid Bearer token', () => {
     process.env['API_KEY'] = 'test-secret';
-    const request = createMockRequest('/api/cards', 'Bearer test-secret');
+    const request = createMockRequest('/api/queries', 'Bearer test-secret');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 
@@ -73,7 +73,7 @@ describe('authPreHandler', () => {
 
   it('should return 401 when Authorization header is missing', () => {
     process.env['API_KEY'] = 'test-secret';
-    const request = createMockRequest('/api/cards');
+    const request = createMockRequest('/api/queries');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 
@@ -86,7 +86,7 @@ describe('authPreHandler', () => {
 
   it('should return 401 when token is wrong', () => {
     process.env['API_KEY'] = 'test-secret';
-    const request = createMockRequest('/api/cards', 'Bearer wrong-token');
+    const request = createMockRequest('/api/queries', 'Bearer wrong-token');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 
@@ -99,7 +99,7 @@ describe('authPreHandler', () => {
 
   it('should return 401 when Authorization header has no Bearer prefix', () => {
     process.env['API_KEY'] = 'test-secret';
-    const request = createMockRequest('/api/cards', 'Basic test-secret');
+    const request = createMockRequest('/api/queries', 'Basic test-secret');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 
@@ -111,7 +111,7 @@ describe('authPreHandler', () => {
 
   it('should allow all requests when API_KEY is not set (dev mode)', () => {
     // API_KEY not set
-    const request = createMockRequest('/api/cards');
+    const request = createMockRequest('/api/queries');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 
@@ -122,7 +122,7 @@ describe('authPreHandler', () => {
   });
 
   it('should log warning when API_KEY is not set', () => {
-    const request = createMockRequest('/api/cards');
+    const request = createMockRequest('/api/queries');
     const reply = createMockReply();
     const done = vi.fn() as unknown as HookHandlerDoneFunction;
 

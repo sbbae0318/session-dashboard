@@ -3,7 +3,6 @@
   import PromptDetailModal from "./PromptDetailModal.svelte";
   import { getSelectedSessionId, getSourceFilter, selectSession } from "../lib/stores/filter.svelte";
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
-  import { getCards } from "../lib/stores/cards.svelte";
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { relativeTime, truncate, getQueryResult, getCompletionTime, formatTimestamp, copyToClipboard, isBackgroundQuery } from "../lib/utils";
   import type { DashboardSession } from "../types";
@@ -18,7 +17,6 @@
   let selectedSessionId = $derived(getSelectedSessionId());
   let machineFilter = $derived(getSelectedMachineId());
   let showMachines = $derived(shouldShowMachineFilter());
-  let cards = $derived(getCards());
   let sessions = $derived(getSessions());
   let sourceFilter = $derived(getSourceFilter());
 
@@ -111,8 +109,8 @@
 
       {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp + '-' + i)}
         {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
-        {@const result = getQueryResult(entry, cards, sessions)}
-        {@const completionTs = getCompletionTime(entry, cards)}
+        {@const result = getQueryResult(entry, [], sessions)}
+        {@const completionTs = getCompletionTime(entry, [])}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           class="prompt-item" class:in-progress={!completionTs}

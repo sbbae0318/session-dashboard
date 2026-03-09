@@ -298,37 +298,6 @@ export class MachineManager {
     });
   }
 
- /**
- * Fetch cards from all machines in parallel.
- * Each card is tagged with machineId/machineAlias/machineHost.
- */
- async pollAllCards(limit: number = 50): Promise<Array<Record<string, unknown> & { machineId: string; machineAlias: string; machineHost: string }>> {
-   // Only fetch cards from machines with OpenCode source (Claude Code has no cards endpoint)
-   const ocServeMachines = this.machines.filter(m => m.source === 'opencode' || m.source === 'both');
-   const results = await Promise.allSettled(
-     ocServeMachines.map(machine => this.fetchCards(machine, limit))
-   );
-
-   const allCards: Array<Record<string, unknown> & { machineId: string; machineAlias: string; machineHost: string }> = [];
-   for (const [index, result] of results.entries()) {
-     const machine = ocServeMachines[index];
-     if (result.status === 'fulfilled') {
-       for (const card of result.value) {
-         allCards.push({
-           ...card,
-           machineId: machine.id,
-           machineAlias: machine.alias,
-           machineHost: machine.host,
-         });
-       }
-     }
-     // Failed machines silently skipped (status already tracked by pollAllSessions)
-   }
-
-   // Sort by startTime descending
-   allCards.sort((a, b) => ((b.startTime as number) ?? 0) - ((a.startTime as number) ?? 0));
-   return allCards;
- }
 
  /**
  * Fetch queries from all machines in parallel.
@@ -430,13 +399,6 @@ export class MachineManager {
    return merged;
  }
 
- private async fetchCards(machine: MachineConfig, limit: number): Promise<Array<Record<string, unknown>>> {
- const url = `http://${machine.host}:${machine.port}/api/cards?limit=${limit}`;
- const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
- const raw = await this.httpGet(url, headers, machine.timeout);
- const response = JSON.parse(raw) as { cards?: Array<Record<string, unknown>> };
- return response.cards ?? [];
- }
 
  private async fetchQueries(machine: MachineConfig, limit: number): Promise<Array<Record<string, unknown>>> {
  const url = `http://${machine.host}:${machine.port}/api/queries?limit=${limit}`;

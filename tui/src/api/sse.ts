@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { DashboardSession, HistoryCard, QueryEntry, MachineInfo } from '../types.js';
+import type { DashboardSession, QueryEntry, MachineInfo } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -7,7 +7,6 @@ import type { DashboardSession, HistoryCard, QueryEntry, MachineInfo } from '../
 
 export interface SseCallbacks {
   onSessionUpdate?: (sessions: DashboardSession[]) => void;
-  onCardNew?: (card: HistoryCard) => void;
   onQueryNew?: (query: QueryEntry) => void;
   onMachineStatus?: (machines: MachineInfo[]) => void;
   onConnect?: () => void;
@@ -54,9 +53,6 @@ function dispatchFrame(frame: SseFrame, callbacks: SseCallbacks): void {
     switch (frame.event) {
       case 'session.update':
         callbacks.onSessionUpdate?.(parsed as DashboardSession[]);
-        break;
-      case 'card.new':
-        callbacks.onCardNew?.(parsed as HistoryCard);
         break;
       case 'query.new':
         callbacks.onQueryNew?.(parsed as QueryEntry);
@@ -178,7 +174,6 @@ export function useSse(
 
   const stableCallbacks = useCallback((): SseCallbacks => ({
     onSessionUpdate: (s) => callbacksRef.current.onSessionUpdate?.(s),
-    onCardNew: (c) => callbacksRef.current.onCardNew?.(c),
     onQueryNew: (q) => callbacksRef.current.onQueryNew?.(q),
     onMachineStatus: (m) => callbacksRef.current.onMachineStatus?.(m),
     onConnect: () => {

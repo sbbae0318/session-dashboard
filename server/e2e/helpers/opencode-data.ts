@@ -12,40 +12,6 @@ import { execSync } from 'node:child_process';
 export const TEST_AGENT_HOME = '/tmp/sd-e2e-oc-agent-home';
 export const TEST_SERVER_HOME = '/tmp/sd-e2e-oc-server-home';
 
-/**
- * Write cards.jsonl for OpenCodeSource.
- *
- * Path: TEST_AGENT_HOME/.opencode/history/cards.jsonl
- */
-export function writeCards(
-  agentHome: string,
-  entries: Array<{
-    sessionId: string;
-    title: string;
-    duration?: string;
-    model?: string;
-    [key: string]: unknown;
-  }>,
-): void {
-  const dir = join(agentHome, '.opencode', 'history');
-  mkdirSync(dir, { recursive: true });
-
-  const lines = entries.map((e) =>
-    JSON.stringify({
-      sessionId: e.sessionId,
-      title: e.title,
-      duration: e.duration ?? '',
-      model: e.model ?? '',
-      ...Object.fromEntries(
-        Object.entries(e).filter(
-          ([k]) => !['sessionId', 'title', 'duration', 'model'].includes(k),
-        ),
-      ),
-    }),
-  );
-
-  writeFileSync(join(dir, 'cards.jsonl'), lines.join('\n') + '\n', 'utf-8');
-}
 
 /**
  * Write queries.jsonl (prompt history) for OpenCodeSource.

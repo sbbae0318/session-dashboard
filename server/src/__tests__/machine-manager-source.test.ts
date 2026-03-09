@@ -146,19 +146,6 @@ describe('MachineManager — source-aware polling', () => {
       expect(calledUrls.some(u => u.includes('/proxy/projects'))).toBe(true);
     });
 
-    it('pollAllCards should fetch from opencode machine', async () => {
-      const manager = new MachineManager([makeOpenCodeMachine()]);
-
-      setupUrlRouter({
-        'http://10.0.0.1:3100/api/cards': JSON.stringify({
-          cards: [{ sessionId: 'c1', startTime: 1000 }],
-        }),
-      });
-
-      const cards = await manager.pollAllCards();
-      expect(cards).toHaveLength(1);
-      expect(cards[0].machineId).toBe('oc-machine');
-    });
 
     it('pollAllQueries should only call /api/queries (not /api/claude/queries)', async () => {
       const manager = new MachineManager([makeOpenCodeMachine()]);
@@ -210,14 +197,6 @@ describe('MachineManager — source-aware polling', () => {
       expect(result.sessions[0].id).toBe('cs-1');
     });
 
-    it('pollAllCards should skip claude-code machines (no cards endpoint)', async () => {
-      const manager = new MachineManager([makeClaudeMachine()]);
-
-      const cards = await manager.pollAllCards();
-      expect(cards).toEqual([]);
-      // No HTTP calls should have been made
-      expect(mockHttpGet).not.toHaveBeenCalled();
-    });
 
     it('pollAllQueries should call /api/claude/queries (not /api/queries)', async () => {
       const manager = new MachineManager([makeClaudeMachine()]);
@@ -283,22 +262,6 @@ describe('MachineManager — source-aware polling', () => {
       expect(queries[1].sessionId).toBe('oq1'); // timestamp 1000
     });
 
-    it('pollAllCards should only fetch from oc-serve (not claude)', async () => {
-      const manager = new MachineManager([makeBothMachine()]);
-
-      setupUrlRouter({
-        'http://10.0.0.3:3100/api/cards': JSON.stringify({
-          cards: [{ sessionId: 'card1', startTime: 1000 }],
-        }),
-      });
-
-      const cards = await manager.pollAllCards();
-
-      expect(cards).toHaveLength(1);
-      const calledUrls = mockHttpGet.mock.calls.map(c => c[0] as string);
-      expect(calledUrls.some(u => u.includes('/api/cards'))).toBe(true);
-      expect(calledUrls.some(u => u.includes('/api/claude/cards'))).toBe(false);
-    });
 
     it('pollSessionDetails should merge opencode + claude session details', async () => {
       const manager = new MachineManager([makeBothMachine()]);

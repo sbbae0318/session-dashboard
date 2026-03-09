@@ -1,34 +1,3 @@
-export interface HistoryCard {
-  version: 1 | 2;
-  sessionId: string; // normalized from JSONL's sessionID (capital D)
-  sessionTitle?: string;
-  startTime: number;
-  endTime: number;
-  endedAt: string;
-  duration: string;
-  summary: string;
-  tools: string[];
-  source?: string;
-  project?: { cwd: string; root: string };
-  parentSessionID?: string;
-  endReason?: string;
-  tokenUsage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
-  invocations?: {
-    total: number;
-    errorTotal: number;
-    byTool: Record<string, { count: number; errors: number }>;
-  };
-
-  // Machine fields — runtime-injected by MachineManager (not in JSONL)
-  machineId: string;
-  machineHost: string;
-  machineAlias: string;
-}
-
 export interface QueryEntry {
   sessionId: string;
   sessionTitle: string | null;

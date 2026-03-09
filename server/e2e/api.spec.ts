@@ -10,15 +10,6 @@ test.describe("API Endpoints", () => {
     expect(body).toHaveProperty("status", "ok");
   });
 
-  test("GET /api/history returns 200 with cards array", async ({ request }) => {
-    const response = await request.get("/api/history");
-
-    expect(response.status()).toBe(200);
-
-    const body = await response.json();
-    expect(body).toHaveProperty("cards");
-    expect(Array.isArray(body.cards)).toBe(true);
-  });
 
   test("GET /api/queries returns 200 with queries array", async ({ request }) => {
     const response = await request.get("/api/queries");

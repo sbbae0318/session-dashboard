@@ -1,11 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import SessionCards from "./components/SessionCards.svelte";
   import ActiveSessions from "./components/ActiveSessions.svelte";
   import RecentPrompts from "./components/RecentPrompts.svelte";
-  import type { HistoryCard, QueryEntry, DashboardSession, MachineInfo } from "./types";
+  import type { QueryEntry, DashboardSession, MachineInfo } from "./types";
   import { fetchSessions, getSessions, setSessions } from "./lib/stores/sessions.svelte";
-  import { fetchCards, addCard } from "./lib/stores/cards.svelte";
   import { fetchQueries, addQuery } from "./lib/stores/queries.svelte";
   import { getSelectedSessionId, clearFilter, getSourceFilter, setSourceFilter } from "./lib/stores/filter.svelte";
   import MachineSelector from './components/MachineSelector.svelte';
@@ -43,20 +41,19 @@
   let refetchTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(async () => {
-    await Promise.all([fetchCards(), fetchQueries(), fetchSessions(), fetchMachines()]);
+    await Promise.all([fetchQueries(), fetchSessions(), fetchMachines()]);
     reviveSessions(getSessions());
     loading = false;
 
     createSSEClient({ url: "/api/events" })
       .onConnectionChange((c) => { connected = c; })
-      .on("card.new", (data) => { addCard(data as HistoryCard); })
       .on("query.new", (data) => { addQuery(data as QueryEntry); })
       .on("session.update", (data) => { const s = data as DashboardSession[]; setSessions(s); reviveSessions(s); })
       .on("machine.status", (data) => { setMachines(data as MachineInfo[]); })
       .start();
 
     refetchTimer = setInterval(async () => {
-      await Promise.all([fetchCards(), fetchQueries(), fetchMachines()]);
+      await Promise.all([fetchQueries(), fetchMachines()]);
     }, 30_000);
   });
 
@@ -152,10 +149,6 @@
       </aside>
       <section class="main-content">
         {#if isDetail}
-          <div class="panel history-detail-panel view-transition">
-            <h2>세션 히스토리</h2>
-            <SessionCards sessionIdFilter={detailId} />
-          </div>
           <div class="panel prompts-panel view-transition">
             <h2>세션 프롬프트</h2>
             <RecentPrompts sessionIdFilter={detailId} />

@@ -13,7 +13,6 @@ import {
   TEST_AGENT_HOME,
   cleanAgentHome,
   cleanPromptStore,
-  writeCards,
   writeQueriesToPromptStore,
 } from './helpers/opencode-data.js';
 
@@ -39,39 +38,6 @@ test.beforeEach(async () => {
   await new Promise((r) => setTimeout(r, 300));
 });
 
-// ---------------------------------------------------------------------------
-// Scenario 1: Cards in API
-// ---------------------------------------------------------------------------
-
-test.describe('Scenario 1: Cards in API', () => {
-  test('cards.jsonl entries appear in agent /api/cards and server /api/history', async ({ request }) => {
-    writeCards(TEST_AGENT_HOME, [
-      { sessionId: 'oc-sess-001', title: 'Build the auth module', source: 'opencode' },
-      { sessionId: 'oc-sess-002', title: 'Refactor database layer', source: 'opencode' },
-    ]);
-
-    // Poll agent /api/cards until data appears
-    await expect.poll(
-      async () => {
-        const r = await agentGet('/api/cards');
-        const body = await r.json() as { cards: Array<{ sessionId: string }> };
-        return body.cards.length;
-      },
-      { timeout: 15_000, intervals: [500] },
-    ).toBeGreaterThanOrEqual(2);
-
-    // Server /api/history should also have them (response is { cards: [...] })
-    await expect.poll(
-      async () => {
-        const r = await request.get(`${SERVER_URL}/api/history?limit=50`);
-        const body = await r.json() as { cards?: Array<{ sessionId?: string; source?: string }> };
-        if (!body.cards) return 0;
-        return body.cards.filter((s) => s.source === 'opencode').length;
-      },
-      { timeout: 15_000, intervals: [500] },
-    ).toBeGreaterThanOrEqual(2);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Scenario 2: Queries in Recent Prompts
@@ -125,9 +91,6 @@ test.describe('Scenario 3: oc-serve down graceful degradation', () => {
 
 test.describe('Scenario 4: Source filter OpenCode', () => {
   test('clicking OpenCode filter shows only opencode data', async ({ page, request }) => {
-    writeCards(TEST_AGENT_HOME, [
-      { sessionId: 'oc-filter-001', title: 'OpenCode session', source: 'opencode' },
-    ]);
     writeQueriesToPromptStore(TEST_AGENT_HOME, [
       { query: 'Run the OpenCode pipeline', sessionId: 'oc-filter-001', timestamp: Date.now() },
     ]);
@@ -154,26 +117,6 @@ test.describe('Scenario 4: Source filter OpenCode', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Scenario 5: Real-time update
-// ---------------------------------------------------------------------------
-
-test.describe('Scenario 5: Real-time update', () => {
-  test('cards appear in browser after cards.jsonl is written', async ({ request }) => {
-    writeCards(TEST_AGENT_HOME, [
-      { sessionId: 'oc-realtime-001', title: 'Deploy to staging' },
-    ]);
-
-    await expect.poll(
-      async () => {
-        const r = await agentGet('/api/cards');
-        const body = await r.json() as { cards: Array<{ sessionId: string }> };
-        return body.cards.some((c) => c.sessionId === 'oc-realtime-001');
-      },
-      { timeout: 10_000, intervals: [500] },
-    ).toBeTruthy();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Scenario 6: Empty state
@@ -182,9 +125,6 @@ test.describe('Scenario 5: Real-time update', () => {
 test.describe('Scenario 6: Empty state', () => {
   test('agent returns empty arrays when no JSONL files exist', async () => {
     // cleanAgentHome() already called in beforeEach
-    const cardsResp = await agentGet('/api/cards');
-    const cardsBody = await cardsResp.json() as { cards: unknown[] };
-    expect(cardsBody.cards).toHaveLength(0);
 
     const queriesResp = await agentGet('/api/queries?limit=50');
     const queriesBody = await queriesResp.json() as { queries: unknown[] };
@@ -192,28 +132,6 @@ test.describe('Scenario 6: Empty state', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Scenario 7: Large file handling
-// ---------------------------------------------------------------------------
-
-test.describe('Scenario 7: Large file handling', () => {
-  test('500 entries in cards.jsonl, limit=50 returns only 50', async () => {
-    const entries = Array.from({ length: 500 }, (_, i) => ({
-      sessionId: `oc-large-${String(i).padStart(3, '0')}`,
-      title: `Session ${i}`,
-    }));
-    writeCards(TEST_AGENT_HOME, entries);
-
-    await expect.poll(
-      async () => {
-        const r = await agentGet('/api/cards?limit=50');
-        const body = await r.json() as { cards: unknown[] };
-        return body.cards.length;
-      },
-      { timeout: 10_000, intervals: [500] },
-    ).toBe(50);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Scenario 8: Recent prompt visibility (long session)

@@ -4,7 +4,6 @@
  * Routes:
  *   GET  /health                — Health check (no auth)
  *   POST /api/auth/token         — Issue JWT token (no auth)
- *   GET  /api/cards?limit=50     — Read cards.jsonl
  *   GET  /api/queries?limit=50   — Read queries.jsonl
  *   GET  /api/sessions           — Proxy to oc-serve /session, wrap in { sessions }
  *   GET  /api/machines           — Proxy to oc-serve /project, wrap in { machines }
@@ -32,7 +31,7 @@ import { OcQueryCollector } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
-import type { AgentConfig, HealthResponse, CardsResponse, QueriesResponse, TokenRequest } from './types.js';
+import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -185,15 +184,6 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     return result;
   });
 
-  // GET /api/cards?limit=50
-  app.get<{ Querystring: { limit?: string } }>('/api/cards', async (request) => {
-    const limit = parseLimit(request.query.limit);
-    const filePath = join(config.historyDir, 'cards.jsonl');
-    const reader = new JsonlReader<Record<string, unknown>>(filePath);
-    const cards = await reader.tailLines(limit);
-    const response: CardsResponse = { cards };
-    return response;
-  });
 
   // GET /api/queries?limit=50
   app.get<{ Querystring: { limit?: string } }>('/api/queries', async (request) => {

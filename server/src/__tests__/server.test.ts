@@ -5,21 +5,6 @@ import type { BackendModule } from "../modules/types.js";
 import type { SSEManager } from "../sse/event-stream.js";
 import type { MachineManager } from '../machines/machine-manager.js';
 
-// ── Mock data ──
-
-const mockCards = [
-  {
-    version: 1,
-    sessionId: "sess-001",
-    startTime: 1700000000000,
-    endTime: 1700000060000,
-    endedAt: "2023-11-14T22:13:20.000Z",
-    duration: "1m 0s",
-    summary: "Fixed bug in parser",
-    tools: ["Read", "Write"],
-    source: "claude-code",
-  },
-];
 
 const mockQueries = [
   {
@@ -50,15 +35,6 @@ const mockSessions = [
 // ── Mock modules (each registers its own route) ──
 
 function createMockModules(): BackendModule[] {
-  const cardsModule: BackendModule = {
-    id: "session-cards",
-    registerRoutes(app) {
-      app.get<{ Querystring: { limit?: string } }>("/api/history", async (request) => {
-        const limit = parseInt(request.query.limit ?? "20", 10);
-        return { cards: mockCards.slice(0, limit) };
-      });
-    },
-  };
 
   const queriesModule: BackendModule = {
     id: "recent-prompts",
@@ -79,7 +55,7 @@ function createMockModules(): BackendModule[] {
     },
   };
 
-  return [cardsModule, queriesModule, sessionsModule];
+  return [queriesModule, sessionsModule];
 }
 
 function createMockSSEManager(): SSEManager {
@@ -130,19 +106,6 @@ describe("Server API", () => {
     });
   });
 
-  describe("GET /api/history", () => {
-    it("should return cards", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/api/history",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.cards).toHaveLength(1);
-      expect(body.cards[0].sessionId).toBe("sess-001"); // normalized from sessionID
-    });
-  });
 
   describe("GET /api/queries", () => {
     it("should return queries", async () => {

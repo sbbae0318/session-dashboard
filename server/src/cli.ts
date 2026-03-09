@@ -3,7 +3,6 @@
 
 import { resolve } from 'node:path';
 import { ActiveSessionsModule } from './modules/active-sessions/index.js';
-import { SessionCardsModule } from './modules/session-cards/index.js';
 import { RecentPromptsModule } from './modules/recent-prompts/index.js';
 import type { BackendModule } from './modules/types.js';
 import { SSEManager } from './sse/event-stream.js';
@@ -36,9 +35,8 @@ async function main(): Promise<void> {
 
       // Create modules
       const activeSessions = new ActiveSessionsModule(machineManager);
- const sessionCards = new SessionCardsModule(machineManager);
- const recentPrompts = new RecentPromptsModule(machineManager);
-      const modules: BackendModule[] = [activeSessions, sessionCards, recentPrompts];
+      const recentPrompts = new RecentPromptsModule(machineManager);
+      const modules: BackendModule[] = [activeSessions, recentPrompts];
 
       // Create SSE manager
       const sseManager = new SSEManager();
@@ -46,9 +44,6 @@ async function main(): Promise<void> {
       // Wire module events → SSE broadcasts
       activeSessions.setUpdateCallback((sessions) => {
         sseManager.broadcast("session.update", sessions);
-      });
-      sessionCards.setNewCardCallback((card) => {
-        sseManager.broadcast("card.new", card);
       });
       recentPrompts.setNewQueryCallback((query) => {
         sseManager.broadcast("query.new", query);

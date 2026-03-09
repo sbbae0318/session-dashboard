@@ -1,7 +1,6 @@
 import type {
   DashboardSession,
   QueryEntry,
-  HistoryCard,
   MachineInfo,
 } from '../types.js';
 
@@ -49,15 +48,6 @@ export class DashboardClient {
     }
   }
 
-  async fetchHistory(limit = 50): Promise<HistoryCard[]> {
-    try {
-      const data = await this.fetchJson<{ cards: HistoryCard[] }>(`/api/history?limit=${limit}`);
-      return data.cards;
-    } catch (error) {
-      console.error('[DashboardTUI]', error);
-      return [];
-    }
-  }
 
   async fetchMachines(): Promise<MachineInfo[]> {
     try {

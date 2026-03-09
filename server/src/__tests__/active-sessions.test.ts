@@ -26,7 +26,6 @@ function createMockMachineManager(overrides?: {
     pollSessionDetails: overrides?.pollSessionDetails ?? vi.fn().mockResolvedValue({}),
     getMachineStatuses: vi.fn().mockReturnValue([]),
     setStatusChangeCallback: vi.fn(),
-    pollAllCards: vi.fn().mockResolvedValue([]),
     pollAllQueries: vi.fn().mockResolvedValue([]),
   } as unknown as MachineManager;
 }
