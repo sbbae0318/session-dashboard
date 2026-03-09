@@ -154,21 +154,17 @@
               <div class="session-header-top">
                 <span class="status-badge {ds.cssClass}">{ds.label}</span>
                 <span class="session-title">{session.title || session.sessionId.slice(0, 8)}</span>
-                <span class="header-badges">
+                <span class="header-actions">
                   <button
-                    class="detail-btn"
+                    class="action-btn action-detail"
                     onclick={(e) => { e.stopPropagation(); pushSessionDetail(session.sessionId); }}
                     title="View session detail"
-                  >
-                    →
-                  </button>
+                  >›</button>
                   <button
-                    class="dismiss-btn"
+                    class="action-btn action-dismiss"
                     onclick={(e) => handleDismiss(session.sessionId, session.lastActivityTime, e)}
                     title="Hide until new activity"
-                  >
-                    ×
-                  </button>
+                  >×</button>
                 </span>
               </div>
               <!-- Row 2: time · machine · source -->
@@ -349,11 +345,17 @@
   .source-text.claude {
     color: #a871ff;
   }
-  .header-badges {
+  .header-actions {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 2px;
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .session-item:hover .header-actions {
+    opacity: 1;
   }
 
   .session-title {
@@ -588,58 +590,32 @@
     font-style: italic;
   }
 
-  .dismiss-btn {
-    display: none;
+  .action-btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    background: none;
-    border: 1px solid rgba(139, 148, 158, 0.3);
-    border-radius: 9999px;
+    width: 1.4rem;
+    height: 1.4rem;
+    background: rgba(139, 148, 158, 0.08);
+    border: none;
+    border-radius: var(--radius-sm, 4px);
     cursor: pointer;
     color: var(--text-secondary);
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     line-height: 1;
     padding: 0;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
-  .session-item:hover .dismiss-btn {
-    display: inline-flex;
-  }
-
-  .dismiss-btn:hover {
-    background: rgba(248, 81, 73, 0.15);
-    color: var(--error);
-    border-color: rgba(248, 81, 73, 0.4);
-  }
-
-  .detail-btn {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    background: none;
-    border: 1px solid rgba(139, 148, 158, 0.3);
-    border-radius: 9999px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    font-size: 0.7rem;
-    line-height: 1;
-    padding: 0;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  }
-
-  .session-item:hover .detail-btn {
-    display: inline-flex;
-  }
-
-  .detail-btn:hover {
+  .action-detail:hover {
     background: rgba(88, 166, 255, 0.15);
     color: var(--accent);
-    border-color: rgba(88, 166, 255, 0.4);
+  }
+
+  .action-dismiss:hover {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--error);
   }
 
   .restore-btn {
@@ -674,16 +650,14 @@
 
   /* ===== Touch devices ===== */
   @media (pointer: coarse) {
-    .dismiss-btn {
-      display: inline-flex;
-      min-width: 44px;
-      min-height: 44px;
+    .header-actions {
+      opacity: 1;
     }
 
-    .detail-btn {
-      display: inline-flex;
-      min-width: 44px;
-      min-height: 44px;
+    .action-btn {
+      width: 2rem;
+      height: 2rem;
+      font-size: 1rem;
     }
 
     .expand-toggle {
@@ -700,24 +674,27 @@
     }
 
     .session-header {
-      gap: 0.25rem;
+      gap: 0.2rem;
     }
 
     .status-badge {
-      font-size: 0.7rem;
-    }
-
-    .header-badges {
-      gap: 0.25rem;
+      font-size: 0.6rem;
+      padding: 0.05rem 0.35rem;
     }
 
     .session-title {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
 
     .session-cwd,
     .session-prompt {
       font-size: 0.75rem;
+    }
+
+    .action-btn {
+      width: 1.6rem;
+      height: 1.6rem;
+      font-size: 0.9rem;
     }
   }
 
