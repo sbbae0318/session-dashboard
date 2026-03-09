@@ -267,6 +267,8 @@ main {
 @media (max-width: 599px) {
   .dashboard-layout {
     grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
   }
   main {
     padding: 0.5rem;
@@ -297,8 +299,17 @@ main {
     align-items: center;
   }
   .sidebar {
+    order: -1;
+    position: static;
+    height: auto;
     max-height: 40vh;
     max-height: 40dvh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .main-content {
+    flex: 1;
+    min-height: 0;
   }
   .detail-header {
     flex-wrap: wrap;
@@ -326,23 +337,16 @@ main {
   }
 }
 
-@media (max-width: 767px) {
+/* Galaxy Fold unfolded / small tablet (600–767px) */
+@media (min-width: 600px) and (max-width: 767px) {
   .dashboard-layout {
-    display: flex;
-    flex-direction: column;
+    grid-template-columns: 220px 1fr;
   }
   .sidebar {
-    order: -1;
     position: static;
     height: auto;
-    max-height: 35vh;
-    max-height: 35dvh;
-    overflow-y: auto;
-    flex-shrink: 0;
-  }
-  .main-content {
-    flex: 1;
-    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
   }
 }
 

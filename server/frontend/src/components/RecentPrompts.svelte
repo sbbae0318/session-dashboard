@@ -39,6 +39,14 @@
       .toSorted((a, b) => b.timestamp - a.timestamp)
   );
 
+  // 세션별 최신 프롬프트 인덱스 (filteredQueries는 timestamp desc 정렬이므로 첫 등장이 최신)
+  let latestIndexBySession = $derived(
+    filteredQueries.reduce((acc, q, idx) => {
+      if (!(q.sessionId in acc)) acc[q.sessionId] = idx;
+      return acc;
+    }, {} as Record<string, number>)
+  );
+
   let backgroundCount = $derived(
     queries
       .filter(q => isBackgroundQuery(q, sessions))
@@ -111,7 +119,10 @@
         {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
-        {@const isWorking = !completionTs || result === 'busy' || result === 'active'}
+        {@const session = sessions.find(s => s.sessionId === entry.sessionId)}
+        {@const isSessionBusy = session?.apiStatus === 'busy' || session?.status === 'active'}
+        {@const isLatestForSession = i === latestIndexBySession[entry.sessionId]}
+        {@const isWorking = !completionTs || (isSessionBusy && isLatestForSession)}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           class="prompt-item" class:in-progress={isWorking}
