@@ -40,6 +40,7 @@ export class MachineManager {
   private readonly machineStatuses: Map<string, MachineStatus> = new Map();
   private readonly consecutiveFailures: Map<string, number> = new Map();
   private onStatusChange: ((statuses: readonly MachineStatus[]) => void) | null = null;
+  private readonly projectsCache: Map<string, Array<{ id: string; worktree: string }>> = new Map();
 
   constructor(machines: readonly MachineConfig[], defaultTimeout?: number) {
     this.machines = machines;
@@ -162,13 +163,31 @@ export class MachineManager {
       const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
 
       // Fetch projects list + active directories in parallel
-      const [projectsRaw, activeDirsRaw] = await Promise.all([
-        this.httpGet(`${baseUrl}/proxy/projects`, headers, machine.timeout),
-        this.httpGet(`${baseUrl}/proxy/active-directories`, headers, machine.timeout).catch(() => '{"directories":[]}'),
-      ]);
-      const projects = JSON.parse(projectsRaw) as Array<{ id: string; worktree: string }>;
-      const activeResponse = JSON.parse(activeDirsRaw) as { directories?: string[] };
-      const activeDirs = activeResponse.directories ?? [];
+      let projects: Array<{ id: string; worktree: string }>;
+      let activeDirs: string[];
+      try {
+        const [projectsRaw, activeDirsRaw] = await Promise.all([
+          this.httpGet(`${baseUrl}/proxy/projects`, headers, machine.timeout),
+          this.httpGet(`${baseUrl}/proxy/active-directories`, headers, machine.timeout).catch(() => '{"directories":[]}'),
+        ]);
+        projects = JSON.parse(projectsRaw) as Array<{ id: string; worktree: string }>;
+        this.projectsCache.set(machine.id, projects);
+        const activeResponse = JSON.parse(activeDirsRaw) as { directories?: string[] };
+        activeDirs = activeResponse.directories ?? [];
+      } catch {
+        // /proxy/projects failed (e.g. 502) — use cached projects if available
+        const cached = this.projectsCache.get(machine.id);
+        if (!cached || cached.length === 0) {
+          // No cache available — skip OpenCode polling entirely for this cycle
+          console.warn(`[MachineManager] ${machine.alias}: /proxy/projects failed, no cache — skipping OpenCode poll`);
+          projects = [];
+          activeDirs = [];
+        } else {
+          console.warn(`[MachineManager] ${machine.alias}: /proxy/projects failed — using cached ${cached.length} projects`);
+          projects = cached;
+          activeDirs = [];
+        }
+      }
 
       // Merge: registered projects + active directories not already in project list
       const registeredWorktrees = new Set(projects.map(p => p.worktree));

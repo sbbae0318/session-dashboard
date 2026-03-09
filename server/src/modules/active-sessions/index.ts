@@ -34,6 +34,7 @@ export class ActiveSessionsModule implements BackendModule {
   private pollInterval: NodeJS.Timeout | null = null;
   private cachedSessions: DashboardSession[] = [];
   private onUpdate: ((sessions: DashboardSession[]) => void) | null = null;
+  private previousSessionMap: Map<string, DashboardSession> = new Map();
 
   constructor(machineManager: MachineManager) {
     this.machineManager = machineManager;
@@ -92,9 +93,30 @@ export class ActiveSessionsModule implements BackendModule {
 
     // Filter out ghost/background sessions (no title = not a real user session)
     // Claude Code sessions legitimately lack titles — always keep them
+    // Sessions with apiStatus (SSE cache confirmed) are also kept even without title
     // Then sort by lastActivityTime descending
-    this.cachedSessions = [...sessionMap.values()]
-      .filter(s => s.source === 'claude-code' || (s.title !== null && s.title !== ''))
+    const filtered = [...sessionMap.values()]
+      .filter(s => s.source === 'claude-code' || s.title !== null || s.apiStatus !== null);
+
+    // Preserve sessions from machines that returned 0 sessions this cycle
+    // (likely due to poll failure) by merging from previousSessionMap
+    const machineStatuses = this.machineManager.getMachineStatuses();
+    const currentMachineIds = new Set(filtered.map(s => s.machineId));
+    for (const ms of machineStatuses) {
+      if (ms.connected && !currentMachineIds.has(ms.machineId)) {
+        // This machine is connected but returned no sessions — preserve previous data
+        for (const prev of this.previousSessionMap.values()) {
+          if (prev.machineId === ms.machineId) {
+            filtered.push(prev);
+          }
+        }
+      }
+    }
+
+    // Update previousSessionMap with current successful results
+    this.previousSessionMap = sessionMap;
+
+    this.cachedSessions = filtered
       .sort((a, b) => b.lastActivityTime - a.lastActivityTime);
     this.onUpdate?.(this.cachedSessions);
   }
@@ -185,6 +207,7 @@ export class ActiveSessionsModule implements BackendModule {
         machineId: cached.machineId,
         machineHost: machine?.host ?? '',
         machineAlias: machine?.alias ?? '',
+        source: 'opencode',
       });
     }
 
