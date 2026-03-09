@@ -266,39 +266,39 @@ main {
 
 @media (max-width: 599px) {
   .dashboard-layout {
-    grid-template-columns: 1fr;  /* single column for Fold cover */
+    grid-template-columns: 1fr;
   }
   main {
-    padding: 0.75rem;    /* was 1.5rem */
+    padding: 0.5rem;
   }
   .dashboard-header {
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
   }
   .dashboard-header h1 {
-    font-size: 1.2rem;   /* was 1.5rem */
+    font-size: 1.1rem;
   }
   .connection-status {
-    font-size: 0.75rem;  /* was 0.8rem */
+    font-size: 0.75rem;
   }
   .panel {
-    padding: 0.75rem;    /* was 1rem */
+    padding: 0.5rem;
   }
   .panel h2 {
-    font-size: 0.8rem;   /* was 0.9rem */
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.35rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.3rem;
   }
   .filter-badge {
-    min-height: 44px;    /* touch target */
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
   }
   .sidebar {
-    max-height: 40vh;      /* prevent sidebar from eating all space */
-    max-height: 40dvh;     /* dvh progressive enhancement */
+    max-height: 40vh;
+    max-height: 40dvh;
   }
   .detail-header {
     flex-wrap: wrap;
@@ -308,11 +308,15 @@ main {
   .detail-session-id {
     font-size: 0.7rem;
   }
+  .source-filter {
+    padding: 0 0.5rem;
+    margin-bottom: 0.35rem;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
   .dashboard-layout {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 300px 1fr;
   }
   .sidebar {
     position: static;

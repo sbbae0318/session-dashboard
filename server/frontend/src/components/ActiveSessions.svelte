@@ -308,7 +308,7 @@
 
   .session-header-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.4rem;
     min-width: 0;
   }
@@ -363,8 +363,9 @@
     font-weight: 600;
     color: var(--text-primary);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     flex: 1;
     min-width: 0;
   }
@@ -668,6 +669,10 @@
 
   /* ===== Mobile (≤599px) ===== */
   @media (max-width: 599px) {
+    .session-item {
+      padding: 0.4rem 0.5rem;
+    }
+
     .children-list {
       margin-left: 0.5rem;
       padding-left: 0.5rem;
