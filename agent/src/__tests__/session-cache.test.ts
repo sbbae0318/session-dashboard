@@ -655,4 +655,256 @@ describe('SessionCache', () => {
     expect(result.meta.sseConnectedAt).toBe(0);
     expect(result.meta.lastSseEventAt).toBe(0);
   });
+
+  // ── 21. pending tool state → waitingForInput: true ──
+
+  it('sets waitingForInput=true when tool state is pending', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/pending',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'sess-pending',
+            type: 'tool',
+            tool: 'edit',
+            state: { status: 'pending' },
+          },
+        },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-pending'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(true);
+    expect(entry.currentTool).toBe('edit');
+  });
+
+  // ── 22. pending → running transition resets waitingForInput ──
+
+  it('resets waitingForInput=false when tool transitions from pending to running', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // First: pending → waitingForInput = true
+    simulateSseEvent(mockRes, {
+      directory: '/project/transition',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'sess-trans',
+            type: 'tool',
+            tool: 'bash',
+            state: { status: 'pending' },
+          },
+        },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-trans']?.waitingForInput).toBe(true);
+
+    // Then: running → waitingForInput = false
+    simulateSseEvent(mockRes, {
+      directory: '/project/transition',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'sess-trans',
+            type: 'tool',
+            tool: 'bash',
+            state: { status: 'running' },
+          },
+        },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-trans'];
+    expect(entry.waitingForInput).toBe(false);
+    expect(entry.currentTool).toBe('bash');
+  });
+
+  // ── 23. session.status busy resets waitingForInput ──
+
+  it('resets waitingForInput=false when session.status transitions to busy', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // Set up pending state first
+    simulateSseEvent(mockRes, {
+      directory: '/project/busy-reset',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'sess-busy',
+            type: 'tool',
+            tool: 'edit',
+            state: { status: 'pending' },
+          },
+        },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-busy']?.waitingForInput).toBe(true);
+
+    // session.status busy → waitingForInput reset
+    simulateSseEvent(mockRes, {
+      directory: '/project/busy-reset',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-busy', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-busy']?.waitingForInput).toBe(false);
+  });
+
+  // ── 24. permission.updated → waitingForInput: true ──
+
+  it('sets waitingForInput=true on permission.updated event', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // Pre-populate session
+    simulateSseEvent(mockRes, {
+      directory: '/project/perm',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-perm', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-perm']?.waitingForInput).toBe(false);
+
+    // permission.updated → waitingForInput = true
+    simulateSseEvent(mockRes, {
+      directory: '/project/perm',
+      payload: {
+        type: 'permission.updated',
+        properties: { sessionID: 'sess-perm' },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-perm'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(true);
+    expect(entry.status).toBe('busy'); // status 변경 없음
+  });
+
+  // ── 25. session.deleted → session removed from cache ──
+
+  it('removes session from cache on session.deleted event', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // Add session first
+    simulateSseEvent(mockRes, {
+      directory: '/project/del',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-del', status: { type: 'idle' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-del']).toBeDefined();
+
+    // Delete via SSE event
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.deleted',
+        properties: { info: { id: 'sess-del' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-del']).toBeUndefined();
+  });
+
+  // ── 26. session.deleted with sessionID fallback ──
+
+  it('handles session.deleted with sessionID fallback (no info.id)', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-del2', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-del2']).toBeDefined();
+
+    // session.deleted with sessionID (not info.id)
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.deleted',
+        properties: { sessionID: 'sess-del2' },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-del2']).toBeUndefined();
+  });
+
+  // ── 27. checkDeletedSessions: 404 → session deleted ──
+
+  it('checkDeletedSessions removes session on 404 response', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // Add session
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-gone', status: { type: 'idle' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-gone']).toBeDefined();
+
+    // fetchJson throws 404
+    mockFetchJson.mockRejectedValueOnce(new Error('404 Not Found'));
+
+    await (cache as any).checkDeletedSessions();
+
+    expect(cache.getSessionDetails().sessions['sess-gone']).toBeUndefined();
+  });
+
+  // ── 28. checkDeletedSessions: network error → session preserved ──
+
+  it('checkDeletedSessions preserves session on network error (non-404)', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // Add session
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-net', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-net']).toBeDefined();
+
+    // fetchJson throws network error (not 404)
+    mockFetchJson.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    await (cache as any).checkDeletedSessions();
+
+    // Session should still exist
+    expect(cache.getSessionDetails().sessions['sess-net']).toBeDefined();
+    expect(cache.getSessionDetails().sessions['sess-net'].status).toBe('busy');
+  });
 });
