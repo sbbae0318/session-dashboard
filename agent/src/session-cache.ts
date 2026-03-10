@@ -110,6 +110,8 @@ export class SessionCache {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private evictionTimer: NodeJS.Timeout | null = null;
+  private deletionCheckTimer: NodeJS.Timeout | null = null;
+  private deletionCheckOffset: number = 0;
   private reconnectDelay: number = INITIAL_RECONNECT_DELAY;
   private sseBuffer = '';
   private sseDataLines: string[] = [];
@@ -127,6 +129,7 @@ export class SessionCache {
   start(): void {
     this.connectSse();
     this.evictionTimer = setInterval(() => this.evict(), EVICTION_INTERVAL_MS);
+    this.deletionCheckTimer = setInterval(() => { void this.checkDeletedSessions(); }, 60_000);
   }
 
   stop(): void {
@@ -142,6 +145,10 @@ export class SessionCache {
     if (this.evictionTimer) {
       clearInterval(this.evictionTimer);
       this.evictionTimer = null;
+    }
+    if (this.deletionCheckTimer) {
+      clearInterval(this.deletionCheckTimer);
+      this.deletionCheckTimer = null;
     }
     this.connectionState = 'disconnected';
     this.store.close();
@@ -307,6 +314,9 @@ export class SessionCache {
       case 'permission.updated':
         this.handlePermissionUpdated(props, directory);
         break;
+      case 'session.deleted':
+        this.handleSessionDeleted(props);
+        break;
       default:
         break;
     }
@@ -406,6 +416,44 @@ export class SessionCache {
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
+  }
+
+  private handleSessionDeleted(props: Record<string, unknown>): void {
+    const info = props['info'] as { id?: string } | undefined;
+    const sessionID = info?.id ?? (props['sessionID'] as string | undefined);
+    if (!sessionID) return;
+    this.store.delete(sessionID);
+  }
+
+  // -------------------------------------------------------------------------
+  // REST Fallback — Deletion Check
+  // -------------------------------------------------------------------------
+
+  private async checkDeletedSessions(): Promise<void> {
+    const allSessions = this.store.getAll();
+    const ids = Object.keys(allSessions);
+    if (ids.length === 0) return;
+
+    // round-robin: offset부터 최대 10개
+    if (this.deletionCheckOffset >= ids.length) {
+      this.deletionCheckOffset = 0;
+    }
+    const batch = ids.slice(this.deletionCheckOffset, this.deletionCheckOffset + 10);
+    this.deletionCheckOffset += batch.length;
+
+    for (const sessionID of batch) {
+      try {
+        const url = `http://127.0.0.1:${this.ocServePort}/session/${sessionID}`;
+        await fetchJson(url, {}, 3000);
+        // Session exists — keep it
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('404')) {
+          this.store.delete(sessionID);
+        }
+        // Network error or other status → preserve session (false positive 방지)
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
