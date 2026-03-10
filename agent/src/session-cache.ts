@@ -22,6 +22,7 @@ export interface SessionDetail {
   lastPromptTime: number;
   currentTool: string | null;
   directory: string | null;
+  waitingForInput: boolean;
   updatedAt: number;
 }
 
@@ -93,6 +94,7 @@ function defaultSessionDetail(directory: string | null): SessionDetail {
     lastPromptTime: 0,
     currentTool: null,
     directory,
+    waitingForInput: false,
     updatedAt: Date.now(),
   };
 }
@@ -302,6 +304,9 @@ export class SessionCache {
       case 'message.part.updated':
         this.handleMessagePartUpdated(props, directory);
         break;
+      case 'permission.updated':
+        this.handlePermissionUpdated(props, directory);
+        break;
       default:
         break;
     }
@@ -317,6 +322,8 @@ export class SessionCache {
     this.store.upsert(sessionID, {
       ...existing,
       status: statusType,
+      // busy 전환 = 사용자가 응답해서 작업 재개된 것 → waitingForInput 리셋
+      waitingForInput: statusType === 'busy' ? false : existing.waitingForInput,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
@@ -364,6 +371,7 @@ export class SessionCache {
     if (toolStatus === 'running') {
       this.store.upsert(sessionID, {
         ...existing,
+        waitingForInput: false,
         currentTool: part.tool ?? null,
         directory: directory ?? existing.directory,
         updatedAt: Date.now(),
@@ -371,11 +379,33 @@ export class SessionCache {
     } else if (toolStatus === 'completed') {
       this.store.upsert(sessionID, {
         ...existing,
+        waitingForInput: false,
         currentTool: null,
         directory: directory ?? existing.directory,
         updatedAt: Date.now(),
       });
+    } else if (toolStatus === 'pending') {
+      this.store.upsert(sessionID, {
+        ...existing,
+        waitingForInput: true,
+        currentTool: part.tool ?? null,
+        directory: directory ?? existing.directory,
+        updatedAt: Date.now(),
+      });
     }
+  }
+
+  private handlePermissionUpdated(props: Record<string, unknown>, directory: string | null): void {
+    const sessionID = props['sessionID'] as string | undefined;
+    if (!sessionID) return;
+
+    const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
+    this.store.upsert(sessionID, {
+      ...existing,
+      waitingForInput: true,
+      directory: directory ?? existing.directory,
+      updatedAt: Date.now(),
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -464,6 +494,7 @@ export class SessionCache {
         lastPromptTime: existing?.lastPromptTime ?? 0,
         currentTool: existing?.currentTool ?? null,
         directory: worktree,
+        waitingForInput: existing?.waitingForInput ?? false,
         updatedAt: Date.now(),
       });
     }

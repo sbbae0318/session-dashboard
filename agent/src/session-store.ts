@@ -22,6 +22,7 @@ interface SessionRow {
   last_prompt_time: number;
   current_tool: string | null;
   directory: string | null;
+  waiting_for_input: number;
   updated_at: number;
 }
 
@@ -60,9 +61,17 @@ export class SessionStore {
         last_prompt_time INTEGER NOT NULL DEFAULT 0,
         current_tool TEXT,
         directory TEXT,
+        waiting_for_input INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL
       )
     `);
+
+    // 기존 DB 마이그레이션: waiting_for_input 컬럼 추가
+    try {
+      this.db.exec(`ALTER TABLE session_status ADD COLUMN waiting_for_input INTEGER NOT NULL DEFAULT 0`);
+    } catch {
+      // 이미 컬럼이 존재하면 무시
+    }
 
     // Prepared statements — 생성자에서 한 번만 준비
     this.stmtGet = this.db.prepare(
@@ -71,9 +80,9 @@ export class SessionStore {
 
     this.stmtUpsert = this.db.prepare(`
       INSERT OR REPLACE INTO session_status
-        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, updated_at)
+        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, waiting_for_input, updated_at)
       VALUES
-        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @updated_at)
+        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @waiting_for_input, @updated_at)
     `);
 
     this.stmtGetAll = this.db.prepare('SELECT * FROM session_status');
@@ -107,6 +116,7 @@ export class SessionStore {
       last_prompt_time: detail.lastPromptTime,
       current_tool: detail.currentTool,
       directory: detail.directory,
+      waiting_for_input: detail.waitingForInput ? 1 : 0,
       updated_at: detail.updatedAt,
     });
   }
@@ -159,6 +169,7 @@ function rowToDetail(row: SessionRow): SessionDetail {
     lastPromptTime: row.last_prompt_time,
     currentTool: row.current_tool,
     directory: row.directory,
+    waitingForInput: Boolean(row.waiting_for_input),
     updatedAt: row.updated_at,
   };
 }

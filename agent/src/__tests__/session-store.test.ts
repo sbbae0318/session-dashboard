@@ -13,6 +13,7 @@ function makeDetail(overrides: Partial<SessionDetail> = {}): SessionDetail {
     lastPromptTime: 0,
     currentTool: null,
     directory: null,
+    waitingForInput: false,
     updatedAt: Date.now(),
     ...overrides,
   };
