@@ -217,7 +217,59 @@
 {/if}
           </div>
 
-          <!-- 하위 세션 목록 숨김 -->
+          {#if children.length > 0}
+            <button
+              class="expand-toggle"
+              class:expanded={expandedIds.has(session.sessionId)}
+              onclick={(e) => toggleExpand(session.sessionId, e)}
+            >
+              <span class="expand-arrow">{expandedIds.has(session.sessionId) ? '▼' : '▶'}</span>
+              <span class="child-count">{children.length}</span>
+            </button>
+          {/if}
+          {#if children.length > 0 && expandedIds.has(session.sessionId)}
+            <div class="children-list">
+              {#each children as child (child.sessionId)}
+                {@const cds = getDisplayStatus(child)}
+                <div
+                  class="session-item child-item"
+                  class:selected={selectedSessionId === child.sessionId}
+                  class:detail-active={detailId === child.sessionId}
+                  onclick={() => handleSessionClick(child)}
+                  role="button"
+                  tabindex="0"
+                  onkeydown={(e) => e.key === 'Enter' && handleSessionClick(child)}
+                >
+                  <div class="session-header">
+                    <div class="session-header-top">
+                      <span class="status-badge {cds.cssClass}">{cds.label}</span>
+                      <span class="session-title">{child.title || child.sessionId.slice(0, 8)}</span>
+                      <span class="header-actions">
+                        <button
+                          class="action-btn action-detail"
+                          onclick={(e) => { e.stopPropagation(); pushSessionDetail(child.sessionId); }}
+                          title="View session detail"
+                        >›</button>
+                      </span>
+                    </div>
+                    <div class="session-header-meta">
+                      <span class="session-activity-time">{(tick, relativeTime(child.lastActivityTime))}</span>
+                      {#if child.currentTool}
+                        <span class="meta-sep">·</span>
+                        <span class="tool-indicator">⚙</span>
+                        <span class="tool-name" style="font-size:0.7rem;color:var(--accent)">{child.currentTool}</span>
+                      {/if}
+                    </div>
+                  </div>
+                  {#if child.lastPrompt}
+                    <div class="session-prompt" title={child.lastPrompt}>
+                      {child.lastPrompt.length > 80 ? child.lastPrompt.slice(0, 80) + '…' : child.lastPrompt}
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>

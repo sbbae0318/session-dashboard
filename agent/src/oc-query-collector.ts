@@ -161,22 +161,44 @@ export class OcQueryCollector {
       }
     }
 
-    // parentID 필터 + 최신 limit*2개만 message fetch (성능 제한)
+    // 정렬 헬퍼
+    const getUpdatedTime = (s: OcServeSession): number => {
+      const t = s.time;
+      return typeof t === 'object' && t !== null ? t.updated ?? t.created : (t || 0);
+    };
+    const byUpdatedDesc = (a: OcServeSession, b: OcServeSession) =>
+      getUpdatedTime(b) - getUpdatedTime(a);
+
+    // 메인 세션 (parentID 없는 세션) — 최신 limit*2개만 message fetch
     const mainSessions = sessions
       .filter((s) => !s.parentID)
-      .sort((a, b) => {
-        const timeA = typeof a.time === 'object' && a.time !== null ? a.time.updated ?? a.time.created : (a.time || 0);
-        const timeB = typeof b.time === 'object' && b.time !== null ? b.time.updated ?? b.time.created : (b.time || 0);
-        return timeB - timeA;
-      })
+      .sort(byUpdatedDesc)
       .slice(0, limit * 2);
-    const results = await Promise.allSettled(
-      mainSessions.map((session) => this.collectFromSession(session)),
-    );
+
+    // 서브에이전트 세션 (parentID 있는 세션) — 최근 BG_SESSION_LIMIT개
+    const BG_SESSION_LIMIT = 30;
+    const bgSessions = sessions
+      .filter((s) => !!s.parentID)
+      .sort(byUpdatedDesc)
+      .slice(0, BG_SESSION_LIMIT);
+
+    // 메인 + bg 병렬 수집
+    const [mainResults, bgResults] = await Promise.all([
+      Promise.allSettled(mainSessions.map((s) => this.collectFromSession(s))),
+      Promise.allSettled(bgSessions.map((s) => this.collectFromSession(s))),
+    ]);
 
     const ocServeEntries: QueryEntry[] = [];
-    for (const result of results) {
+    for (const result of mainResults) {
       if (result.status === 'fulfilled') {
+        ocServeEntries.push(...result.value);
+      }
+    }
+    for (const result of bgResults) {
+      if (result.status === 'fulfilled') {
+        for (const entry of result.value) {
+          entry.isBackground = true;  // 서브에이전트 = 항상 background
+        }
         ocServeEntries.push(...result.value);
       }
     }

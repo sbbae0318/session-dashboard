@@ -212,7 +212,7 @@ describe('OcQueryCollector', () => {
     expect(entries[0].query).toBe('from working session');
   });
 
-  it('parentID 있는 세션 필터링: 서브에이전트 세션 제외', async () => {
+  it('parentID 있는 세션도 수집: 서브에이전트 세션은 isBackground=true', async () => {
     mockFetchJson.mockImplementation((url: string) => {
       if (url.includes('/session?')) {
         return Promise.resolve([
@@ -220,21 +220,27 @@ describe('OcQueryCollector', () => {
           { id: 'sub-session', title: 'look_at: some file', time: 2000, parentID: 'main-session' },
         ]);
       }
-      if (url.includes('main-session')) {
+      if (url.includes('main-session/message')) {
         return Promise.resolve([makeMessage('user', 'real user question')]);
       }
-      // sub-session은 호출되면 안 됨
-      return Promise.resolve([makeMessage('user', 'tool generated message')]);
+      if (url.includes('sub-session/message')) {
+        return Promise.resolve([makeMessage('user', 'tool generated message')]);
+      }
+      return Promise.resolve([]);
     });
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(1);
-    expect(entries[0].sessionId).toBe('main-session');
-    expect(entries[0].query).toBe('real user question');
+    expect(entries).toHaveLength(2);
+    const mainEntry = entries.find(e => e.sessionId === 'main-session')!;
+    const subEntry = entries.find(e => e.sessionId === 'sub-session')!;
+    expect(mainEntry.query).toBe('real user question');
+    expect(mainEntry.isBackground).toBe(false);
+    expect(subEntry.query).toBe('tool generated message');
+    expect(subEntry.isBackground).toBe(true);
   });
 
-  it('parentID 없는 세션만 수집: 메인 세션 2개 모두 수집', async () => {
+  it('parentID 없는 세션 + 있는 세션 모두 수집', async () => {
     mockFetchJson.mockImplementation((url: string) => {
       if (url.includes('/session?')) {
         return Promise.resolve([
@@ -243,22 +249,27 @@ describe('OcQueryCollector', () => {
           { id: 'sub-1', title: 'Task 1: explore', time: 3000, parentID: 'main-1' },
         ]);
       }
-      if (url.includes('main-1')) {
+      if (url.includes('main-1/message')) {
         return Promise.resolve([makeMessage('user', 'question from main-1')]);
       }
-      if (url.includes('main-2')) {
+      if (url.includes('main-2/message')) {
         return Promise.resolve([makeMessage('user', 'question from main-2')]);
+      }
+      if (url.includes('sub-1/message')) {
+        return Promise.resolve([makeMessage('user', 'sub question')]);
       }
       return Promise.resolve([]);
     });
 
     const entries = await collector.collectQueries();
 
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(3);
     const sessionIds = entries.map((e) => e.sessionId);
     expect(sessionIds).toContain('main-1');
     expect(sessionIds).toContain('main-2');
-    expect(sessionIds).not.toContain('sub-1');
+    expect(sessionIds).toContain('sub-1');
+    const sub1Entry = entries.find(e => e.sessionId === 'sub-1')!;
+    expect(sub1Entry.isBackground).toBe(true);
   });
 
   it('활성 세션이 session limit 밖에 있어도 콜백으로 보완하여 수집', async () => {
