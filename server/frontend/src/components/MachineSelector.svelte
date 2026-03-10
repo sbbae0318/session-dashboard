@@ -84,7 +84,7 @@
   }
 
   @media (max-width: 599px) {
-.machine-selector {
+  .machine-selector {
     /* inline mode - no padding needed */
   }
 

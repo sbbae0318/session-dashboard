@@ -186,17 +186,17 @@
     transition: transform 200ms ease-out, opacity 200ms ease-out;
   }
 
-.source-filter {
+  .dashboard-icon {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .source-filter {
     display: flex;
     gap: 0.25rem;
     padding: 0;
     margin-bottom: 0;
     margin-left: auto;
-
-  .dashboard-icon {
-    color: var(--text-secondary);
-    flex-shrink: 0;
-  }
   }
 
   .source-filter-btn {

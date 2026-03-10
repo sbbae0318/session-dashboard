@@ -267,7 +267,7 @@ main {
   main {
     padding: 0.35rem 0.5rem;
   }
-.dashboard-header {
+  .dashboard-header {
     flex-wrap: wrap;
     gap: 0.3rem;
     margin-bottom: 0.3rem;
@@ -309,7 +309,7 @@ main {
   .detail-session-id {
     font-size: 0.7rem;
   }
-.source-filter {
+  .source-filter {
     padding: 0;
     margin-bottom: 0;
   }
