@@ -26,6 +26,16 @@
   let filteredQueries = $derived(
     queries
       .filter(q => showBackground || !isBackgroundQuery(q, sessions))
+      // bg query를 parent 세션으로 리매핑
+      .map(q => {
+        if (!isBackgroundQuery(q, sessions)) return q;
+        const childSession = sessions.find(s => s.sessionId === q.sessionId);
+        const parentId = childSession?.parentSessionId;
+        if (!parentId) return q; // orphaned — 원본 유지
+        const parentSession = sessions.find(s => s.sessionId === parentId);
+        if (!parentSession) return q; // parent not in store — 원본 유지
+        return { ...q, sessionId: parentId, sessionTitle: parentSession.title ?? parentId.slice(0, 8) };
+      })
       .filter(q => !machineFilter || q.machineId === machineFilter)
       .filter(q => {
         if (sourceFilter === "all") return true;
@@ -58,7 +68,11 @@
       })
       .filter(q => {
         const sid = sessionIdFilter ?? selectedSessionId;
-        return !sid || q.sessionId === sid;
+        if (!sid) return true;
+        if (q.sessionId === sid) return true;
+        // bg query의 parent가 선택된 세션인 경우도 포함
+        const childSession = sessions.find(s => s.sessionId === q.sessionId);
+        return childSession?.parentSessionId === sid;
       })
       .length
   );
@@ -230,6 +244,12 @@
 
   .prompt-item:hover {
     border-color: var(--accent);
+  }
+
+  .prompt-item.background {
+    border-left: 2px solid rgba(139, 148, 158, 0.4);
+    opacity: 0.85;
+    background: rgba(139, 148, 158, 0.03);
   }
 
 

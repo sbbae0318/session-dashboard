@@ -22,19 +22,6 @@
   let sourceFilter = $derived(getSourceFilter());
   let detailId = $derived(getDetailSessionId());
 
-  // Track which session groups are expanded
-  let expandedIds = $state<Set<string>>(new Set());
-
-  function toggleExpand(sessionId: string, event: Event): void {
-    event.stopPropagation();
-    const next = new Set(expandedIds);
-    if (next.has(sessionId)) {
-      next.delete(sessionId);
-    } else {
-      next.add(sessionId);
-    }
-    expandedIds = next;
-  }
   const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
   function handleDismiss(sessionId: string, lastActivityTime: number, event: Event): void {
@@ -91,9 +78,6 @@
       )
   );
 
-  function getChildren(parentId: string): DashboardSession[] {
-    return sessions.filter(s => s.parentSessionId === parentId);
-  }
 
   interface DisplayStatus {
     label: string;
@@ -136,14 +120,12 @@
     <div class="sessions-list">
       {#each topLevelSessions as session (session.sessionId)}
         {@const ds = getDisplayStatus(session)}
-        {@const children = getChildren(session.sessionId)}
         <div class="session-group">
           <!-- Parent / standalone session -->
           <div
             class="session-item"
             class:selected={selectedSessionId === session.sessionId}
             class:detail-active={detailId === session.sessionId}
-            class:has-children={children.length > 0}
             onclick={() => handleSessionClick(session)}
             role="button"
             tabindex="0"
@@ -217,59 +199,6 @@
 {/if}
           </div>
 
-          {#if children.length > 0}
-            <button
-              class="expand-toggle"
-              class:expanded={expandedIds.has(session.sessionId)}
-              onclick={(e) => toggleExpand(session.sessionId, e)}
-            >
-              <span class="expand-arrow">{expandedIds.has(session.sessionId) ? '▼' : '▶'}</span>
-              <span class="child-count">{children.length}</span>
-            </button>
-          {/if}
-          {#if children.length > 0 && expandedIds.has(session.sessionId)}
-            <div class="children-list">
-              {#each children as child (child.sessionId)}
-                {@const cds = getDisplayStatus(child)}
-                <div
-                  class="session-item child-item"
-                  class:selected={selectedSessionId === child.sessionId}
-                  class:detail-active={detailId === child.sessionId}
-                  onclick={() => handleSessionClick(child)}
-                  role="button"
-                  tabindex="0"
-                  onkeydown={(e) => e.key === 'Enter' && handleSessionClick(child)}
-                >
-                  <div class="session-header">
-                    <div class="session-header-top">
-                      <span class="status-badge {cds.cssClass}">{cds.label}</span>
-                      <span class="session-title">{child.title || child.sessionId.slice(0, 8)}</span>
-                      <span class="header-actions">
-                        <button
-                          class="action-btn action-detail"
-                          onclick={(e) => { e.stopPropagation(); pushSessionDetail(child.sessionId); }}
-                          title="View session detail"
-                        >›</button>
-                      </span>
-                    </div>
-                    <div class="session-header-meta">
-                      <span class="session-activity-time">{(tick, relativeTime(child.lastActivityTime))}</span>
-                      {#if child.currentTool}
-                        <span class="meta-sep">·</span>
-                        <span class="tool-indicator">⚙</span>
-                        <span class="tool-name" style="font-size:0.7rem;color:var(--accent)">{child.currentTool}</span>
-                      {/if}
-                    </div>
-                  </div>
-                  {#if child.lastPrompt}
-                    <div class="session-prompt" title={child.lastPrompt}>
-                      {child.lastPrompt.length > 80 ? child.lastPrompt.slice(0, 80) + '…' : child.lastPrompt}
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {/if}
         </div>
       {/each}
     </div>
@@ -324,32 +253,6 @@
     box-shadow: inset 3px 0 0 var(--accent);
   }
 
-  .session-item.has-children {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  /* Child sessions */
-  .children-list {
-    display: flex;
-    flex-direction: column;
-    margin-left: 1rem;
-    padding-left: 0.75rem;
-    border-left: 2px solid var(--border);
-  }
-
-  .child-item {
-    border-radius: 0;
-    padding: 0.45rem 0.65rem;
-    font-size: 0.9em;
-    background: var(--bg-secondary, var(--bg-tertiary));
-    border-left: none;
-  }
-
-  .child-item:last-child {
-    border-bottom-left-radius: var(--radius-sm);
-    border-bottom-right-radius: var(--radius-sm);
-  }
 
   .session-header {
     display: flex;
@@ -422,50 +325,6 @@
     min-width: 0;
   }
 
-  .child-item .session-title {
-    font-weight: 500;
-    font-size: 0.8rem;
-  }
-
-  .expand-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    background: none;
-    border: 1px solid rgba(139, 148, 158, 0.3);
-    border-radius: 9999px;
-    padding: 0.05rem 0.4rem;
-    cursor: pointer;
-    color: var(--text-secondary);
-    font-size: 0.6rem;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-
-  .expand-toggle:hover {
-    background: rgba(139, 148, 158, 0.15);
-    color: var(--text-primary);
-  }
-
-  .expand-toggle.expanded {
-    background: rgba(88, 166, 255, 0.1);
-    border-color: rgba(88, 166, 255, 0.3);
-    color: var(--accent);
-  }
-
-  .expand-arrow {
-    font-size: 0.65rem;
-    line-height: 1;
-  }
-
-  .child-count {
-    font-size: 0.6rem;
-    padding: 0.05rem 0.4rem;
-    border-radius: 9999px;
-    font-weight: 600;
-    background: rgba(139, 148, 158, 0.2);
-    color: var(--text-secondary);
-    border: 1px solid rgba(139, 148, 158, 0.3);
-  }
 
   .status-badge {
     font-size: 0.65rem;
@@ -713,21 +572,12 @@
       font-size: 1rem;
     }
 
-    .expand-toggle {
-      min-width: 44px;
-      min-height: 44px;
-    }
   }
 
   /* ===== Mobile (≤599px) ===== */
   @media (max-width: 599px) {
     .session-item {
       padding: 0.4rem 0.5rem;
-    }
-
-    .children-list {
-      margin-left: 0.5rem;
-      padding-left: 0.5rem;
     }
 
     .session-header {
@@ -755,12 +605,6 @@
     }
   }
 
-  /* ===== Small tablet (600–767px) ===== */
-  @media (min-width: 600px) and (max-width: 767px) {
-    .children-list {
-      margin-left: 0.75rem;
-    }
-  }
 
   /* ===== Copy toast ===== */
   .copy-toast {
