@@ -10,7 +10,8 @@ interface DashboardSession {
   childSessionIds: string[];
   title: string | null;
   projectCwd: string | null;
-  status: "active" | "completed" | "orphaned";
+  status: "active" | "idle";
+  waitingForInput: boolean;
   startTime: number;
   lastActivityTime: number;
   currentTool: string | null;
@@ -156,7 +157,8 @@ export class ActiveSessionsModule implements BackendModule {
         childSessionIds: [],
         title: (s.title as string) ?? null,
         projectCwd: (s.directory as string) ?? null,
-        status: isActive ? 'active' : 'completed',
+        status: isActive ? 'active' : 'idle',
+        waitingForInput: cached?.waitingForInput ?? false,
         startTime: isClaudeCode
           ? (s.startTime as number) ?? Date.now()
           : (s.time as { created?: number })?.created ?? Date.now(),
@@ -195,7 +197,8 @@ export class ActiveSessionsModule implements BackendModule {
         childSessionIds: [],
         title: null,
         projectCwd: cached.directory,
-        status: 'active',
+        status: 'idle',
+        waitingForInput: cached.waitingForInput ?? false,
         startTime: cached.updatedAt,
         lastActivityTime: cached.updatedAt,
         currentTool: cached.currentTool,

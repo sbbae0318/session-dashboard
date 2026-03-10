@@ -29,6 +29,7 @@ export interface CachedSessionDetail {
   readonly lastFileModified?: number | null;
   /** Whether the agent's SSE connection to oc-serve is active */
   readonly sseConnected?: boolean;
+  readonly waitingForInput?: boolean;
 }
 
 export class MachineManager {

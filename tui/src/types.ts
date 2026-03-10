@@ -17,7 +17,8 @@ export interface DashboardSession {
   childSessionIds: string[];
   title: string | null;
   projectCwd: string | null;
-  status: "active" | "completed" | "orphaned";
+  status: "active" | "idle";
+  waitingForInput?: boolean;
   startTime: number;
   lastActivityTime: number;
   currentTool: string | null;

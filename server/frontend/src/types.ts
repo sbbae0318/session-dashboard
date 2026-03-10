@@ -19,7 +19,8 @@ export interface DashboardSession {
   childSessionIds: string[];
   title: string | null;
   projectCwd: string | null;
-  status: "active" | "completed" | "orphaned";
+  status: "active" | "idle";
+  waitingForInput?: boolean;
   startTime: number;
   lastActivityTime: number;
   currentTool: string | null;
@@ -28,6 +29,7 @@ export interface DashboardSession {
   apiStatus: "idle" | "busy" | "retry" | null;
   lastPrompt: string | null;
   lastPromptTime: number | null;
+  waitingForInput: boolean;
 
   source?: "opencode" | "claude-code";
 
