@@ -135,40 +135,42 @@
         >
           <div class="prompt-header">
             <span class="prompt-session">{resolvedTitle}</span>
-            <span class="prompt-time">
-              {formatTimestamp(entry.timestamp)}
-              <span class="time-arrow">→</span>
-              {#if completionTs && !isWorking}
-                {formatTimestamp(completionTs)}
-                <span class="time-ago">({relativeTime(completionTs)})</span>
-              {:else}
-                <span class="dot-loader"><span></span><span></span><span></span></span>
+            <div class="prompt-meta">
+              <span class="prompt-time">
+                {formatTimestamp(entry.timestamp)}
+                <span class="time-arrow">→</span>
+                {#if completionTs && !isWorking}
+                  {formatTimestamp(completionTs)}
+                  <span class="time-ago">({relativeTime(completionTs)})</span>
+                {:else}
+                  <span class="dot-loader"><span></span><span></span><span></span></span>
+                {/if}
+              </span>
+              {#if showMachines && entry.machineAlias}
+                <span class="machine-tag">{entry.machineAlias}</span>
               {/if}
-            </span>
-            {#if showMachines && entry.machineAlias}
-              <span class="machine-tag">{entry.machineAlias}</span>
-            {/if}
-            {#if result === 'completed'}
-              <span class="result-badge result-completed">✓</span>
-            {:else if result === 'user_exit'}
-              <span class="result-badge result-exit">↩</span>
-            {:else if result === 'error'}
-              <span class="result-badge result-error">⚠</span>
-            {:else if result === 'idle'}
-              <span class="result-badge result-idle">○</span>
-            {:else if result === 'busy' || result === 'active'}
-              <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
-            {/if}
-            {#if entry.source === "claude-code"}
-              <span class="source-badge claude">Claude</span>
-            {:else}
-              <span class="source-badge opencode">OpenCode</span>
-            {/if}
-            <button
-              class="prompt-detail-btn"
-              onclick={(e) => handleDetailClick(entry, e)}
-              title="프롬프트 전문 보기"
-            >전문</button>
+              {#if result === 'completed'}
+                <span class="result-badge result-completed">✓</span>
+              {:else if result === 'user_exit'}
+                <span class="result-badge result-exit">↩</span>
+              {:else if result === 'error'}
+                <span class="result-badge result-error">⚠</span>
+              {:else if result === 'idle'}
+                <span class="result-badge result-idle">○</span>
+              {:else if result === 'busy' || result === 'active'}
+                <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
+              {/if}
+              {#if entry.source === "claude-code"}
+                <span class="source-badge claude">Claude</span>
+              {:else}
+                <span class="source-badge opencode">OpenCode</span>
+              {/if}
+              <button
+                class="prompt-detail-btn"
+                onclick={(e) => handleDetailClick(entry, e)}
+                title="프롬프트 전문 보기"
+              >전문</button>
+            </div>
           </div>
           <p class="prompt-text" title={entry.query}>
             {truncate(entry.query, 200)}
@@ -233,10 +235,16 @@
 
   .prompt-header {
     display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .prompt-meta {
+    display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.35rem;
-    margin-bottom: 0.4rem;
   }
 
   .prompt-session {
@@ -246,7 +254,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1;
+    flex-shrink: 1;
     min-width: 0;
   }
 
@@ -410,7 +418,7 @@
     .prompt-item {
       padding: 0.65rem;
     }
-    .prompt-header {
+    .prompt-meta {
       flex-wrap: wrap;
     }
     .prompt-text {
