@@ -39,10 +39,11 @@ function buildFlatRows(sessions: DashboardSession[]): FlatRow[] {
   return rows;
 }
 
-function badgeColor(apiStatus: string | null): string | undefined {
-  if (apiStatus === 'busy') return 'yellow';
+function badgeColor(apiStatus: string | null, waitingForInput?: boolean): string | undefined {
+  if (waitingForInput) return 'magenta';
+  if (apiStatus === 'busy') return 'blue';
+  if (apiStatus === 'retry') return 'yellow';
   if (apiStatus === 'idle') return 'green';
-  if (apiStatus === 'retry') return 'magenta';
   return undefined;
 }
 
@@ -55,8 +56,8 @@ function SessionRow({
   const isSelected = flatIndex === selectedIndex;
   const cursor = isSelected ? '❯' : ' ';
   const treePrefix = isChild ? '  └─ ' : '     ';
-  const badge = statusBadge(session.apiStatus);
-  const color = badgeColor(session.apiStatus);
+  const badge = statusBadge(session.apiStatus, session.waitingForInput);
+  const color = badgeColor(session.apiStatus, session.waitingForInput);
   const proj = projectName(session.projectCwd);
   const titleText = truncate(session.title ?? session.sessionId, 28);
   const time = formatTime(session.lastActivityTime);

@@ -99,18 +99,15 @@ export function truncate(text: string, maxLen: number): string {
 
 /**
  * Format API status as a badge string.
- * Examples: '● BUSY', '○ IDLE', '? --'
+ * Examples: '● WORK', '⏳ WAIT', '○ IDLE'
  */
-export function statusBadge(apiStatus: string | null): string {
+export function statusBadge(apiStatus: string | null, waitingForInput?: boolean): string {
+  if (waitingForInput) return '⏳ WAIT';
   switch (apiStatus) {
-    case 'busy':
-      return '● BUSY';
-    case 'idle':
-      return '○ IDLE';
-    case 'retry':
-      return '↻ RETRY';
-    default:
-      return '? --';
+    case 'busy': return '● WORK';
+    case 'retry': return '↻ RETRY';
+    case 'idle': return '○ IDLE';
+    default: return '○ IDLE';
   }
 }
 
