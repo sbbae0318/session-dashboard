@@ -268,9 +268,15 @@ main {
     padding: 0.35rem 0.5rem;
   }
   .dashboard-header {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     gap: 0.3rem;
     margin-bottom: 0.3rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .dashboard-header::-webkit-scrollbar {
+    display: none;
   }
   .connection-status {
     font-size: 0.75rem;
@@ -312,6 +318,12 @@ main {
   .source-filter {
     padding: 0;
     margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .source-filter-btn {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    white-space: nowrap;
   }
 }
 

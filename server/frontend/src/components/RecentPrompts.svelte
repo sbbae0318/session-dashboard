@@ -9,8 +9,12 @@
 
   let {
     sessionIdFilter = null,
+    showBackground = $bindable(false),
+    onBackgroundCountChange,
   }: {
     sessionIdFilter?: string | null;
+    showBackground?: boolean;
+    onBackgroundCountChange?: (count: number) => void;
   } = $props();
 
   let queries = $derived(getQueries());
@@ -21,7 +25,6 @@
   let sourceFilter = $derived(getSourceFilter());
 
   // --- State ---
-  let showBackground = $state(false);
 
   let filteredQueries = $derived(
     queries
@@ -77,6 +80,8 @@
       .length
   );
 
+  $effect(() => { onBackgroundCountChange?.(backgroundCount); });
+
   // --- Clipboard copy ---
   let toastMessage = $state<string | null>(null);
   let modalEntry = $state<{ sessionId: string; source?: string; query: string; sessionTitle?: string; timestamp: number } | null>(null);
@@ -109,21 +114,6 @@
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
-  {#if backgroundCount > 0}
-    <div class="bg-toggle-bar">
-      <button
-        class="bg-toggle-btn"
-        class:active={showBackground}
-        onclick={() => { showBackground = !showBackground; }}
-      >
-        {#if showBackground}
-          bg 숨김
-        {:else}
-          bg 포함 ({backgroundCount})
-        {/if}
-      </button>
-    </div>
-  {/if}
   {#if filteredQueries.length === 0}
     <div class="empty-state">{selectedSessionId ? '선택된 세션의 프롬프트 없음' : '최근 프롬프트 없음'}</div>
   {:else}
@@ -402,35 +392,6 @@
     font-style: italic;
   }
 
-  .bg-toggle-bar {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0 0 0.4rem 0;
-    flex-shrink: 0;
-  }
-
-  .bg-toggle-btn {
-    background: none;
-    border: 1px solid rgba(139, 148, 158, 0.3);
-    border-radius: 9999px;
-    padding: 0.15rem 0.6rem;
-    font-size: 0.65rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  }
-
-  .bg-toggle-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .bg-toggle-btn.active {
-    background: rgba(88, 166, 255, 0.1);
-    border-color: rgba(88, 166, 255, 0.4);
-    color: var(--accent);
-  }
   @media (max-width: 599px) {
     .prompts-list {
       max-height: 60vh;

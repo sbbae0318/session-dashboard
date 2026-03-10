@@ -20,6 +20,8 @@
   let isDetail = $derived(isDetailView());
   let detailId = $derived(getDetailSessionId());
   let sourceFilter = $derived(getSourceFilter());
+  let showBackground = $state(false);
+  let backgroundCount = $state(0);
 
   $effect(() => {
     const sessions = getSessions();
@@ -156,19 +158,25 @@
         {#if isDetail}
           <div class="panel prompts-panel view-transition">
             <h2>세션 프롬프트</h2>
-            <RecentPrompts sessionIdFilter={detailId} />
+            <RecentPrompts sessionIdFilter={detailId} bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} />
           </div>
         {:else}
           <div class="panel prompts-panel view-transition">
             <div class="panel-header-row">
               <h2>Prompt History</h2>
+              {#if backgroundCount > 0}
+                <button class="bg-toggle-btn" class:active={showBackground}
+                  onclick={() => { showBackground = !showBackground; }}>
+                  {#if showBackground}bg 숨김{:else}bg 포함 ({backgroundCount}){/if}
+                </button>
+              {/if}
               {#if selectedSessionId}
                 <button class="filter-badge" onclick={clearFilter}>
                   ✕ 필터 해제
                 </button>
               {/if}
             </div>
-            <RecentPrompts />
+            <RecentPrompts bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} />
           </div>
         {/if}
       </section>
@@ -221,6 +229,30 @@
     border-color: var(--accent);
     color: var(--accent);
     font-weight: 600;
+  }
+
+
+  .bg-toggle-btn {
+    background: none;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    border-radius: 9999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .bg-toggle-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .bg-toggle-btn.active {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--accent);
   }
 
   @media (prefers-reduced-motion: reduce) {
