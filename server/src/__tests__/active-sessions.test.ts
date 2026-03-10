@@ -18,6 +18,7 @@ function createMockMachineManager(overrides?: {
     currentTool: string | null;
     directory: string | null;
     updatedAt: number;
+    waitingForInput?: boolean;
     machineId: string;
   }>>;
 }): MachineManager {
@@ -770,5 +771,146 @@ describe('ActiveSessionsModule — ghost filter + previousSessionMap (Task 3)', 
     expect(sessions).toHaveLength(1);
     expect(sessions[0].sessionId).toBe('ses_new');
     expect(sessions.find((s: any) => s.sessionId === 'ses_old')).toBeUndefined();
+  });
+});
+
+describe('ActiveSessionsModule — waitingForInput forwarding', () => {
+  let module: ActiveSessionsModule;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  // ── Test Q: waitingForInput=true in cachedDetails propagates to DashboardSession ──
+  it('Test Q: waitingForInput=true from cachedDetails is forwarded to DashboardSession', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_waiting',
+            sessionId: 'ses_waiting',
+            title: 'Waiting Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_waiting': { type: 'idle', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_waiting': {
+          status: 'idle',
+          lastPrompt: 'waiting prompt',
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          waitingForInput: true,
+          sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_waiting');
+
+    expect(session).toBeDefined();
+    expect(session.waitingForInput).toBe(true);
+  });
+
+  // ── Test R: waitingForInput defaults to false when not in cachedDetails ──
+  it('Test R: waitingForInput defaults to false when absent from cachedDetails', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_no_wait',
+            sessionId: 'ses_no_wait',
+            title: 'No Wait Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_no_wait': { type: 'busy', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_no_wait': {
+          status: 'busy',
+          lastPrompt: 'working',
+          lastPromptTime: 1000,
+          currentTool: 'bash',
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          sseConnected: true,
+          // waitingForInput NOT set
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_no_wait');
+
+    expect(session).toBeDefined();
+    expect(session.waitingForInput).toBe(false);
+  });
+
+  // ── Test S: waitingForInput forwarded for orphan sessions too ──
+  it('Test S: waitingForInput=true forwarded for orphan sessions synthesized from cache', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [],
+        statuses: {},
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_orphan_wait': {
+          status: 'idle',
+          lastPrompt: 'orphan waiting',
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          waitingForInput: true,
+          sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const orphan = sessions.find((s: any) => s.sessionId === 'ses_orphan_wait');
+
+    expect(orphan).toBeDefined();
+    expect(orphan.waitingForInput).toBe(true);
+    expect(orphan.apiStatus).toBe('idle');
   });
 });
