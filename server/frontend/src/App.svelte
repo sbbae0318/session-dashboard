@@ -104,15 +104,20 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 <main>
-  <header class="dashboard-header">
-    <h1>Session Dashboard</h1>
-    <span class="connection-status" class:connected>
-      {connected ? "● Connected" : "○ Disconnected"}
-    </span>
-  </header>
-
+<header class="dashboard-header">
+  <svg class="dashboard-icon" width="16" height="16" viewBox="0 0 24 24"
+       fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+       aria-hidden="true">
+    <rect x="3" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  <span class="connection-status" class:connected
+        title={connected ? "Connected" : "Disconnected"}>
+    {connected ? "●" : "○"}
+  </span>
   <MachineSelector />
-
   <div class="source-filter">
     <button
       class="source-filter-btn"
@@ -130,7 +135,7 @@
       onclick={() => setSourceFilter("claude-code")}
     >Claude</button>
   </div>
-
+</header>
   {#if loading}
     <div class="loading">Loading...</div>
   {:else}
@@ -181,16 +186,22 @@
     transition: transform 200ms ease-out, opacity 200ms ease-out;
   }
 
-  .source-filter {
+.source-filter {
     display: flex;
     gap: 0.25rem;
-    padding: 0 1rem;
-    margin-bottom: 0.5rem;
+    padding: 0;
+    margin-bottom: 0;
+    margin-left: auto;
+
+  .dashboard-icon {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
   }
 
   .source-filter-btn {
-    font-size: 0.72rem;
-    padding: 0.25rem 0.65rem;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: 9999px;

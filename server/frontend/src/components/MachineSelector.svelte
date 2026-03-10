@@ -34,14 +34,10 @@
 {/if}
 
 <style>
-  .machine-selector {
-    display: flex;
+.machine-selector {
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 1.5rem;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
+    gap: 0.3rem;
     flex-wrap: wrap;
   }
 
@@ -49,12 +45,12 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.25rem 0.75rem;
+    padding: 0.2rem 0.6rem;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: 9999px;
     color: var(--text-secondary);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-family: inherit;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
@@ -88,9 +84,9 @@
   }
 
   @media (max-width: 599px) {
-    .machine-selector {
-      padding: 0.4rem 0.75rem;
-    }
+.machine-selector {
+    /* inline mode - no padding needed */
+  }
 
     .machine-btn {
       padding: 0.25rem 0.5rem;
