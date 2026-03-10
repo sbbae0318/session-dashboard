@@ -29,7 +29,6 @@ export interface DashboardSession {
   apiStatus: "idle" | "busy" | "retry" | null;
   lastPrompt: string | null;
   lastPromptTime: number | null;
-  waitingForInput: boolean;
 
   source?: "opencode" | "claude-code";
 

@@ -22,94 +22,19 @@
   let sourceFilter = $derived(getSourceFilter());
   let detailId = $derived(getDetailSessionId());
 
-  const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
-
-  function handleDismiss(sessionId: string, lastActivityTime: number, event: Event): void {
-    event.stopPropagation();
-    dismissSession(sessionId, lastActivityTime);
-  }
-
-  // --- Clipboard copy: build session resume command ---
-  let toastMessage = $state<string | null>(null);
-  let toastTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  function buildSessionCommand(session: DashboardSession): string {
-    const cwd = session.projectCwd ?? '~';
-    if (session.source === 'claude-code') {
-      return `cd ${cwd} && claude --resume ${session.sessionId}`;
-    }
-    // OpenCode → attach to oc-serve
-    const rawHost = session.machineHost ?? 'localhost';
-    const host = (rawHost === 'host.docker.internal' || rawHost === '127.0.0.1')
-      ? 'localhost'
-      : rawHost;
-    return `opencode attach http://${host}:4096 --session ${session.sessionId}`;
-  }
-
-  async function copySessionCommand(session: DashboardSession): Promise<void> {
-    const cmd = buildSessionCommand(session);
-    const ok = await copyToClipboard(cmd);
-    showToast(ok ? 'Copied!' : 'Copy failed');
-  }
-
-  function showToast(msg: string): void {
-    toastMessage = msg;
-    if (toastTimeout) clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
-  }
-
-  function handleSessionClick(session: DashboardSession): void {
-    selectSession(session.sessionId);
-    copySessionCommand(session);
-  }
-
-  // Top-level sessions: no parent, or parent not in active set
-  let topLevelSessions = $derived(
-    sessions
-      .filter(s => !machineFilter || s.machineId === machineFilter)
-      .filter(s => {
-        if (sourceFilter === "all") return true;
-        if (sourceFilter === "opencode") return !s.source || s.source === "opencode";
-        return s.source === sourceFilter;
-      })
-      .filter(s =>
-        !s.parentSessionId ||
-        !sessions.some(p => p.sessionId === s.parentSessionId)
-      )
-  );
-
-
-  interface DisplayStatus {
-    label: string;
-    cssClass: string;
-  }
-
   function getDisplayStatus(session: DashboardSession): DisplayStatus {
-    // apiStatus (from SSE cache) takes priority over session.status
-    // because status can lag behind real-time SSE updates
-    if (session.apiStatus === 'busy' || session.currentTool) {
-      return { label: 'Working', cssClass: 'status-working' };
+    // 1. Working: busy 또는 retry 또는 currentTool 실행 중 (단, waitingForInput 아닌 경우)
+    if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
+        && !session.waitingForInput) {
+      const label = session.apiStatus === 'retry' ? 'Retry' : 'Working';
+      return { label, cssClass: 'status-working' };
     }
-    if (session.apiStatus === 'idle') {
+    // 2. Waiting: 사용자 입력/승인 대기
+    if (session.waitingForInput) {
       return { label: 'Waiting', cssClass: 'status-waiting' };
     }
-    if (session.apiStatus === 'retry') {
-      return { label: 'Retry', cssClass: 'status-retry' };
-    }
-    if (session.status === 'completed') {
-      return { label: 'Done', cssClass: 'status-completed' };
-    }
-    if (session.status === 'orphaned') {
-      return { label: 'Orphaned', cssClass: 'status-orphaned' };
-    }
-    if (session.apiStatus === null && session.status === 'active') {
-      return { label: 'Active', cssClass: 'status-active' };
-    }
-    const idleMs = Date.now() - session.lastActivityTime;
-    if (idleMs < IDLE_THRESHOLD_MS) {
-      return { label: 'Idle', cssClass: 'status-idle' };
-    }
-    return { label: 'Stale', cssClass: 'status-stale' };
+    // 3. Idle: 그 외 모든 상태
+    return { label: 'Idle', cssClass: 'status-idle' };
   }
 </script>
 
@@ -381,41 +306,12 @@
     border: 1px solid rgba(63, 185, 80, 0.3);
   }
 
-  .status-stale {
-    background: rgba(210, 153, 34, 0.15);
-    color: var(--warning);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-  }
-
-  .status-completed {
-    background: rgba(139, 148, 158, 0.15);
-    color: var(--text-secondary);
-    border: 1px solid rgba(139, 148, 158, 0.3);
-  }
-
-  .status-orphaned {
-    background: rgba(210, 153, 34, 0.15);
-    color: var(--warning);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-  }
-
   .status-waiting {
     background: rgba(168, 113, 255, 0.15);
     color: #a871ff;
     border: 1px solid rgba(168, 113, 255, 0.3);
   }
 
-  .status-retry {
-    background: rgba(248, 81, 73, 0.15);
-    color: var(--error);
-    border: 1px solid rgba(248, 81, 73, 0.3);
-  }
-
-  .status-active {
-    background: rgba(45, 212, 191, 0.15);
-    color: #2dd4bf;
-    border: 1px solid rgba(45, 212, 191, 0.3);
-  }
 
   .session-tool {
     display: flex;
