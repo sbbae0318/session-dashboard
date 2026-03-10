@@ -167,7 +167,7 @@
               {#if backgroundCount > 0}
                 <button class="bg-toggle-btn" class:active={showBackground}
                   onclick={() => { showBackground = !showBackground; }}>
-                  {#if showBackground}bg 숨김{:else}bg 포함 ({backgroundCount}){/if}
+                  {#if showBackground}hide bg{:else}background ({backgroundCount}){/if}
                 </button>
               {/if}
               {#if selectedSessionId}

@@ -126,7 +126,7 @@
         {@const session = sessions.find(s => s.sessionId === entry.sessionId)}
         {@const isSessionBusy = session?.apiStatus === 'busy' || session?.status === 'active'}
         {@const isLatestForSession = i === latestIndexBySession[entry.sessionId]}
-        {@const isWorking = !completionTs || (isSessionBusy && isLatestForSession)}
+        {@const isWorking = isSessionBusy && isLatestForSession}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
           class="prompt-item" class:in-progress={isWorking}
@@ -142,12 +142,13 @@
             <div class="prompt-meta">
               <span class="prompt-time">
                 {formatTimestamp(entry.timestamp)}
-                <span class="time-arrow">→</span>
-                {#if completionTs && !isWorking}
+                {#if isWorking}
+                  <span class="time-arrow">→</span>
+                  <span class="dot-loader"><span></span><span></span><span></span></span>
+                {:else if completionTs}
+                  <span class="time-arrow">→</span>
                   {formatTimestamp(completionTs)}
                   <span class="time-ago">({relativeTime(completionTs)})</span>
-                {:else}
-                  <span class="dot-loader"><span></span><span></span><span></span></span>
                 {/if}
               </span>
               {#if showMachines && entry.machineAlias}
