@@ -119,7 +119,7 @@
   {:else}
     <div class="prompts-list">
 
-      {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp)}
+      {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp + '-' + i)}
         {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
@@ -163,11 +163,7 @@
               {:else if result === 'idle'}
                 <span class="result-badge result-idle">○</span>
               {:else if result === 'busy' || result === 'active'}
-                {#if isWorking}
-                  <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
-                {:else}
-                  <span class="result-badge result-active">⟳</span>
-                {/if}
+                <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
               {/if}
               {#if entry.source === "claude-code"}
                 <span class="source-badge claude">Claude</span>
@@ -473,8 +469,6 @@
     border-radius: 50%;
     animation: dot-bounce 1.4s ease-in-out infinite;
     box-shadow: 0 0 4px rgba(88, 166, 255, 0.5);
-    will-change: transform, opacity;
-    backface-visibility: hidden;
   }
 
   .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
@@ -505,8 +499,6 @@
     background: var(--accent);
     border-radius: 50%;
     animation: dot-bounce 1.4s ease-in-out infinite;
-    will-change: transform, opacity;
-    backface-visibility: hidden;
   }
 
   .dot-loader-sm span:nth-child(2) { animation-delay: 0.2s; }
