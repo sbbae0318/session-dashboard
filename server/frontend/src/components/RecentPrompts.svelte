@@ -4,7 +4,7 @@
   import { getSelectedSessionId, getSourceFilter, selectSession } from "../lib/stores/filter.svelte";
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
   import { getSessions } from "../lib/stores/sessions.svelte";
-  import { relativeTime, truncate, getQueryResult, getCompletionTime, formatTimestamp, copyToClipboard, isBackgroundQuery } from "../lib/utils";
+  import { truncate, getQueryResult, getCompletionTime, formatTimestamp, formatDuration, copyToClipboard, isBackgroundQuery } from "../lib/utils";
   import type { DashboardSession } from "../types";
 
   let {
@@ -146,9 +146,7 @@
                   <span class="time-arrow">→</span>
                   <span class="dot-loader"><span></span><span></span><span></span></span>
                 {:else if completionTs}
-                  <span class="time-arrow">→</span>
-                  {formatTimestamp(completionTs)}
-                  <span class="time-ago">({relativeTime(completionTs)})</span>
+                  <span class="prompt-duration">({formatDuration(completionTs - entry.timestamp)})</span>
                 {/if}
               </span>
               {#if showMachines && entry.machineAlias}
@@ -283,11 +281,11 @@
     opacity: 0.4;
   }
 
-  .time-ago {
+
+  .prompt-duration {
     font-size: 0.6rem;
     opacity: 0.6;
   }
-
   .prompt-text {
     font-size: 0.9rem;
     color: var(--text-primary);

@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { dismissSession, isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { getDetailSessionId, pushSessionDetail } from '../lib/stores/navigation.svelte';
-  import { relativeTime, copyToClipboard, formatTimestamp } from "../lib/utils";
+  import { relativeTime, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -140,19 +140,11 @@
               <div class="session-header-meta">
                 {#if session.lastPromptTime}
                   {@const isBusy = ds.cssClass === 'status-working'}
-                  {@const showCompletion = !isBusy && session.lastActivityTime > session.lastPromptTime}
-                  <span class="session-time-range">
-                    {formatTimestamp(session.lastPromptTime)}
-                    <span class="time-arrow">→</span>
-                    {#if isBusy}
-                      <span class="dot-loader-session"><span></span><span></span><span></span></span>
-                    {:else if showCompletion}
-                      {formatTimestamp(session.lastActivityTime)}
-                      <span class="time-ago">({(tick, relativeTime(session.lastActivityTime))})</span>
-                    {:else}
-                      {(tick, relativeTime(session.lastPromptTime))}
-                    {/if}
-                  </span>
+                  {#if isBusy}
+                    <span class="session-time-working"><span class="dot-loader-session"><span></span><span></span><span></span></span></span>
+                  {:else}
+                    <span class="session-activity-time" title="Last completed">{(tick, relativeTime(session.lastActivityTime))}</span>
+                  {/if}
                 {:else}
                   <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
                 {/if}
@@ -404,21 +396,10 @@
     flex-shrink: 0;
   }
 
-  .session-time-range {
+  .session-time-working {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    white-space: nowrap;
     flex-shrink: 0;
-  }
-
-  .time-arrow {
-    opacity: 0.4;
-  }
-
-  .time-ago {
-    font-size: 0.6rem;
-    opacity: 0.6;
   }
 
   .dot-loader-session {
