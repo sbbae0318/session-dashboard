@@ -196,3 +196,110 @@ describe('ClaudeSource', () => {
   });
 
 });
+
+describe('ClaudeSource — getRecentQueries with extractUserPrompt', () => {
+  let tmpDir: string;
+  let source: ClaudeSource;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    source = new ClaudeSource(tmpDir);
+  });
+
+  afterEach(() => {
+    source.stop();
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should filter out system-only prompts ([SYSTEM DIRECTIVE:)', async () => {
+    writeHistory(tmpDir, [
+      { display: 'Normal query', timestamp: Date.now(), sessionId: 'ses_001' },
+      { display: '[SYSTEM DIRECTIVE: do not respond] System message', timestamp: Date.now(), sessionId: 'ses_002' },
+      { display: 'Another normal query', timestamp: Date.now(), sessionId: 'ses_003' },
+    ]);
+
+    const queries = await source.getRecentQueries();
+    expect(queries).toHaveLength(2);
+    expect(queries[0]!.query).toBe('Normal query');
+    expect(queries[1]!.query).toBe('Another normal query');
+  });
+
+  it('should filter out <system-reminder> prompts', async () => {
+    writeHistory(tmpDir, [
+      { display: '<system-reminder>\nSome system content', timestamp: Date.now(), sessionId: 'ses_001' },
+    ]);
+
+    const queries = await source.getRecentQueries();
+    expect(queries).toHaveLength(0);
+  });
+
+  it('should strip [search-mode] prefix and return actual content', async () => {
+    writeHistory(tmpDir, [
+      { display: '[search-mode]\n---\nActual search query', timestamp: Date.now(), sessionId: 'ses_001' },
+    ]);
+
+    const queries = await source.getRecentQueries();
+    expect(queries).toHaveLength(1);
+    expect(queries[0]!.query).toBe('Actual search query');
+  });
+
+  it('should filter "Continue if you have next steps" system prompt', async () => {
+    writeHistory(tmpDir, [
+      { display: 'Continue if you have next steps to complete', timestamp: Date.now(), sessionId: 'ses_001' },
+    ]);
+
+    const queries = await source.getRecentQueries();
+    expect(queries).toHaveLength(0);
+  });
+});
+
+describe('ClaudeSource — completedAt field', () => {
+  let tmpDir: string;
+  let source: ClaudeSource;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    source = new ClaudeSource(tmpDir);
+  });
+
+  afterEach(() => {
+    source.stop();
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should always set completedAt to null (not extractable from history.jsonl)', async () => {
+    writeHistory(tmpDir, [
+      { display: 'What is TypeScript?', timestamp: Date.now(), sessionId: 'ses_a' },
+      { display: 'Explain generics', timestamp: Date.now(), sessionId: 'ses_b' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.completedAt).toBeNull();
+    expect(entries[1]!.completedAt).toBeNull();
+  });
+
+  it('should include completedAt in ClaudeQueryEntry shape', async () => {
+    writeHistory(tmpDir, [
+      { display: 'test query', timestamp: 1700000000000, sessionId: 'ses_shape' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+    expect(entries).toHaveLength(1);
+    const entry = entries[0]!;
+    // Verify full shape
+    expect(entry).toEqual({
+      sessionId: 'ses_shape',
+      sessionTitle: null,
+      timestamp: 1700000000000,
+      query: 'test query',
+      isBackground: false,
+      source: 'claude-code',
+      completedAt: null,
+    });
+  });
+});

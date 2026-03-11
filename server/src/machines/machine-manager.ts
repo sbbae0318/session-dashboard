@@ -404,8 +404,8 @@ export class MachineManager {
          if (sessionId) {
           merged[sessionId] = {
             status: sessionStatus === 'idle' ? 'idle' : 'busy',
-            lastPrompt: null,
-            lastPromptTime: (session.startTime as number) ?? Date.now(),
+            lastPrompt: (session.lastPrompt as string) ?? null,
+            lastPromptTime: (session.lastPromptTime as number) ?? null,
             currentTool: null,
             directory: (session.cwd as string) ?? null,
             updatedAt: (session.lastHeartbeat as number) ?? Date.now(),

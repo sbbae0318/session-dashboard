@@ -1,4 +1,5 @@
 
+import { extractUserPrompt } from './prompt-extractor.js';
 import { watch, type FSWatcher } from 'node:fs';
 import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -21,14 +22,25 @@ export interface ClaudeSessionInfo {
   readonly lastPromptTime: number | null;
   readonly lastResponseTime: number | null;
   readonly lastFileModified: number;
+  readonly lastPrompt: string | null;
+}
+
+interface ConversationData {
+  readonly status: 'busy' | 'idle';
+  readonly title: string | null;
+  readonly lastPrompt: string | null;
+  readonly lastPromptTime: number | null;
+  readonly lastResponseTime: number | null;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STALE_TTL_MS = 4 * 60 * 60 * 1000;
 const EVICTION_INTERVAL_MS = 30_000;
+const MAX_TITLE_LENGTH = 100;
+const MAX_PROMPT_LENGTH = 200;
 
 // ---------------------------------------------------------------------------
 // ClaudeHeartbeat
@@ -137,18 +149,19 @@ export class ClaudeHeartbeat {
       if (!sessionId) return null;
 
       const cwd = String(data['cwd'] ?? '');
-      const status = await this.detectSessionStatus(sessionId, cwd);
 
-      // title 추출을 위한 conversation path 구성
+      // single-pass conversation file parsing
       const encodedCwd = cwd.replace(/\//g, '-');
       const conversationPath = join(
         this.claudeProjectsDir,
         encodedCwd,
         `${sessionId}.jsonl`,
       );
-      const title = await this.extractTitleFromFile(conversationPath);
-      const lastPromptTime = await this.extractLastPromptTimeFromFile(conversationPath);
-      const lastResponseTime = await this.extractLastResponseTimeFromFile(conversationPath);
+      const parsed = await this.parseConversationFile(conversationPath);
+      const status = parsed?.status ?? 'busy';
+      const title = parsed?.title ?? null;
+      const lastPromptTime = parsed?.lastPromptTime ?? null;
+      const lastResponseTime = parsed?.lastResponseTime ?? null;
 
       // JSONL 파일의 mtime을 실제 활동 시간으로 사용 (lastHeartbeat는 프로세스 생존 확인용)
       let lastFileModified: number;
@@ -159,6 +172,9 @@ export class ClaudeHeartbeat {
         // JSONL 파일이 없으면 lastHeartbeat를 폴백으로 사용
         lastFileModified = Number(data['lastHeartbeat'] ?? 0);
       }
+
+      const rawLastPrompt = parsed?.lastPrompt ?? null;
+      const lastPrompt = rawLastPrompt ? (extractUserPrompt(rawLastPrompt) ?? null) : null;
 
       const info: ClaudeSessionInfo = {
         sessionId,
@@ -173,6 +189,7 @@ export class ClaudeHeartbeat {
         lastPromptTime,
         lastFileModified,
         lastResponseTime,
+        lastPrompt,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -182,6 +199,141 @@ export class ClaudeHeartbeat {
     }
   }
 
+
+  // -------------------------------------------------------------------------
+  // Single-pass JSONL parsing
+  // -------------------------------------------------------------------------
+
+  /** 단일 readFile 호출로 JSONL 파일에서 모든 세션 메타데이터를 추출 */
+  private async parseConversationFile(
+    filePath: string,
+  ): Promise<ConversationData | null> {
+    let content: string;
+    try {
+      content = await readFile(filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+
+    const lines = content.trimEnd().split('\n');
+
+    // Defaults for empty file
+    let status: 'busy' | 'idle' = 'busy';
+    let title: string | null = null;
+    let lastPrompt: string | null = null;
+    let lastPromptTime: number | null = null;
+    let lastResponseTime: number | null = null;
+
+    // Forward scan: find first user message → title
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        if (entry.type === 'user') {
+          const msg = entry.message as Record<string, unknown> | undefined;
+          const msgContent = msg?.content;
+          if (typeof msgContent === 'string' && msgContent.trim()) {
+            title = msgContent.slice(0, MAX_TITLE_LENGTH).trim();
+          } else if (Array.isArray(msgContent)) {
+            for (const part of msgContent) {
+              const p = part as Record<string, unknown>;
+              if (
+                p.type === 'text' &&
+                typeof p.text === 'string' &&
+                p.text.trim()
+              ) {
+                title = (p.text as string).slice(0, MAX_TITLE_LENGTH).trim();
+                break;
+              }
+            }
+          }
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    // Reverse scan: find last user/assistant → status, timestamps, lastPrompt
+    let foundStatus = false;
+    let foundLastUser = false;
+    let foundLastAssistant = false;
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (foundStatus && foundLastUser && foundLastAssistant) break;
+      if (!lines[i].trim()) continue;
+      try {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+
+        // Status: determined by the very first user/assistant encountered from end
+        if (!foundStatus) {
+          if (entry.type === 'user') {
+            status = 'busy';
+            foundStatus = true;
+          } else if (entry.type === 'assistant') {
+            const msg = entry.message as Record<string, unknown> | undefined;
+            const msgContent = msg?.content;
+            if (
+              Array.isArray(msgContent) &&
+              msgContent.some(
+                (c: Record<string, unknown>) => c.type === 'tool_use',
+              )
+            ) {
+              status = 'busy';
+            } else {
+              status = 'idle';
+            }
+            foundStatus = true;
+          }
+        }
+
+        // Last user entry → lastPromptTime + lastPrompt
+        if (!foundLastUser && entry.type === 'user') {
+          foundLastUser = true;
+          const ts = entry.timestamp;
+          if (typeof ts === 'string') {
+            const ms = new Date(ts).getTime();
+            if (!Number.isNaN(ms)) {
+              lastPromptTime = ms;
+            }
+          }
+          const msg = entry.message as Record<string, unknown> | undefined;
+          const msgContent = msg?.content;
+          if (typeof msgContent === 'string' && msgContent.trim()) {
+            lastPrompt = msgContent.slice(0, MAX_PROMPT_LENGTH);
+          } else if (Array.isArray(msgContent)) {
+            for (const part of msgContent) {
+              const p = part as Record<string, unknown>;
+              if (
+                p.type === 'text' &&
+                typeof p.text === 'string' &&
+                p.text.trim()
+              ) {
+                lastPrompt = (p.text as string).slice(0, MAX_PROMPT_LENGTH);
+                break;
+              }
+            }
+          }
+        }
+
+        // Last assistant entry → lastResponseTime
+        if (!foundLastAssistant && entry.type === 'assistant') {
+          foundLastAssistant = true;
+          const ts = entry.timestamp;
+          if (typeof ts === 'string') {
+            const ms = new Date(ts).getTime();
+            if (!Number.isNaN(ms)) {
+              lastResponseTime = ms;
+            }
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return { status, title, lastPrompt, lastPromptTime, lastResponseTime };
+  }
 
   // -------------------------------------------------------------------------
   // Status detection
@@ -258,10 +410,13 @@ export class ClaudeHeartbeat {
               // heartbeat 파일로 이미 추적 중인 세션은 건드리지 않음
               if (this.sessions.has(sessionId)) continue;
 
-              const status = await this.detectStatusFromFile(filePath);
-              const title = await this.extractTitleFromFile(filePath);
-              const lastPromptTime = await this.extractLastPromptTimeFromFile(filePath);
-              const lastResponseTime = await this.extractLastResponseTimeFromFile(filePath);
+              const parsed = await this.parseConversationFile(filePath);
+              const status = parsed?.status ?? 'busy';
+              const title = parsed?.title ?? null;
+              const rawLastPrompt = parsed?.lastPrompt ?? null;
+              const lastPrompt = rawLastPrompt ? (extractUserPrompt(rawLastPrompt) ?? null) : null;
+              const lastPromptTime = parsed?.lastPromptTime ?? null;
+              const lastResponseTime = parsed?.lastResponseTime ?? null;
               this.sessions.set(sessionId, {
                 sessionId,
                 pid: 0,
@@ -275,6 +430,7 @@ export class ClaudeHeartbeat {
                 lastPromptTime,
                 lastFileModified: fileStat.mtimeMs,
                 lastResponseTime,
+                lastPrompt,
               });
             } catch {
               continue;
@@ -343,7 +499,7 @@ export class ClaudeHeartbeat {
             const msg = entry.message as Record<string, unknown> | undefined;
             const msgContent = msg?.content;
             if (typeof msgContent === 'string' && msgContent.trim()) {
-              return msgContent.slice(0, 100).trim();
+              return msgContent.slice(0, MAX_TITLE_LENGTH).trim();
             }
             if (Array.isArray(msgContent)) {
               for (const part of msgContent) {
@@ -353,7 +509,7 @@ export class ClaudeHeartbeat {
                   typeof p.text === 'string' &&
                   p.text.trim()
                 ) {
-                  return (p.text as string).slice(0, 100).trim();
+                  return (p.text as string).slice(0, MAX_TITLE_LENGTH).trim();
                 }
               }
             }
@@ -484,12 +640,29 @@ export class ClaudeHeartbeat {
   // Eviction
   // -------------------------------------------------------------------------
 
+  private isProcessAlive(pid: number): boolean {
+    if (pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === 'EPERM') return true;
+      return false;
+    }
+  }
+
   private evictStale(): void {
     const now = Date.now();
     for (const [sessionId, info] of this.sessions) {
-      if (now - info.lastHeartbeat > STALE_TTL_MS) {
+      // PID alive 세션은 TTL 무시 — 절대 evict 안 함
+      if (this.isProcessAlive(info.pid)) continue;
+
+      // PID dead (또는 pid=0) + 최근 활동 없음 → evict
+      const lastActivity = Math.max(info.lastHeartbeat, info.lastFileModified);
+      if (now - lastActivity > STALE_TTL_MS) {
         this.sessions.delete(sessionId);
       }
     }
-  }
+}
 }
