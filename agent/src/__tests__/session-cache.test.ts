@@ -856,14 +856,20 @@ describe('SessionCache', () => {
     expect(cache.getSessionDetails().sessions['sess-del2']).toBeUndefined();
   });
 
-  // ── 27. checkDeletedSessions: 404 → session deleted ──
+  // ── 27. checkDeletedSessions: session not in oc-serve → deleted ──
 
-  it('checkDeletedSessions removes session on 404 response', async () => {
+  it('checkDeletedSessions removes sessions not found in oc-serve session list', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
 
-    // Add session
+    // Add two sessions via SSE
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-alive', status: { type: 'idle' } },
+      },
+    });
     simulateSseEvent(mockRes, {
       payload: {
         type: 'session.status',
@@ -871,24 +877,28 @@ describe('SessionCache', () => {
       },
     });
 
+    expect(cache.getSessionDetails().sessions['sess-alive']).toBeDefined();
     expect(cache.getSessionDetails().sessions['sess-gone']).toBeDefined();
 
-    // fetchJson throws 404
-    mockFetchJson.mockRejectedValueOnce(new Error('404 Not Found'));
+    // checkDeletedSessions: /project → 1 project, /session → only sess-alive
+    mockFetchJson
+      .mockResolvedValueOnce([{ id: 'p1', worktree: '/project/test', vcs: null, time: null, sandboxes: null }])
+      .mockResolvedValueOnce([{ id: 'sess-alive' }]);
 
     await (cache as any).checkDeletedSessions();
 
+    expect(cache.getSessionDetails().sessions['sess-alive']).toBeDefined();
     expect(cache.getSessionDetails().sessions['sess-gone']).toBeUndefined();
   });
 
-  // ── 28. checkDeletedSessions: network error → session preserved ──
+  // ── 28. checkDeletedSessions: oc-serve unreachable → sessions preserved ──
 
-  it('checkDeletedSessions preserves session on network error (non-404)', async () => {
+  it('checkDeletedSessions preserves all sessions when oc-serve is unreachable', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
 
-    // Add session
+    // Add session via SSE
     simulateSseEvent(mockRes, {
       payload: {
         type: 'session.status',
@@ -898,13 +908,37 @@ describe('SessionCache', () => {
 
     expect(cache.getSessionDetails().sessions['sess-net']).toBeDefined();
 
-    // fetchJson throws network error (not 404)
+    // /project fetch fails → oc-serve unreachable → return null → skip deletion
     mockFetchJson.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     await (cache as any).checkDeletedSessions();
 
-    // Session should still exist
     expect(cache.getSessionDetails().sessions['sess-net']).toBeDefined();
     expect(cache.getSessionDetails().sessions['sess-net'].status).toBe('busy');
+  });
+
+  // ── 29. checkDeletedSessions: all project fetches fail → sessions preserved ──
+
+  it('checkDeletedSessions preserves sessions when all project fetches fail', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-safe', status: { type: 'idle' } },
+      },
+    });
+
+    // /project succeeds, but all /session fetches fail
+    mockFetchJson
+      .mockResolvedValueOnce([{ id: 'p1', worktree: '/project/a', vcs: null, time: null, sandboxes: null }])
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    await (cache as any).checkDeletedSessions();
+
+    // All project fetches failed → treat as unreachable → preserve
+    expect(cache.getSessionDetails().sessions['sess-safe']).toBeDefined();
   });
 });

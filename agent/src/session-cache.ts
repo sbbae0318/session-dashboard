@@ -111,7 +111,6 @@ export class SessionCache {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private evictionTimer: NodeJS.Timeout | null = null;
   private deletionCheckTimer: NodeJS.Timeout | null = null;
-  private deletionCheckOffset: number = 0;
   private reconnectDelay: number = INITIAL_RECONNECT_DELAY;
   private sseBuffer = '';
   private sseDataLines: string[] = [];
@@ -430,29 +429,60 @@ export class SessionCache {
   // -------------------------------------------------------------------------
 
   private async checkDeletedSessions(): Promise<void> {
-    const allSessions = this.store.getAll();
-    const ids = Object.keys(allSessions);
-    if (ids.length === 0) return;
+    const cachedIds = Object.keys(this.store.getAll());
+    if (cachedIds.length === 0) return;
 
-    // round-robin: offset부터 최대 10개
-    if (this.deletionCheckOffset >= ids.length) {
-      this.deletionCheckOffset = 0;
-    }
-    const batch = ids.slice(this.deletionCheckOffset, this.deletionCheckOffset + 10);
-    this.deletionCheckOffset += batch.length;
+    // Fetch all session IDs known to oc-serve across all projects
+    const ocServeIds = await this.fetchAllOcServeSessionIds();
+    if (ocServeIds === null) return; // oc-serve unreachable — skip to avoid false positives
 
-    for (const sessionID of batch) {
-      try {
-        const url = `http://127.0.0.1:${this.ocServePort}/session/${sessionID}`;
-        await fetchJson(url, {}, 3000);
-        // Session exists — keep it
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('404')) {
-          this.store.delete(sessionID);
-        }
-        // Network error or other status → preserve session (false positive 방지)
+    let deletedCount = 0;
+    for (const id of cachedIds) {
+      if (!ocServeIds.has(id)) {
+        this.store.delete(id);
+        deletedCount++;
       }
+    }
+    if (deletedCount > 0) {
+      console.log(`[SessionCache] Purged ${deletedCount} stale session(s) not found in oc-serve`);
+    }
+  }
+
+  /**
+   * Fetch all session IDs from oc-serve by querying /session per project.
+   * Returns null if oc-serve is unreachable (to prevent false-positive deletions).
+   */
+  private async fetchAllOcServeSessionIds(): Promise<Set<string> | null> {
+    try {
+      const baseUrl = `http://127.0.0.1:${this.ocServePort}`;
+      const projects = (await fetchJson(`${baseUrl}/project`, {}, 3000)) as OcServeProject[];
+      if (!Array.isArray(projects)) return null;
+
+      const ids = new Set<string>();
+
+      // Query sessions per project in parallel
+      const results = await Promise.allSettled(
+        projects
+          .filter(p => p.worktree)
+          .map(async (project) => {
+            const dir = encodeURIComponent(project.worktree);
+            const url = `${baseUrl}/session?directory=${dir}&limit=500`;
+            const sessions = (await fetchJson(url, {}, 5000)) as Array<{ id?: string }>;
+            if (Array.isArray(sessions)) {
+              for (const s of sessions) {
+                if (s.id) ids.add(String(s.id));
+              }
+            }
+          }),
+      );
+
+      // If zero projects succeeded, treat as unreachable
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      if (succeeded === 0 && projects.filter(p => p.worktree).length > 0) return null;
+
+      return ids;
+    } catch {
+      return null; // /project fetch failed — oc-serve unreachable
     }
   }
 
