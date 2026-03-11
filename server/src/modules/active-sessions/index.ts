@@ -195,7 +195,7 @@ export class ActiveSessionsModule implements BackendModule {
         sessionId: id,
         parentSessionId: null,
         childSessionIds: [],
-        title: null,
+        title: this.previousSessionMap.get(id)?.title ?? null,
         projectCwd: cached.directory,
         status: 'idle',
         waitingForInput: cached.waitingForInput ?? false,

@@ -913,4 +913,111 @@ describe('ActiveSessionsModule — waitingForInput forwarding', () => {
     expect(orphan.waitingForInput).toBe(true);
     expect(orphan.apiStatus).toBe('idle');
   });
+
+  // ── Test T: orphan session restores title from previousSessionMap ──
+  it('Test T: orphan session title is restored from previousSessionMap on second poll', async () => {
+    const pollAllSessionsMock = vi.fn()
+      .mockResolvedValueOnce({
+        sessions: [
+          {
+            id: 'ses_orphan_title',
+            sessionId: 'ses_orphan_title',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            title: 'My Orphan Session',
+            directory: '/Users/test',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: { 'ses_orphan_title': { type: 'idle', machineId: 'mac-1' } },
+      })
+      .mockResolvedValueOnce({
+        sessions: [],
+        statuses: {},
+      });
+
+    const pollSessionDetailsMock = vi.fn()
+      .mockResolvedValueOnce({
+        'ses_orphan_title': {
+          status: 'idle',
+          lastPrompt: null,
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          waitingForInput: false,
+          sseConnected: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        'ses_orphan_title': {
+          status: 'idle',
+          lastPrompt: null,
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          waitingForInput: false,
+          sseConnected: true,
+        },
+      });
+
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: pollAllSessionsMock,
+      pollSessionDetails: pollSessionDetailsMock,
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    // First poll: session appears in REST → stored in previousSessionMap with title
+    await (module as any).poll();
+    // Second poll: session disappears from REST but stays in SSE cache → orphan
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const orphan = sessions.find((s: any) => s.sessionId === 'ses_orphan_title');
+
+    expect(orphan).toBeDefined();
+    expect(orphan.title).toBe('My Orphan Session');
+  });
+
+  // ── Test U: first-time orphan has title=null (no previousSessionMap entry) ──
+  it('Test U: first-time orphan session has title=null when not in previousSessionMap', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [],
+        statuses: {},
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_brand_new_orphan': {
+          status: 'idle',
+          lastPrompt: null,
+          lastPromptTime: 1000,
+          currentTool: null,
+          directory: '/Users/test',
+          updatedAt: 2000,
+          machineId: 'mac-1',
+          waitingForInput: false,
+          sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const orphan = sessions.find((s: any) => s.sessionId === 'ses_brand_new_orphan');
+
+    expect(orphan).toBeDefined();
+    expect(orphan.title).toBeNull();
+  });
 });
