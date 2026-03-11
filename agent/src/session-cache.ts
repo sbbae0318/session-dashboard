@@ -347,6 +347,7 @@ export class SessionCache {
       ...existing,
       status: 'idle',
       currentTool: null,
+      waitingForInput: false,  // idle = turn 완료 → 대기 상태 해제
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });

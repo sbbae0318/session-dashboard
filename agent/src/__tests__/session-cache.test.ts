@@ -941,4 +941,87 @@ describe('SessionCache', () => {
     // All project fetches failed → treat as unreachable → preserve
     expect(cache.getSessionDetails().sessions['sess-safe']).toBeDefined();
   });
+
+  // ── 30. pending tool → session.idle → waitingForInput: false ──
+
+  it('resets waitingForInput=false when session.idle fires after pending tool', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // pending tool → waitingForInput = true
+    simulateSseEvent(mockRes, {
+      directory: '/project/idle-reset',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            sessionID: 'sess-idle-pending',
+            type: 'tool',
+            tool: 'bash',
+            state: { status: 'pending' },
+          },
+        },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-idle-pending']?.waitingForInput).toBe(true);
+
+    // session.idle → waitingForInput 리셋
+    simulateSseEvent(mockRes, {
+      directory: '/project/idle-reset',
+      payload: {
+        type: 'session.idle',
+        properties: { sessionID: 'sess-idle-pending' },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-idle-pending'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(false);
+    expect(entry.status).toBe('idle');
+  });
+
+  // ── 31. permission.updated → session.idle → waitingForInput: false ──
+
+  it('resets waitingForInput=false when session.idle fires after permission.updated', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // 세션 생성 (busy)
+    simulateSseEvent(mockRes, {
+      directory: '/project/perm-idle',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-perm-idle', status: { type: 'busy' } },
+      },
+    });
+
+    // permission.updated → waitingForInput = true
+    simulateSseEvent(mockRes, {
+      directory: '/project/perm-idle',
+      payload: {
+        type: 'permission.updated',
+        properties: { sessionID: 'sess-perm-idle' },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-perm-idle']?.waitingForInput).toBe(true);
+
+    // session.idle → waitingForInput 리셋
+    simulateSseEvent(mockRes, {
+      directory: '/project/perm-idle',
+      payload: {
+        type: 'session.idle',
+        properties: { sessionID: 'sess-perm-idle' },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-perm-idle'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(false);
+    expect(entry.status).toBe('idle');
+  });
+
 });
