@@ -397,7 +397,6 @@ export class SessionCache {
     } else if (toolStatus === 'pending') {
       this.store.upsert(sessionID, {
         ...existing,
-        waitingForInput: true,
         currentTool: part.tool ?? null,
         directory: directory ?? existing.directory,
         updatedAt: Date.now(),

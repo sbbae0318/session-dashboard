@@ -658,7 +658,7 @@ describe('SessionCache', () => {
 
   // ── 21. pending tool state → waitingForInput: true ──
 
-  it('sets waitingForInput=true when tool state is pending', async () => {
+  it('tool pending does NOT set waitingForInput (only permission.updated does)', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
@@ -680,36 +680,36 @@ describe('SessionCache', () => {
 
     const entry = cache.getSessionDetails().sessions['sess-pending'];
     expect(entry).toBeDefined();
-    expect(entry.waitingForInput).toBe(true);
+    expect(entry.waitingForInput).toBe(false);
     expect(entry.currentTool).toBe('edit');
   });
 
   // ── 22. pending → running transition resets waitingForInput ──
 
-  it('resets waitingForInput=false when tool transitions from pending to running', async () => {
+  it('permission.updated → running transition resets waitingForInput', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
 
-    // First: pending → waitingForInput = true
+    // permission.updated → waitingForInput = true
     simulateSseEvent(mockRes, {
       directory: '/project/transition',
       payload: {
-        type: 'message.part.updated',
-        properties: {
-          part: {
-            sessionID: 'sess-trans',
-            type: 'tool',
-            tool: 'bash',
-            state: { status: 'pending' },
-          },
-        },
+        type: 'session.status',
+        properties: { sessionID: 'sess-trans', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/transition',
+      payload: {
+        type: 'permission.updated',
+        properties: { sessionID: 'sess-trans' },
       },
     });
 
     expect(cache.getSessionDetails().sessions['sess-trans']?.waitingForInput).toBe(true);
 
-    // Then: running → waitingForInput = false
+    // running → waitingForInput = false
     simulateSseEvent(mockRes, {
       directory: '/project/transition',
       payload: {
@@ -737,25 +737,23 @@ describe('SessionCache', () => {
     cache = startCache(mockRes);
     await flushPromises();
 
-    // Set up pending state first
     simulateSseEvent(mockRes, {
       directory: '/project/busy-reset',
       payload: {
-        type: 'message.part.updated',
-        properties: {
-          part: {
-            sessionID: 'sess-busy',
-            type: 'tool',
-            tool: 'edit',
-            state: { status: 'pending' },
-          },
-        },
+        type: 'session.status',
+        properties: { sessionID: 'sess-busy', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/busy-reset',
+      payload: {
+        type: 'permission.updated',
+        properties: { sessionID: 'sess-busy' },
       },
     });
 
     expect(cache.getSessionDetails().sessions['sess-busy']?.waitingForInput).toBe(true);
 
-    // session.status busy → waitingForInput reset
     simulateSseEvent(mockRes, {
       directory: '/project/busy-reset',
       payload: {
@@ -942,32 +940,30 @@ describe('SessionCache', () => {
     expect(cache.getSessionDetails().sessions['sess-safe']).toBeDefined();
   });
 
-  // ── 30. pending tool → session.idle → waitingForInput: false ──
+  // ── 30. permission.updated → session.idle → waitingForInput: false ──
 
-  it('resets waitingForInput=false when session.idle fires after pending tool', async () => {
+  it('resets waitingForInput=false when session.idle fires after permission.updated', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
 
-    // pending tool → waitingForInput = true
     simulateSseEvent(mockRes, {
       directory: '/project/idle-reset',
       payload: {
-        type: 'message.part.updated',
-        properties: {
-          part: {
-            sessionID: 'sess-idle-pending',
-            type: 'tool',
-            tool: 'bash',
-            state: { status: 'pending' },
-          },
-        },
+        type: 'session.status',
+        properties: { sessionID: 'sess-idle-pending', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/idle-reset',
+      payload: {
+        type: 'permission.updated',
+        properties: { sessionID: 'sess-idle-pending' },
       },
     });
 
     expect(cache.getSessionDetails().sessions['sess-idle-pending']?.waitingForInput).toBe(true);
 
-    // session.idle → waitingForInput 리셋
     simulateSseEvent(mockRes, {
       directory: '/project/idle-reset',
       payload: {

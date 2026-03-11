@@ -11,7 +11,7 @@ import { jwtPreHandler } from './auth.js';
 import { detectActiveDirectories } from './active-directories.js';
 import type { CreateSessionBody, SendMessageBody, ReplyToQuestionBody, ReplyToPermissionBody, RunCommandBody } from './types.js';
 
-const PROXY_TIMEOUT = 3000;
+const PROXY_TIMEOUT = 10000;
 
 /**
  * Fetch JSON from a local HTTP endpoint

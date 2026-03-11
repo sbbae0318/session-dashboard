@@ -175,8 +175,9 @@ export class MachineManager {
         this.projectsCache.set(machine.id, projects);
         const activeResponse = JSON.parse(activeDirsRaw) as { directories?: string[] };
         activeDirs = activeResponse.directories ?? [];
-      } catch {
-        // /proxy/projects failed (e.g. 502) — use cached projects if available
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[MachineManager] ${machine.alias}: poll error detail:`, errorMsg);
         const cached = this.projectsCache.get(machine.id);
         if (!cached || cached.length === 0) {
           // No cache available — skip OpenCode polling entirely for this cycle
