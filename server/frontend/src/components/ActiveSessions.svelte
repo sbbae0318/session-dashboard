@@ -22,18 +22,80 @@
   let sourceFilter = $derived(getSourceFilter());
   let detailId = $derived(getDetailSessionId());
 
+
+
+  function handleDismiss(sessionId: string, lastActivityTime: number, event: Event): void {
+    event.stopPropagation();
+    dismissSession(sessionId, lastActivityTime);
+  }
+
+  // --- Clipboard copy: build session resume command ---
+  let toastMessage = $state<string | null>(null);
+  let toastTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function buildSessionCommand(session: DashboardSession): string {
+    const cwd = session.projectCwd ?? '~';
+    if (session.source === 'claude-code') {
+      return `cd ${cwd} && claude --resume ${session.sessionId}`;
+    }
+    // OpenCode → attach to oc-serve
+    const rawHost = session.machineHost ?? 'localhost';
+    const host = (rawHost === 'host.docker.internal' || rawHost === '127.0.0.1')
+      ? 'localhost'
+      : rawHost;
+    return `opencode attach http://${host}:4096 --session ${session.sessionId}`;
+  }
+
+  async function copySessionCommand(session: DashboardSession): Promise<void> {
+    const cmd = buildSessionCommand(session);
+    const ok = await copyToClipboard(cmd);
+    showToast(ok ? 'Copied!' : 'Copy failed');
+  }
+
+  function showToast(msg: string): void {
+    toastMessage = msg;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
+  }
+
+  function handleSessionClick(session: DashboardSession): void {
+    selectSession(session.sessionId);
+    copySessionCommand(session);
+  }
+
+  // Top-level sessions: no parent, or parent not in active set
+  let topLevelSessions = $derived(
+    sessions
+      .filter(s => !machineFilter || s.machineId === machineFilter)
+      .filter(s => {
+        if (sourceFilter === "all") return true;
+        if (sourceFilter === "opencode") return !s.source || s.source === "opencode";
+        return s.source === sourceFilter;
+      })
+      .filter(s =>
+        !s.parentSessionId ||
+        !sessions.some(p => p.sessionId === s.parentSessionId)
+      )
+  );
+
+
+  interface DisplayStatus {
+    label: string;
+    cssClass: string;
+  }
+
   function getDisplayStatus(session: DashboardSession): DisplayStatus {
-    // 1. Working: busy 또는 retry 또는 currentTool 실행 중 (단, waitingForInput 아닌 경우)
+    // 1. Working: busy or retry or currentTool running (unless waitingForInput)
     if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
         && !session.waitingForInput) {
       const label = session.apiStatus === 'retry' ? 'Retry' : 'Working';
       return { label, cssClass: 'status-working' };
     }
-    // 2. Waiting: 사용자 입력/승인 대기
+    // 2. Waiting: user input/approval pending
     if (session.waitingForInput) {
       return { label: 'Waiting', cssClass: 'status-waiting' };
     }
-    // 3. Idle: 그 외 모든 상태
+    // 3. Idle: everything else
     return { label: 'Idle', cssClass: 'status-idle' };
   }
 </script>
@@ -304,12 +366,6 @@
     background: rgba(63, 185, 80, 0.15);
     color: var(--success);
     border: 1px solid rgba(63, 185, 80, 0.3);
-  }
-
-  .status-waiting {
-    background: rgba(168, 113, 255, 0.15);
-    color: #a871ff;
-    border: 1px solid rgba(168, 113, 255, 0.3);
   }
 
 
