@@ -121,14 +121,14 @@ describe('ClaudeHeartbeat', () => {
 
   it('should evict sessions with stale heartbeats', async () => {
     const now = Date.now();
-    // Heartbeat 8 days old → stale (TTL is 7 days)
+    // Heartbeat 5 hours old → stale (TTL is 4 hours)
     writeHeartbeat(tmpDir, {
       sessionId: 'ses_stale',
       pid: 10,
       cwd: '/tmp',
       project: 'p',
-      startTime: now - 9 * 24 * 60 * 60 * 1000,
-      lastHeartbeat: now - 8 * 24 * 60 * 60 * 1000,
+      startTime: now - 6 * 60 * 60 * 1000,
+      lastHeartbeat: now - 5 * 60 * 60 * 1000,
     });
     // Fresh heartbeat
     writeHeartbeat(tmpDir, {
@@ -136,8 +136,8 @@ describe('ClaudeHeartbeat', () => {
       pid: 20,
       cwd: '/tmp',
       project: 'p',
-      startTime: now - 10_000,
-      lastHeartbeat: now,
+      startTime: now - 1 * 60 * 60 * 1000,
+      lastHeartbeat: now - 1 * 60 * 60 * 1000,
     });
 
     heartbeat.start();
@@ -454,9 +454,9 @@ describe('ClaudeHeartbeat — project scanning', () => {
     const filePath = join(projectDir, `${sessionId}.jsonl`);
     writeFileSync(filePath, JSON.stringify({ type: 'assistant', message: { content: [] } }) + '\n', 'utf-8');
 
-    // Manually set mtime to 8 days ago (older than STALE_TTL_MS = 7 days)
+    // Manually set mtime to 5 hours ago (older than STALE_TTL_MS = 4 hours)
     const { utimesSync } = await import('node:fs');
-    const oldTime = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const oldTime = new Date(Date.now() - 5 * 60 * 60 * 1000);
     utimesSync(filePath, oldTime, oldTime);
 
     const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
@@ -816,5 +816,313 @@ describe('ClaudeHeartbeat — lastResponseTime extraction', () => {
 
     expect(hb.getActiveSessions()[0]!.lastResponseTime).toBeNull();
     hb.stop();
+  });
+});
+
+describe('ClaudeHeartbeat — PID liveness + eviction', () => {
+  let tmpDir: string;
+  let heartbeat: ClaudeHeartbeat;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    heartbeat = new ClaudeHeartbeat(tmpDir, join(tmpDir, 'empty-projects'));
+  });
+
+  afterEach(() => {
+    heartbeat.stop();
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should NOT evict session when PID is alive even if TTL expired', async () => {
+    const now = Date.now();
+    // Use current process PID (guaranteed alive)
+    writeHeartbeat(tmpDir, {
+      sessionId: 'ses_alive',
+      pid: process.pid,
+      cwd: '/tmp',
+      project: 'p',
+      startTime: now - 6 * 60 * 60 * 1000,
+      lastHeartbeat: now - 5 * 60 * 60 * 1000,
+      lastFileModified: now - 5 * 60 * 60 * 1000,
+    });
+
+    heartbeat.start();
+    await vi.waitFor(() => {
+      expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (heartbeat as any).evictStale();
+
+    // PID alive → TTL 초과해도 evict 안 됨
+    expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    expect(heartbeat.getActiveSessions()[0]!.sessionId).toBe('ses_alive');
+  });
+
+  it('should evict session when PID is dead AND TTL expired', async () => {
+    const now = Date.now();
+    // Use a PID that almost certainly does not exist
+    writeHeartbeat(tmpDir, {
+      sessionId: 'ses_dead',
+      pid: 999999999,
+      cwd: '/tmp',
+      project: 'p',
+      startTime: now - 6 * 60 * 60 * 1000,
+      lastHeartbeat: now - 5 * 60 * 60 * 1000,
+      lastFileModified: now - 5 * 60 * 60 * 1000,
+    });
+
+    heartbeat.start();
+    await vi.waitFor(() => {
+      expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (heartbeat as any).evictStale();
+
+    // PID dead + TTL 초과 → evict
+    expect(heartbeat.getActiveSessions()).toHaveLength(0);
+  });
+
+  it('should keep session when PID is dead but TTL not expired', async () => {
+    const now = Date.now();
+    writeHeartbeat(tmpDir, {
+      sessionId: 'ses_recent',
+      pid: 999999999,
+      cwd: '/tmp',
+      project: 'p',
+      startTime: now - 2 * 60 * 60 * 1000,
+      lastHeartbeat: now - 1 * 60 * 60 * 1000,
+      lastFileModified: now - 1 * 60 * 60 * 1000,
+    });
+
+    heartbeat.start();
+    await vi.waitFor(() => {
+      expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (heartbeat as any).evictStale();
+
+    // PID dead + TTL 미초과 → 유지
+    expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    expect(heartbeat.getActiveSessions()[0]!.sessionId).toBe('ses_recent');
+  });
+
+  it('should evict pid=0 session when TTL expired', async () => {
+    const now = Date.now();
+    writeHeartbeat(tmpDir, {
+      sessionId: 'ses_zero_stale',
+      pid: 0,
+      cwd: '/tmp',
+      project: 'p',
+      startTime: now - 6 * 60 * 60 * 1000,
+      lastHeartbeat: now - 5 * 60 * 60 * 1000,
+      lastFileModified: now - 5 * 60 * 60 * 1000,
+    });
+
+    heartbeat.start();
+    await vi.waitFor(() => {
+      expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (heartbeat as any).evictStale();
+
+    // pid=0 → PID 체크 스킵 + TTL 초과 → evict
+    expect(heartbeat.getActiveSessions()).toHaveLength(0);
+  });
+
+  it('should keep pid=0 session when TTL not expired', async () => {
+    const now = Date.now();
+    writeHeartbeat(tmpDir, {
+      sessionId: 'ses_zero_fresh',
+      pid: 0,
+      cwd: '/tmp',
+      project: 'p',
+      startTime: now - 2 * 60 * 60 * 1000,
+      lastHeartbeat: now - 1 * 60 * 60 * 1000,
+      lastFileModified: now - 1 * 60 * 60 * 1000,
+    });
+
+    heartbeat.start();
+    await vi.waitFor(() => {
+      expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (heartbeat as any).evictStale();
+
+    // pid=0 + TTL 미초과 → 유지
+    expect(heartbeat.getActiveSessions()).toHaveLength(1);
+    expect(heartbeat.getActiveSessions()[0]!.sessionId).toBe('ses_zero_fresh');
+  });
+});
+
+describe('ClaudeHeartbeat — parseConversationFile (single-pass)', () => {
+  let tmpDir: string;
+  let hb: ClaudeHeartbeat;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    hb = new ClaudeHeartbeat(join(tmpDir, 'heartbeats'), join(tmpDir, 'projects'));
+  });
+
+  afterEach(() => {
+    hb.stop();
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('happy path: user+assistant → status=idle, correct title, lastPrompt, timestamps', async () => {
+    const ts1 = '2026-03-10T10:00:00.000Z';
+    const ts2 = '2026-03-10T10:01:00.000Z';
+    const ts3 = '2026-03-10T10:05:00.000Z';
+    const ts4 = '2026-03-10T10:06:00.000Z';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: ts1, message: { content: 'First user prompt' } }),
+      JSON.stringify({ type: 'assistant', timestamp: ts2, message: { content: [{ type: 'text', text: 'Reply 1' }] } }),
+      JSON.stringify({ type: 'user', timestamp: ts3, message: { content: 'Second user prompt' } }),
+      JSON.stringify({ type: 'assistant', timestamp: ts4, message: { content: [{ type: 'text', text: 'Reply 2' }] } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'conv.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.status).toBe('idle');
+    expect(result.title).toBe('First user prompt');
+    expect(result.lastPrompt).toBe('Second user prompt');
+    expect(result.lastPromptTime).toBe(new Date(ts3).getTime());
+    expect(result.lastResponseTime).toBe(new Date(ts4).getTime());
+  });
+
+  it('empty file → status=busy, title=null, lastPrompt=null', async () => {
+    const filePath = join(tmpDir, 'empty.jsonl');
+    writeFileSync(filePath, '', 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.status).toBe('busy');
+    expect(result.title).toBeNull();
+    expect(result.lastPrompt).toBeNull();
+    expect(result.lastPromptTime).toBeNull();
+    expect(result.lastResponseTime).toBeNull();
+  });
+
+  it('incomplete last line → uses previous complete line for status', async () => {
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: 'hello' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'reply' }] } }),
+      '{"type": "user", "timestamp": "2026-03-10T10:02:00.000Z", "message": {"content": "broken',
+    ].join('\n');
+
+    const filePath = join(tmpDir, 'incomplete.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    // Last parseable entry is assistant text → idle
+    expect(result.status).toBe('idle');
+  });
+
+  it('user-only → status=busy, lastResponseTime=null', async () => {
+    const ts = '2026-03-10T10:00:00.000Z';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: ts, message: { content: 'only user message' } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'user-only.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.status).toBe('busy');
+    expect(result.title).toBe('only user message');
+    expect(result.lastPrompt).toBe('only user message');
+    expect(result.lastPromptTime).toBe(new Date(ts).getTime());
+    expect(result.lastResponseTime).toBeNull();
+  });
+
+  it('assistant-only → status=idle, lastPromptTime=null, lastPrompt=null', async () => {
+    const ts = '2026-03-10T10:00:00.000Z';
+    const conversation = [
+      JSON.stringify({ type: 'assistant', timestamp: ts, message: { content: [{ type: 'text', text: 'Hello' }] } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'assistant-only.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.status).toBe('idle');
+    expect(result.title).toBeNull();
+    expect(result.lastPrompt).toBeNull();
+    expect(result.lastPromptTime).toBeNull();
+    expect(result.lastResponseTime).toBe(new Date(ts).getTime());
+  });
+
+  it('tool_use assistant → status=busy', async () => {
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: 'fix bug' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'tool_use', name: 'mcp_bash', id: 'tool_1', input: {} }] } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'tool-use.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.status).toBe('busy');
+  });
+
+  it('lastPrompt 200자 제한: 200자 초과 → truncate', async () => {
+    const longContent = 'X'.repeat(300);
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: longContent } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'ok' }] } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'long-prompt.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.lastPrompt).toHaveLength(200);
+    expect(result.lastPrompt).toBe('X'.repeat(200));
+    // title은 100자 제한
+    expect(result.title).toHaveLength(100);
+    expect(result.title).toBe('X'.repeat(100));
+  });
+
+  it('array content lastPrompt: content가 array인 경우 text part 추출', async () => {
+    const conversation = [
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-03-10T10:00:00.000Z',
+        message: { content: [{ type: 'image', source: {} }, { type: 'text', text: 'Describe this image' }] },
+      }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'I see...' }] } }),
+    ].join('\n') + '\n';
+
+    const filePath = join(tmpDir, 'array-content.jsonl');
+    writeFileSync(filePath, conversation, 'utf-8');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (hb as any).parseConversationFile(filePath);
+    expect(result).not.toBeNull();
+    expect(result.lastPrompt).toBe('Describe this image');
+    expect(result.title).toBe('Describe this image');
   });
 });
