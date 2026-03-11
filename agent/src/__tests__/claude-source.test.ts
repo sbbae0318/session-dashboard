@@ -254,3 +254,52 @@ describe('ClaudeSource — getRecentQueries with extractUserPrompt', () => {
     expect(queries).toHaveLength(0);
   });
 });
+
+describe('ClaudeSource — completedAt field', () => {
+  let tmpDir: string;
+  let source: ClaudeSource;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    source = new ClaudeSource(tmpDir);
+  });
+
+  afterEach(() => {
+    source.stop();
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should always set completedAt to null (not extractable from history.jsonl)', async () => {
+    writeHistory(tmpDir, [
+      { display: 'What is TypeScript?', timestamp: Date.now(), sessionId: 'ses_a' },
+      { display: 'Explain generics', timestamp: Date.now(), sessionId: 'ses_b' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.completedAt).toBeNull();
+    expect(entries[1]!.completedAt).toBeNull();
+  });
+
+  it('should include completedAt in ClaudeQueryEntry shape', async () => {
+    writeHistory(tmpDir, [
+      { display: 'test query', timestamp: 1700000000000, sessionId: 'ses_shape' },
+    ]);
+
+    const entries = await source.getRecentQueries(10);
+    expect(entries).toHaveLength(1);
+    const entry = entries[0]!;
+    // Verify full shape
+    expect(entry).toEqual({
+      sessionId: 'ses_shape',
+      sessionTitle: null,
+      timestamp: 1700000000000,
+      query: 'test query',
+      isBackground: false,
+      source: 'claude-code',
+      completedAt: null,
+    });
+  });
+});

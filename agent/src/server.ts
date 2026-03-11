@@ -27,7 +27,7 @@ import { authPreHandler, createAuthToken } from './auth.js';
 import { JsonlReader } from './jsonl-reader.js';
 import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeConnection } from './oc-serve-proxy.js';
 import { SessionCache } from './session-cache.js';
-import { OcQueryCollector } from './oc-query-collector.js';
+import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
@@ -120,6 +120,22 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     const doCollection = async (): Promise<void> => {
       try {
         const entries = await ocQueryCollector!.collectQueries(200);
+
+        // Claude 쿼리 수집 (claudeEnabled인 경우)
+        if (claudeEnabled && claudeSource) {
+          const claudeEntries = await claudeSource.getRecentQueries(200);
+          const claudeQueryEntries: QueryEntry[] = claudeEntries.map((e) => ({
+            sessionId: e.sessionId,
+            sessionTitle: e.sessionTitle,
+            timestamp: e.timestamp,
+            query: e.query,
+            isBackground: e.isBackground,
+            source: 'claude-code' as const,
+            completedAt: e.completedAt,
+          }));
+          entries.push(...claudeQueryEntries);
+        }
+
         const inserted = promptStore!.upsertMany(entries);
         if (inserted > 0) console.log(`[prompt-store] Stored ${inserted} new prompts`);
         promptStore!.evict();

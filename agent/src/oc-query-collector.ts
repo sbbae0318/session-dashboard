@@ -38,7 +38,7 @@ export interface QueryEntry {
   timestamp: number;
   query: string;
   isBackground: boolean;
-  source: 'opencode';
+  source: 'opencode' | 'claude-code';
   completedAt: number | null;
 }
 

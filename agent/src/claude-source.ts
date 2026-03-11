@@ -21,6 +21,7 @@ export interface ClaudeQueryEntry {
   query: string;
   isBackground: boolean;
   source: 'claude-code';
+  completedAt: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,7 @@ export class ClaudeSource {
           query: filtered,
           isBackground: false,
           source: 'claude-code' as const,
+          completedAt: null,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);

@@ -203,7 +203,7 @@ function rowToQueryEntry(row: PromptRow): QueryEntry {
     timestamp: row.timestamp,
     query: row.query,
     isBackground: row.is_background === 1,
-    source: row.source as 'opencode',
+    source: row.source as QueryEntry['source'],
     completedAt: row.completed_at ?? null,
   };
 }
