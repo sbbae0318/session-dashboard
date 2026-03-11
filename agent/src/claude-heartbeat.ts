@@ -1,4 +1,5 @@
 
+import { extractUserPrompt } from './prompt-extractor.js';
 import { watch, type FSWatcher } from 'node:fs';
 import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -21,6 +22,7 @@ export interface ClaudeSessionInfo {
   readonly lastPromptTime: number | null;
   readonly lastResponseTime: number | null;
   readonly lastFileModified: number;
+  readonly lastPrompt: string | null;
 }
 
 interface ConversationData {
@@ -171,6 +173,9 @@ export class ClaudeHeartbeat {
         lastFileModified = Number(data['lastHeartbeat'] ?? 0);
       }
 
+      const rawLastPrompt = parsed?.lastPrompt ?? null;
+      const lastPrompt = rawLastPrompt ? (extractUserPrompt(rawLastPrompt) ?? null) : null;
+
       const info: ClaudeSessionInfo = {
         sessionId,
         pid: Number(data['pid'] ?? 0),
@@ -184,6 +189,7 @@ export class ClaudeHeartbeat {
         lastPromptTime,
         lastFileModified,
         lastResponseTime,
+        lastPrompt,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -407,6 +413,8 @@ export class ClaudeHeartbeat {
               const parsed = await this.parseConversationFile(filePath);
               const status = parsed?.status ?? 'busy';
               const title = parsed?.title ?? null;
+              const rawLastPrompt = parsed?.lastPrompt ?? null;
+              const lastPrompt = rawLastPrompt ? (extractUserPrompt(rawLastPrompt) ?? null) : null;
               const lastPromptTime = parsed?.lastPromptTime ?? null;
               const lastResponseTime = parsed?.lastResponseTime ?? null;
               this.sessions.set(sessionId, {
@@ -422,6 +430,7 @@ export class ClaudeHeartbeat {
                 lastPromptTime,
                 lastFileModified: fileStat.mtimeMs,
                 lastResponseTime,
+                lastPrompt,
               });
             } catch {
               continue;

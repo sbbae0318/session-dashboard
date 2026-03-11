@@ -1126,3 +1126,138 @@ describe('ClaudeHeartbeat — parseConversationFile (single-pass)', () => {
     expect(result.title).toBe('Describe this image');
   });
 });
+
+describe('ClaudeHeartbeat — lastPrompt filtering', () => {
+  let tmpDir: string;
+  let projectsDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    projectsDir = join(tmpDir, 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should pass through normal user prompt as lastPrompt', async () => {
+    const sessionId = 'lp-normal-001';
+    const projectDir = join(projectsDir, '-Users-user-project-lp');
+    mkdirSync(projectDir, { recursive: true });
+
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: 'Fix the login bug' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'Sure!' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.lastPrompt).toBe('Fix the login bug');
+    hb.stop();
+  });
+
+  it('should filter system prompt to null (SYSTEM DIRECTIVE)', async () => {
+    const sessionId = 'lp-system-001';
+    const projectDir = join(projectsDir, '-Users-user-project-lps');
+    mkdirSync(projectDir, { recursive: true });
+
+    const systemContent = '[SYSTEM DIRECTIVE: do not respond] This is a system message';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: 'Normal first message' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'reply' }] } }),
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:05:00.000Z', message: { content: systemContent } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.lastPrompt).toBeNull();
+    hb.stop();
+  });
+
+  it('should strip [search-mode] prefix from lastPrompt', async () => {
+    const sessionId = 'lp-search-001';
+    const projectDir = join(projectsDir, '-Users-user-project-lpm');
+    mkdirSync(projectDir, { recursive: true });
+
+    const searchContent = '[search-mode]\n---\nActual question';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: searchContent } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'reply' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.lastPrompt).toBe('Actual question');
+    hb.stop();
+  });
+
+  it('should truncate lastPrompt to 200 chars (via parseConversationFile)', async () => {
+    const sessionId = 'lp-truncate-001';
+    const projectDir = join(projectsDir, '-Users-user-project-lpt');
+    mkdirSync(projectDir, { recursive: true });
+
+    const longContent = 'A'.repeat(300);
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: longContent } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'ok' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    // 200자 제한은 parseConversationFile에서 적용, extractUserPrompt()는 그 위에 적용
+    expect(session.lastPrompt).not.toBeNull();
+    expect(session.lastPrompt!.length).toBeLessThanOrEqual(200);
+    hb.stop();
+  });
+
+  it('should filter <system-reminder> prefix to null', async () => {
+    const sessionId = 'lp-sysrem-001';
+    const projectDir = join(projectsDir, '-Users-user-project-lpsr');
+    mkdirSync(projectDir, { recursive: true });
+
+    const systemContent = '<system-reminder>\nSome system content here';
+    const conversation = [
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:00:00.000Z', message: { content: 'Normal first' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-03-10T10:01:00.000Z', message: { content: [{ type: 'text', text: 'reply' }] } }),
+      JSON.stringify({ type: 'user', timestamp: '2026-03-10T10:05:00.000Z', message: { content: systemContent } }),
+    ].join('\n') + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    const session = hb.getActiveSessions()[0]!;
+    expect(session.lastPrompt).toBeNull();
+    hb.stop();
+  });
+});
