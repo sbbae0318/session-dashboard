@@ -681,9 +681,22 @@ export class SessionCache {
       if (!statusType) continue;
 
       const existing = this.store.get(sessionID);
-      if (existing && existing.updatedAt >= this.sseConnectedAt) continue;
-
       const meta = metaMap.get(sessionID);
+
+      if (existing && existing.updatedAt >= this.sseConnectedAt) {
+        if (meta && (!existing.title || !existing.createdAt)) {
+          const timeObj = meta.time;
+          const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+          this.store.upsert(sessionID, {
+            ...existing,
+            title: meta.title ?? existing.title ?? null,
+            parentSessionId: meta.parentID ?? existing.parentSessionId ?? null,
+            createdAt: createdAt || existing.createdAt,
+          });
+        }
+        continue;
+      }
+
       const timeObj = meta?.time;
       const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
 
@@ -703,7 +716,21 @@ export class SessionCache {
 
     // Sessions in session list but not in status map (idle sessions)
     for (const meta of sessionList) {
-      if (!meta.id || this.store.get(meta.id)) continue;
+      if (!meta.id) continue;
+      const existing = this.store.get(meta.id);
+      if (existing) {
+        if (!existing.title || !existing.createdAt) {
+          const timeObj = meta.time;
+          const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+          this.store.upsert(meta.id, {
+            ...existing,
+            title: meta.title ?? existing.title ?? null,
+            parentSessionId: meta.parentID ?? existing.parentSessionId ?? null,
+            createdAt: createdAt || existing.createdAt,
+          });
+        }
+        continue;
+      }
       const timeObj = meta.time;
       const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
 
