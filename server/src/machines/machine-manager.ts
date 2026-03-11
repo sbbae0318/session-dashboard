@@ -284,7 +284,12 @@ export class MachineManager {
     }
 
     if (machine.source === 'claude-code' || machine.source === 'both') {
-      const claudeSessions = await this.fetchClaudeSessions(machine);
+      let claudeSessions: Array<Record<string, unknown>> = [];
+      try {
+        claudeSessions = await this.fetchClaudeSessions(machine);
+      } catch {
+        // Agent may not have Claude Code routes enabled — skip gracefully
+      }
       for (const session of claudeSessions) {
         const sessionId = String(session.sessionId ?? '');
         if (sessionId && !seenIds.has(sessionId)) {
