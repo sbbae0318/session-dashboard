@@ -354,6 +354,12 @@
     border: 1px solid rgba(88, 166, 255, 0.3);
   }
 
+  .status-waiting {
+    background: rgba(209, 105, 239, 0.15);
+    color: #d169ef;
+    border: 1px solid rgba(209, 105, 239, 0.3);
+  }
+
   .status-idle {
     background: rgba(63, 185, 80, 0.15);
     color: var(--success);
