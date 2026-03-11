@@ -15,6 +15,9 @@ function makeDetail(overrides: Partial<SessionDetail> = {}): SessionDetail {
     directory: null,
     waitingForInput: false,
     updatedAt: Date.now(),
+    title: null,
+    parentSessionId: null,
+    createdAt: 0,
     ...overrides,
   };
 }

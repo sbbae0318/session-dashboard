@@ -69,18 +69,11 @@ export class ActiveSessionsModule implements BackendModule {
   }
 
   private async poll(): Promise<void> {
-    const [sessionResult, detailsResult] = await Promise.allSettled([
-      this.machineManager.pollAllSessions(),
-      this.machineManager.pollSessionDetails(),
-    ]);
+    const result = await this.machineManager.pollAll();
 
-    const { sessions: rawSessions, statuses: allStatuses } =
-      sessionResult.status === 'fulfilled'
-        ? sessionResult.value
-        : { sessions: [], statuses: {} as Record<string, { type: string; machineId: string }> };
-
-    const cachedDetails =
-      detailsResult.status === 'fulfilled' ? detailsResult.value : {};
+    const rawSessions = result.sessions;
+    const allStatuses = result.statuses;
+    const cachedDetails = result.cachedDetails;
 
     const sessionMap = this.buildSessionMap(rawSessions, allStatuses, cachedDetails);
 

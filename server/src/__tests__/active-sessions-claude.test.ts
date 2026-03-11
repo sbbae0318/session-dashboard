@@ -64,9 +64,43 @@ function makeBothMachine(): MachineConfig {
   return { id: 'both-m', alias: 'Both', host: '10.0.0.3', port: 3100, apiKey: 'key-b', source: 'both' };
 }
 
-/**
- * Helper: create module, do a single poll, and capture sessions via onUpdate callback.
- */
+function makeSessionsAllResponse(
+  sessions: Record<string, {
+    status: string;
+    title?: string | null;
+    parentSessionId?: string | null;
+    createdAt?: number;
+    directory?: string | null;
+    lastPrompt?: string | null;
+    lastPromptTime?: number;
+    currentTool?: string | null;
+    waitingForInput?: boolean;
+    updatedAt?: number;
+  }>,
+): string {
+  const full: Record<string, unknown> = {};
+  for (const [id, s] of Object.entries(sessions)) {
+    full[id] = {
+      status: s.status,
+      lastPrompt: s.lastPrompt ?? null,
+      lastPromptTime: s.lastPromptTime ?? 0,
+      currentTool: s.currentTool ?? null,
+      directory: s.directory ?? null,
+      waitingForInput: s.waitingForInput ?? false,
+      updatedAt: s.updatedAt ?? Date.now(),
+      title: s.title ?? null,
+      parentSessionId: s.parentSessionId ?? null,
+      createdAt: s.createdAt ?? 0,
+    };
+  }
+  return JSON.stringify({
+    meta: { sseConnected: true, lastSseEventAt: 0, sseConnectedAt: 0 },
+    projects: [],
+    activeDirectories: [],
+    sessions: full,
+  });
+}
+
 async function pollAndCapture(machines: readonly MachineConfig[]): Promise<Record<string, unknown>[]> {
   const manager = new MachineManager(machines);
   const module = new ActiveSessionsModule(manager);
@@ -115,15 +149,9 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
     it('should set source="opencode" for sessions from oc-serve endpoint', async () => {
       setupUrlRouter({
-        'http://10.0.0.1:3100/proxy/projects': JSON.stringify([{ id: 'p1', worktree: '/proj' }]),
-        'http://10.0.0.1:3100/proxy/session/status': JSON.stringify({ 'oc-sess-1': { type: 'active' } }),
-        'http://10.0.0.1:3100/proxy/session?directory': JSON.stringify([{
-          id: 'oc-sess-1',
-          title: 'OC Work',
-          time: { created: 1000, updated: 2000 },
-          directory: '/proj',
-        }]),
-        'http://10.0.0.1:3100/proxy/session/details': JSON.stringify({}),
+        'http://10.0.0.1:3100/proxy/sessions-all': makeSessionsAllResponse({
+          'oc-sess-1': { status: 'active', title: 'OC Work', directory: '/proj', createdAt: 1000, updatedAt: 2000 },
+        }),
       });
 
       const sessions = await pollAndCapture([makeOcMachine()]);
@@ -173,16 +201,8 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
     it('should set apiStatus from cache for OpenCode sessions', async () => {
       setupUrlRouter({
-        'http://10.0.0.1:3100/proxy/projects': JSON.stringify([{ id: 'p1', worktree: '/proj' }]),
-        'http://10.0.0.1:3100/proxy/session/status': JSON.stringify({ 'oc-sess': { type: 'busy' } }),
-        'http://10.0.0.1:3100/proxy/session?directory': JSON.stringify([{
-          id: 'oc-sess',
-          title: 'Coding',
-          time: { created: 1000, updated: 2000 },
-          directory: '/proj',
-        }]),
-        'http://10.0.0.1:3100/proxy/session/details': JSON.stringify({
-          'oc-sess': { status: 'busy', lastPrompt: 'Fix bug', lastPromptTime: 1500, currentTool: 'Edit', directory: '/proj', updatedAt: 1500 },
+        'http://10.0.0.1:3100/proxy/sessions-all': makeSessionsAllResponse({
+          'oc-sess': { status: 'busy', title: 'Coding', directory: '/proj', lastPrompt: 'Fix bug', lastPromptTime: 1500, currentTool: 'Edit', createdAt: 1000, updatedAt: 1500 },
         }),
       });
 
@@ -215,14 +235,9 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
     it('should mark active OpenCode sessions as status="active"', async () => {
       setupUrlRouter({
-        'http://10.0.0.1:3100/proxy/projects': JSON.stringify([{ id: 'p1', worktree: '/proj' }]),
-        'http://10.0.0.1:3100/proxy/session/status': JSON.stringify({ 'oc-active': { type: 'busy' } }),
-        'http://10.0.0.1:3100/proxy/session?directory': JSON.stringify([{
-          id: 'oc-active',
-          title: 'Working',
-          time: { created: 1000, updated: 2000 },
-        }]),
-        'http://10.0.0.1:3100/proxy/session/details': JSON.stringify({}),
+        'http://10.0.0.1:3100/proxy/sessions-all': makeSessionsAllResponse({
+          'oc-active': { status: 'busy', title: 'Working', createdAt: 1000, updatedAt: 2000 },
+        }),
       });
 
       const sessions = await pollAndCapture([makeOcMachine()]);
@@ -235,17 +250,9 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
   describe('mixed sources', () => {
     it('should correctly differentiate OC and Claude sessions from "both" machine', async () => {
       setupUrlRouter({
-        // oc-serve endpoints
-        'http://10.0.0.3:3100/proxy/projects': JSON.stringify([{ id: 'p1', worktree: '/proj' }]),
-        'http://10.0.0.3:3100/proxy/session/status': JSON.stringify({ 'oc-s1': { type: 'active' } }),
-        'http://10.0.0.3:3100/proxy/session?directory': JSON.stringify([{
-          id: 'oc-s1',
-          title: 'OC Session',
-          time: { created: 1000, updated: 2000 },
-          directory: '/proj',
-        }]),
-        'http://10.0.0.3:3100/proxy/session/details': JSON.stringify({}),
-        // Claude endpoint
+        'http://10.0.0.3:3100/proxy/sessions-all': makeSessionsAllResponse({
+          'oc-s1': { status: 'active', title: 'OC Session', directory: '/proj', createdAt: 1000, updatedAt: 2000 },
+        }),
         'http://10.0.0.3:3100/api/claude/sessions': JSON.stringify({
           sessions: [{
             sessionId: 'cl-s1',
@@ -275,16 +282,9 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
     it('should handle mixed opencode + claude-code machines', async () => {
       setupUrlRouter({
-        // OC machine
-        'http://10.0.0.1:3100/proxy/projects': JSON.stringify([{ id: 'p1', worktree: '/proj' }]),
-        'http://10.0.0.1:3100/proxy/session/status': JSON.stringify({ 'oc-s': { type: 'idle' } }),
-        'http://10.0.0.1:3100/proxy/session?directory': JSON.stringify([{
-          id: 'oc-s',
-          title: 'OC',
-          time: { created: 100, updated: 200 },
-        }]),
-        'http://10.0.0.1:3100/proxy/session/details': JSON.stringify({}),
-        // Claude machine
+        'http://10.0.0.1:3100/proxy/sessions-all': makeSessionsAllResponse({
+          'oc-s': { status: 'idle', title: 'OC', createdAt: 100, updatedAt: 200 },
+        }),
         'http://10.0.0.2:3100/api/claude/sessions': JSON.stringify({
           sessions: [{
             sessionId: 'cl-s',

@@ -23,13 +23,37 @@ export interface CachedSessionDetail {
   readonly currentTool: string | null;
   readonly directory: string | null;
   readonly updatedAt: number;
-  /** Claude Code only: last assistant response timestamp (ms) */
   readonly lastResponseTime?: number | null;
-  /** Claude Code only: JSONL file mtime (ms) */
   readonly lastFileModified?: number | null;
-  /** Whether the agent's SSE connection to oc-serve is active */
   readonly sseConnected?: boolean;
   readonly waitingForInput?: boolean;
+  readonly title?: string | null;
+  readonly parentSessionId?: string | null;
+  readonly createdAt?: number;
+}
+
+interface SessionsAllResponse {
+  meta: { sseConnected: boolean; lastSseEventAt: number; sseConnectedAt: number };
+  projects: Array<{ id: string; worktree: string }>;
+  activeDirectories: string[];
+  sessions: Record<string, {
+    status: string;
+    lastPrompt: string | null;
+    lastPromptTime: number;
+    currentTool: string | null;
+    directory: string | null;
+    waitingForInput: boolean;
+    updatedAt: number;
+    title: string | null;
+    parentSessionId: string | null;
+    createdAt: number;
+  }>;
+}
+
+interface PollAllResult {
+  sessions: Array<Record<string, unknown> & { machineId: string; machineAlias: string; machineHost: string }>;
+  statuses: Record<string, { type: string; machineId: string }>;
+  cachedDetails: Record<string, CachedSessionDetail & { machineId: string }>;
 }
 
 export class MachineManager {
@@ -149,10 +173,142 @@ export class MachineManager {
   }
 
   /**
-   * Poll a single machine's dashboard-agent for session data.
-   * Fetches /proxy/projects to discover all projects, then queries
-   * sessions per project with ?directory= param.
+   * Poll ALL machines via /proxy/sessions-all (single request per machine).
+   * Returns sessions, statuses, and cached details in one call.
    */
+  async pollAll(): Promise<PollAllResult> {
+    const results = await Promise.allSettled(
+      this.machines.map(machine => this.pollMachineCached(machine))
+    );
+
+    const allSessions: PollAllResult['sessions'] = [];
+    const allStatuses: PollAllResult['statuses'] = {};
+    const allCachedDetails: PollAllResult['cachedDetails'] = {};
+
+    for (const [index, result] of results.entries()) {
+      const machine = this.machines[index];
+      if (result.status === 'fulfilled') {
+        for (const session of result.value.sessions) {
+          allSessions.push({
+            ...session,
+            machineId: machine.id,
+            machineAlias: machine.alias,
+            machineHost: machine.host,
+          });
+        }
+        for (const [sessionId, status] of Object.entries(result.value.statuses)) {
+          allStatuses[sessionId] = { ...status, machineId: machine.id };
+        }
+        for (const [sessionId, detail] of Object.entries(result.value.cachedDetails)) {
+          allCachedDetails[sessionId] = { ...detail, machineId: machine.id };
+        }
+        this.consecutiveFailures.set(machine.id, 0);
+        this.machineStatuses.set(machine.id, {
+          machineId: machine.id,
+          machineAlias: machine.alias,
+          machineHost: machine.host,
+          connected: true,
+          lastSeen: Date.now(),
+          error: null,
+          source: machine.source,
+        });
+      } else {
+        const failures = (this.consecutiveFailures.get(machine.id) ?? 0) + 1;
+        this.consecutiveFailures.set(machine.id, failures);
+        const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        console.warn(`[MachineManager] ${machine.alias} (${machine.host}) pollAll failed (${failures}/${MachineManager.GRACE_THRESHOLD}): ${errorMsg}`);
+
+        const prev = this.machineStatuses.get(machine.id);
+        if (failures >= MachineManager.GRACE_THRESHOLD) {
+          this.machineStatuses.set(machine.id, {
+            machineId: machine.id,
+            machineAlias: machine.alias,
+            machineHost: machine.host,
+            connected: false,
+            lastSeen: prev?.lastSeen ?? null,
+            error: errorMsg,
+            source: machine.source,
+          });
+        } else if (prev) {
+          this.machineStatuses.set(machine.id, { ...prev, error: errorMsg });
+        }
+      }
+    }
+
+    this.onStatusChange?.(this.getMachineStatuses());
+    return { sessions: allSessions, statuses: allStatuses, cachedDetails: allCachedDetails };
+  }
+
+  private async pollMachineCached(machine: MachineConfig): Promise<{
+    sessions: Array<Record<string, unknown>>;
+    statuses: Record<string, { type: string }>;
+    cachedDetails: Record<string, CachedSessionDetail>;
+  }> {
+    const sessions: Array<Record<string, unknown>> = [];
+    const statuses: Record<string, { type: string }> = {};
+    const cachedDetails: Record<string, CachedSessionDetail> = {};
+    const seenIds = new Set<string>();
+
+    if (machine.source === 'opencode' || machine.source === 'both') {
+      const baseUrl = `http://${machine.host}:${machine.port}`;
+      const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
+      const raw = await this.httpGet(`${baseUrl}/proxy/sessions-all`, headers, machine.timeout);
+      const response = JSON.parse(raw) as SessionsAllResponse;
+
+      for (const [id, detail] of Object.entries(response.sessions)) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+
+        sessions.push({
+          id,
+          title: detail.title ?? null,
+          parentID: detail.parentSessionId ?? null,
+          directory: detail.directory,
+          time: { created: detail.createdAt ?? 0, updated: detail.updatedAt },
+        });
+        statuses[id] = { type: detail.status };
+        cachedDetails[id] = {
+          status: detail.status as CachedSessionDetail['status'],
+          lastPrompt: detail.lastPrompt,
+          lastPromptTime: detail.lastPromptTime,
+          currentTool: detail.currentTool,
+          directory: detail.directory,
+          waitingForInput: detail.waitingForInput,
+          updatedAt: detail.updatedAt,
+          title: detail.title,
+          parentSessionId: detail.parentSessionId,
+          createdAt: detail.createdAt,
+          sseConnected: response.meta.sseConnected,
+        };
+      }
+    }
+
+    if (machine.source === 'claude-code' || machine.source === 'both') {
+      const claudeSessions = await this.fetchClaudeSessions(machine);
+      for (const session of claudeSessions) {
+        const sessionId = String(session.sessionId ?? '');
+        if (sessionId && !seenIds.has(sessionId)) {
+          seenIds.add(sessionId);
+          sessions.push({ ...session, id: sessionId, source: 'claude-code' });
+          const sessionStatus = String(session.status ?? 'busy');
+          statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'active' };
+          cachedDetails[sessionId] = {
+            status: sessionStatus === 'idle' ? 'idle' : 'busy',
+            lastPrompt: (session.lastPrompt as string) ?? null,
+            lastPromptTime: (session.lastPromptTime as number) ?? 0,
+            currentTool: null,
+            directory: (session.cwd as string) ?? null,
+            updatedAt: (session.lastHeartbeat as number) ?? Date.now(),
+            lastResponseTime: (session.lastResponseTime as number) ?? null,
+            lastFileModified: (session.lastFileModified as number) ?? null,
+          };
+        }
+      }
+    }
+
+    return { sessions, statuses, cachedDetails };
+  }
+
   private async pollMachine(machine: MachineConfig): Promise<MachineSessionData> {
     const allSessions: Array<Record<string, unknown>> = [];
     const statuses: Record<string, { type: string }> = {};

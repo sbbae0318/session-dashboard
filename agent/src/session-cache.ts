@@ -11,6 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import { fetchJson } from './oc-serve-proxy.js';
 import { SessionStore } from './session-store.js';
 import { extractUserPrompt } from './prompt-extractor.js';
+import { detectActiveDirectories } from './active-directories.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +25,10 @@ export interface SessionDetail {
   directory: string | null;
   waitingForInput: boolean;
   updatedAt: number;
+  // Full-cache fields (populated from REST bootstrap + incremental fetch)
+  title: string | null;
+  parentSessionId: string | null;
+  createdAt: number;
 }
 
 interface SessionDetailsMeta {
@@ -49,6 +54,14 @@ interface OcServeProject {
   sandboxes: unknown;
 }
 
+interface OcServeSessionMeta {
+  id: string;
+  title?: string | null;
+  parentID?: string;
+  directory?: string;
+  time?: { created: number; updated: number } | number;
+}
+
 interface OcServeMessage {
   info: { role: string; sessionID: string; time?: { created: number } };
   parts?: Array<{ type: string; text?: string }>;
@@ -65,6 +78,7 @@ const MAX_CACHE_SIZE = 500;
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 1_000;
 const PROMPT_MAX_LENGTH = 200;
+const PROJECTS_CACHE_TTL_MS = 300_000; // 5 minutes
 
 const SYSTEM_PROMPT_PREFIXES = [
   '[SYSTEM DIRECTIVE:',
@@ -96,6 +110,9 @@ function defaultSessionDetail(directory: string | null): SessionDetail {
     directory,
     waitingForInput: false,
     updatedAt: Date.now(),
+    title: null,
+    parentSessionId: null,
+    createdAt: 0,
   };
 }
 
@@ -116,6 +133,8 @@ export class SessionCache {
   private sseDataLines: string[] = [];
   private sseConnectedAt: number = 0;
   private lastSseEventAt: number = 0;
+  private projectsCache: { projects: OcServeProject[]; updatedAt: number } = { projects: [], updatedAt: 0 };
+  private pendingMetadataFetches = new Set<string>();
 
   constructor(private ocServePort: number = 4096, dbPath?: string) {
     this.store = new SessionStore(dbPath);
@@ -176,6 +195,52 @@ export class SessionCache {
     app.get('/proxy/session/details', async () => {
       return this.getSessionDetails();
     });
+
+    app.get('/proxy/sessions-all', async () => {
+      return this.getAllSessionData();
+    });
+  }
+
+  async getAllSessionData(): Promise<{
+    meta: SessionDetailsMeta;
+    projects: Array<{ id: string; worktree: string }>;
+    activeDirectories: string[];
+    sessions: Record<string, SessionDetail>;
+  }> {
+    const [projects, activeDirectories] = await Promise.all([
+      this.getCachedProjects(),
+      detectActiveDirectories(),
+    ]);
+
+    return {
+      meta: {
+        sseConnected: this.connectionState === 'connected',
+        lastSseEventAt: this.lastSseEventAt,
+        sseConnectedAt: this.sseConnectedAt,
+      },
+      projects: projects
+        .filter(p => p.worktree && p.worktree !== '/')
+        .map(p => ({ id: p.id, worktree: p.worktree })),
+      activeDirectories,
+      sessions: this.store.getAll(),
+    };
+  }
+
+  async getCachedProjects(): Promise<OcServeProject[]> {
+    const now = Date.now();
+    if (now - this.projectsCache.updatedAt < PROJECTS_CACHE_TTL_MS) {
+      return this.projectsCache.projects;
+    }
+    try {
+      const baseUrl = `http://127.0.0.1:${this.ocServePort}`;
+      const projects = (await fetchJson(`${baseUrl}/project`, {}, 3000)) as OcServeProject[];
+      if (Array.isArray(projects)) {
+        this.projectsCache = { projects, updatedAt: now };
+      }
+      return this.projectsCache.projects;
+    } catch {
+      return this.projectsCache.projects;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -327,33 +392,35 @@ export class SessionCache {
     if (!sessionID || !statusObj?.type) return;
 
     const statusType = statusObj.type as SessionDetail['status'];
+    const isNew = !this.store.get(sessionID);
     const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
     this.store.upsert(sessionID, {
       ...existing,
       status: statusType,
-      // busy 전환 = 사용자가 응답해서 작업 재개된 것 → waitingForInput 리셋
       waitingForInput: statusType === 'busy' ? false : existing.waitingForInput,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
+    if (isNew) this.scheduleMetadataFetch(sessionID);
   }
 
   private handleSessionIdle(props: Record<string, unknown>, directory: string | null): void {
     const sessionID = props['sessionID'] as string | undefined;
     if (!sessionID) return;
 
+    const isNew = !this.store.get(sessionID);
     const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
     this.store.upsert(sessionID, {
       ...existing,
       status: 'idle',
       currentTool: null,
-      waitingForInput: false,  // idle = turn 완료 → 대기 상태 해제
+      waitingForInput: false,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
 
-    // idle = turn 완료 → 최신 user prompt 갱신
     void this.fetchLatestUserPrompt(sessionID, directory);
+    if (isNew) this.scheduleMetadataFetch(sessionID);
   }
 
   private handleMessageUpdated(props: Record<string, unknown>, directory: string | null): void {
@@ -527,6 +594,42 @@ export class SessionCache {
   }
 
   // -------------------------------------------------------------------------
+  // Session Metadata Fetch (title, parentID, createdAt for new sessions)
+  // -------------------------------------------------------------------------
+
+  private scheduleMetadataFetch(sessionID: string): void {
+    if (this.pendingMetadataFetches.has(sessionID)) return;
+    this.pendingMetadataFetches.add(sessionID);
+    void this.fetchSessionMetadata(sessionID).finally(() => {
+      this.pendingMetadataFetches.delete(sessionID);
+    });
+  }
+
+  private async fetchSessionMetadata(sessionID: string): Promise<void> {
+    try {
+      const url = `http://127.0.0.1:${this.ocServePort}/session/${sessionID}`;
+      const data = (await fetchJson(url, {}, 3000)) as OcServeSessionMeta;
+      if (!data?.id) return;
+
+      const existing = this.store.get(sessionID);
+      if (!existing) return;
+
+      const timeObj = data.time;
+      const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+
+      this.store.upsert(sessionID, {
+        ...existing,
+        title: data.title ?? existing.title,
+        parentSessionId: data.parentID ?? existing.parentSessionId,
+        createdAt: createdAt || existing.createdAt,
+        directory: data.directory ?? existing.directory,
+      });
+    } catch {
+      // REST fetch failed — metadata stays as-is
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Bootstrap
   // -------------------------------------------------------------------------
 
@@ -536,6 +639,8 @@ export class SessionCache {
       const projects = (await fetchJson(`${baseUrl}/project`, {}, 3000)) as OcServeProject[];
 
       if (!Array.isArray(projects)) return;
+
+      this.projectsCache = { projects, updatedAt: Date.now() };
 
       const validProjects = projects.filter((p) => p.worktree && p.worktree !== '/');
 
@@ -554,10 +659,22 @@ export class SessionCache {
   }
 
   private async bootstrapProject(baseUrl: string, worktree: string): Promise<void> {
-    const url = `${baseUrl}/session/status?directory=${encodeURIComponent(worktree)}`;
-    const statusMap = (await fetchJson(url, {}, 3000)) as Record<string, { type: string }>;
+    const encodedDir = encodeURIComponent(worktree);
+    const [statusMap, sessionList] = await Promise.all([
+      fetchJson(`${baseUrl}/session/status?directory=${encodedDir}`, {}, 3000)
+        .then(d => d as Record<string, { type: string }>)
+        .catch(() => ({} as Record<string, { type: string }>)),
+      fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=500`, {}, 5000)
+        .then(d => (Array.isArray(d) ? d : []) as OcServeSessionMeta[])
+        .catch(() => [] as OcServeSessionMeta[]),
+    ]);
 
     if (!statusMap || typeof statusMap !== 'object') return;
+
+    const metaMap = new Map<string, OcServeSessionMeta>();
+    for (const s of sessionList) {
+      if (s.id) metaMap.set(s.id, s);
+    }
 
     for (const [sessionID, statusObj] of Object.entries(statusMap)) {
       const statusType = statusObj?.type as SessionDetail['status'] | undefined;
@@ -565,6 +682,10 @@ export class SessionCache {
 
       const existing = this.store.get(sessionID);
       if (existing && existing.updatedAt >= this.sseConnectedAt) continue;
+
+      const meta = metaMap.get(sessionID);
+      const timeObj = meta?.time;
+      const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
 
       this.store.upsert(sessionID, {
         status: statusType,
@@ -574,6 +695,29 @@ export class SessionCache {
         directory: worktree,
         waitingForInput: existing?.waitingForInput ?? false,
         updatedAt: Date.now(),
+        title: meta?.title ?? existing?.title ?? null,
+        parentSessionId: meta?.parentID ?? existing?.parentSessionId ?? null,
+        createdAt: createdAt || (existing?.createdAt ?? 0),
+      });
+    }
+
+    // Sessions in session list but not in status map (idle sessions)
+    for (const meta of sessionList) {
+      if (!meta.id || this.store.get(meta.id)) continue;
+      const timeObj = meta.time;
+      const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+
+      this.store.upsert(meta.id, {
+        status: 'idle',
+        lastPrompt: null,
+        lastPromptTime: 0,
+        currentTool: null,
+        directory: meta.directory ?? worktree,
+        waitingForInput: false,
+        updatedAt: Date.now(),
+        title: meta.title ?? null,
+        parentSessionId: meta.parentID ?? null,
+        createdAt,
       });
     }
   }

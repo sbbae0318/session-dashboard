@@ -24,6 +24,9 @@ interface SessionRow {
   directory: string | null;
   waiting_for_input: number;
   updated_at: number;
+  title: string | null;
+  parent_session_id: string | null;
+  created_at: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,15 +65,22 @@ export class SessionStore {
         current_tool TEXT,
         directory TEXT,
         waiting_for_input INTEGER NOT NULL DEFAULT 0,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        title TEXT,
+        parent_session_id TEXT,
+        created_at INTEGER NOT NULL DEFAULT 0
       )
     `);
 
-    // 기존 DB 마이그레이션: waiting_for_input 컬럼 추가
-    try {
-      this.db.exec(`ALTER TABLE session_status ADD COLUMN waiting_for_input INTEGER NOT NULL DEFAULT 0`);
-    } catch {
-      // 이미 컬럼이 존재하면 무시
+    // 기존 DB 마이그레이션
+    const migrations = [
+      `ALTER TABLE session_status ADD COLUMN waiting_for_input INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE session_status ADD COLUMN title TEXT`,
+      `ALTER TABLE session_status ADD COLUMN parent_session_id TEXT`,
+      `ALTER TABLE session_status ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`,
+    ];
+    for (const sql of migrations) {
+      try { this.db.exec(sql); } catch { /* column already exists */ }
     }
 
     // Prepared statements — 생성자에서 한 번만 준비
@@ -80,9 +90,9 @@ export class SessionStore {
 
     this.stmtUpsert = this.db.prepare(`
       INSERT OR REPLACE INTO session_status
-        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, waiting_for_input, updated_at)
+        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, waiting_for_input, updated_at, title, parent_session_id, created_at)
       VALUES
-        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @waiting_for_input, @updated_at)
+        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @waiting_for_input, @updated_at, @title, @parent_session_id, @created_at)
     `);
 
     this.stmtGetAll = this.db.prepare('SELECT * FROM session_status');
@@ -118,6 +128,9 @@ export class SessionStore {
       directory: detail.directory,
       waiting_for_input: detail.waitingForInput ? 1 : 0,
       updated_at: detail.updatedAt,
+      title: detail.title,
+      parent_session_id: detail.parentSessionId,
+      created_at: detail.createdAt,
     });
   }
 
@@ -171,5 +184,8 @@ function rowToDetail(row: SessionRow): SessionDetail {
     directory: row.directory,
     waitingForInput: Boolean(row.waiting_for_input),
     updatedAt: row.updated_at,
+    title: row.title ?? null,
+    parentSessionId: row.parent_session_id ?? null,
+    createdAt: row.created_at ?? 0,
   };
 }

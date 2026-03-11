@@ -22,10 +22,22 @@ function createMockMachineManager(overrides?: {
     machineId: string;
   }>>;
 }): MachineManager {
+  const pollAllSessionsFn = overrides?.pollAllSessions ?? vi.fn().mockResolvedValue({ sessions: [], statuses: {} });
+  const pollSessionDetailsFn = overrides?.pollSessionDetails ?? vi.fn().mockResolvedValue({});
+
   return {
     getMachines: overrides?.getMachines ?? vi.fn().mockReturnValue([]),
-    pollAllSessions: overrides?.pollAllSessions ?? vi.fn().mockResolvedValue({ sessions: [], statuses: {} }),
-    pollSessionDetails: overrides?.pollSessionDetails ?? vi.fn().mockResolvedValue({}),
+    pollAllSessions: pollAllSessionsFn,
+    pollSessionDetails: pollSessionDetailsFn,
+    pollAll: vi.fn().mockImplementation(async () => {
+      const sessionResult = await pollAllSessionsFn();
+      const detailsResult = await pollSessionDetailsFn();
+      return {
+        sessions: sessionResult.sessions,
+        statuses: sessionResult.statuses,
+        cachedDetails: detailsResult,
+      };
+    }),
     getMachineStatuses: overrides?.getMachineStatuses ?? vi.fn().mockReturnValue([]),
     setStatusChangeCallback: vi.fn(),
     pollAllQueries: vi.fn().mockResolvedValue([]),
