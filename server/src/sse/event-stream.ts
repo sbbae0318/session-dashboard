@@ -58,7 +58,7 @@ export class SSEManager {
     });
 
     // Send initial connection event
-    reply.raw.write(`event: connected\ndata: ${JSON.stringify({ clientId })}\n\n`);
+    reply.raw.write(`retry: 1000\nevent: connected\ndata: ${JSON.stringify({ clientId })}\n\n`);
 
     this.clients.set(clientId, { id: clientId, reply });
 

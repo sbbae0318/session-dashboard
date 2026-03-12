@@ -55,12 +55,21 @@
       .start();
 
     refetchTimer = setInterval(async () => {
-      await Promise.all([fetchQueries(), fetchMachines()]);
+      await Promise.all([fetchSessions(), fetchQueries(), fetchMachines()]);
     }, 30_000);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
   });
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+      Promise.all([fetchSessions(), fetchQueries(), fetchMachines()]);
+    }
+  }
 
   onDestroy(() => {
     if (refetchTimer) clearInterval(refetchTimer);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   function handleGlobalKeydown(e: KeyboardEvent) {
