@@ -72,10 +72,7 @@
         if (sourceFilter === "opencode") return !s.source || s.source === "opencode";
         return s.source === sourceFilter;
       })
-      .filter(s =>
-        !s.parentSessionId ||
-        !sessions.some(p => p.sessionId === s.parentSessionId)
-      )
+      .filter(s => !s.parentSessionId)
   );
 
 

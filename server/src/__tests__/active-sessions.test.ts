@@ -1033,3 +1033,213 @@ describe('ActiveSessionsModule — waitingForInput forwarding', () => {
     expect(orphan.title).toBeNull();
   });
 });
+
+describe('ActiveSessionsModule — background session regression', () => {
+  let module: ActiveSessionsModule;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  it('child sessions with parentSessionId are included with parentSessionId set', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'opencode' },
+      ],
+      getMachineStatuses: () => [],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_parent',
+            title: 'Parent Session',
+            parentID: null,
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 1000, updated: 3000 },
+          },
+          {
+            id: 'ses_child',
+            title: 'T22: backtest-guide (@subagent)',
+            parentID: 'ses_parent',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 2000, updated: 2500 },
+          },
+        ],
+        statuses: {},
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_parent': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 3000,
+          machineId: 'mac-1', sseConnected: true,
+        },
+        'ses_child': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 2500,
+          machineId: 'mac-1', sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const child = sessions.find((s: any) => s.sessionId === 'ses_child');
+    const parent = sessions.find((s: any) => s.sessionId === 'ses_parent');
+
+    expect(parent).toBeDefined();
+    expect(parent.parentSessionId).toBeNull();
+
+    expect(child).toBeDefined();
+    expect(child.parentSessionId).toBe('ses_parent');
+  });
+
+  it('orphan child sessions (parent evicted) still have parentSessionId set', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'opencode' },
+      ],
+      getMachineStatuses: () => [],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_orphan_child',
+            title: 'T22: backtest-guide (@subagent)',
+            parentID: 'ses_evicted_parent',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 2000, updated: 2500 },
+          },
+        ],
+        statuses: {},
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_orphan_child': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 2500,
+          machineId: 'mac-1', sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const child = sessions.find((s: any) => s.sessionId === 'ses_orphan_child');
+
+    expect(child).toBeDefined();
+    expect(child.parentSessionId).toBe('ses_evicted_parent');
+  });
+});
+
+describe('ActiveSessionsModule — idle session status regression', () => {
+  let module: ActiveSessionsModule;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  it('idle sessions have status "idle", not "active"', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'opencode' },
+      ],
+      getMachineStatuses: () => [],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_idle',
+            title: 'Idle Session',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 1000, updated: 2000 },
+          },
+          {
+            id: 'ses_busy',
+            title: 'Busy Session',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 1000, updated: 3000 },
+          },
+        ],
+        statuses: {
+          'ses_idle': { type: 'idle', machineId: 'mac-1' },
+          'ses_busy': { type: 'busy', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_idle': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 2000,
+          machineId: 'mac-1', sseConnected: true,
+        },
+        'ses_busy': {
+          status: 'busy', lastPrompt: 'working', lastPromptTime: 3000,
+          currentTool: 'bash', directory: '/project', updatedAt: 3000,
+          machineId: 'mac-1', sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const idle = sessions.find((s: any) => s.sessionId === 'ses_idle');
+    const busy = sessions.find((s: any) => s.sessionId === 'ses_busy');
+
+    expect(idle).toBeDefined();
+    expect(idle.status).toBe('idle');
+
+    expect(busy).toBeDefined();
+    expect(busy.status).toBe('active');
+  });
+
+  it('allStatuses with only idle entries produces zero active sessions', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'opencode' },
+      ],
+      getMachineStatuses: () => [],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_a', title: 'Session A',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 1000, updated: 2000 },
+          },
+          {
+            id: 'ses_b', title: 'Session B',
+            machineId: 'mac-1', machineAlias: 'Test Mac', machineHost: '10.0.0.1',
+            directory: '/project', time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_a': { type: 'idle', machineId: 'mac-1' },
+          'ses_b': { type: 'idle', machineId: 'mac-1' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({
+        'ses_a': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 2000,
+          machineId: 'mac-1', sseConnected: true,
+        },
+        'ses_b': {
+          status: 'idle', lastPrompt: null, lastPromptTime: 0,
+          currentTool: null, directory: '/project', updatedAt: 2000,
+          machineId: 'mac-1', sseConnected: true,
+        },
+      }),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const activeSessions = sessions.filter((s: any) => s.status === 'active');
+
+    expect(activeSessions).toHaveLength(0);
+    expect(sessions.every((s: any) => s.status === 'idle')).toBe(true);
+  });
+});
