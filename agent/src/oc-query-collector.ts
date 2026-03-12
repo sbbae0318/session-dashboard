@@ -47,6 +47,7 @@ export interface QueryEntry {
 export interface SupplementData {
   lastPrompt: string | null;
   lastPromptTime: number;
+  status?: 'busy' | 'idle' | 'retry';
 }
 
 const QUERY_MAX_LENGTH = 2000;
@@ -156,7 +157,7 @@ export class OcQueryCollector {
           query: extracted.slice(0, QUERY_MAX_LENGTH),
           isBackground: false,
           source: 'opencode',
-          completedAt: null,
+          completedAt: data.status === 'idle' ? (data.lastPromptTime || Date.now()) : null,
         });
       }
     }

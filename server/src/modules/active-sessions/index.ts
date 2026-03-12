@@ -121,7 +121,14 @@ export class ActiveSessionsModule implements BackendModule {
     allStatuses: Record<string, { type: string; machineId: string }>,
     cachedDetails: Record<string, CachedSessionDetail & { machineId: string }>,
   ): Map<string, DashboardSession> {
-    const activeIds = new Set(Object.keys(allStatuses));
+    // Phase 3 sends ALL sessions in allStatuses (including idle).
+    // Only treat busy/retry as "active" — matches pre-Phase3 behavior
+    // where /session/status only returned non-idle sessions.
+    const activeIds = new Set(
+      Object.entries(allStatuses)
+        .filter(([, v]) => v.type === 'busy' || v.type === 'retry')
+        .map(([id]) => id),
+    );
     const sessionMap = new Map<string, DashboardSession>();
 
     for (const s of rawSessions) {
