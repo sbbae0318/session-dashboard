@@ -45,6 +45,12 @@ export class RecentPromptsModule implements BackendModule {
     }
   }
 
+  triggerPoll(): void {
+    this.pollQueries().catch(err => {
+      console.error("[RecentPrompts] Triggered poll error:", err);
+    });
+  }
+
   private async pollQueries(): Promise<void> {
     const rawQueries = await this.machineManager.pollAllQueries(100);
     const newQueries: QueryEntry[] = rawQueries.map(raw => ({

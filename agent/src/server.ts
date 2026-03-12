@@ -152,6 +152,17 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     bgCollectionInterval = setInterval(() => {
       void doCollection();
     }, PROMPT_COLLECTION_INTERVAL_MS);
+
+    if (sessionCache) {
+      let busyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+      sessionCache.onSessionBusy(() => {
+        if (busyDebounceTimer) return;
+        busyDebounceTimer = setTimeout(() => {
+          busyDebounceTimer = null;
+          void doCollection();
+        }, 1_000);
+      });
+    }
   }
 
   // Conditionally create Claude modules

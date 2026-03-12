@@ -135,9 +135,14 @@ export class SessionCache {
   private lastSseEventAt: number = 0;
   private projectsCache: { projects: OcServeProject[]; updatedAt: number } = { projects: [], updatedAt: 0 };
   private pendingMetadataFetches = new Set<string>();
+  private onSessionBusyCallback: (() => void) | null = null;
 
   constructor(private ocServePort: number = 4096, dbPath?: string) {
     this.store = new SessionStore(dbPath);
+  }
+
+  onSessionBusy(cb: () => void): void {
+    this.onSessionBusyCallback = cb;
   }
 
   // -------------------------------------------------------------------------
@@ -394,6 +399,7 @@ export class SessionCache {
     const statusType = statusObj.type as SessionDetail['status'];
     const isNew = !this.store.get(sessionID);
     const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
+    const wasBusy = existing.status === 'busy';
     this.store.upsert(sessionID, {
       ...existing,
       status: statusType,
@@ -402,6 +408,7 @@ export class SessionCache {
       updatedAt: Date.now(),
     });
     if (isNew) this.scheduleMetadataFetch(sessionID);
+    if (statusType === 'busy' && !wasBusy) this.onSessionBusyCallback?.();
   }
 
   private handleSessionIdle(props: Record<string, unknown>, directory: string | null): void {

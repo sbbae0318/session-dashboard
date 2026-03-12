@@ -35,7 +35,9 @@ export class ActiveSessionsModule implements BackendModule {
   private pollInterval: NodeJS.Timeout | null = null;
   private cachedSessions: DashboardSession[] = [];
   private onUpdate: ((sessions: DashboardSession[]) => void) | null = null;
+  private onSessionActivated: (() => void) | null = null;
   private previousSessionMap: Map<string, DashboardSession> = new Map();
+  private previousActiveIds: Set<string> = new Set();
 
   constructor(machineManager: MachineManager) {
     this.machineManager = machineManager;
@@ -47,9 +49,12 @@ export class ActiveSessionsModule implements BackendModule {
     });
   }
 
-  /** Set callback for session updates (SSE broadcast) */
   setUpdateCallback(cb: (sessions: DashboardSession[]) => void): void {
     this.onUpdate = cb;
+  }
+
+  setSessionActivatedCallback(cb: () => void): void {
+    this.onSessionActivated = cb;
   }
 
   async start(): Promise<void> {
@@ -113,6 +118,13 @@ export class ActiveSessionsModule implements BackendModule {
     this.cachedSessions = filtered
       .sort((a, b) => b.lastActivityTime - a.lastActivityTime);
     this.onUpdate?.(this.cachedSessions);
+
+    const currentActiveIds = new Set(
+      filtered.filter(s => s.status === 'active').map(s => s.sessionId),
+    );
+    const hasNewActive = [...currentActiveIds].some(id => !this.previousActiveIds.has(id));
+    this.previousActiveIds = currentActiveIds;
+    if (hasNewActive) this.onSessionActivated?.();
   }
 
   /** Build session map from raw data, statuses, and cached details. */
