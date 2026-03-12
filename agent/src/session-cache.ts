@@ -646,11 +646,13 @@ export class SessionCache {
 
       if (this.connectionState !== 'connected') return;
 
-      const statusPromises = validProjects.map((project) =>
-        this.bootstrapProject(baseUrl, project.worktree),
-      );
-
-      await Promise.allSettled(statusPromises);
+      const BATCH_SIZE = 4;
+      for (let i = 0; i < validProjects.length; i += BATCH_SIZE) {
+        const batch = validProjects.slice(i, i + BATCH_SIZE);
+        await Promise.allSettled(
+          batch.map((project) => this.bootstrapProject(baseUrl, project.worktree)),
+        );
+      }
       console.log(`[SessionCache] Bootstrap complete — ${this.store.count()} sessions cached`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -664,7 +666,7 @@ export class SessionCache {
       fetchJson(`${baseUrl}/session/status?directory=${encodedDir}`, {}, 3000)
         .then(d => d as Record<string, { type: string }>)
         .catch(() => ({} as Record<string, { type: string }>)),
-      fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=500`, {}, 5000)
+      fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=500`, {}, 10000)
         .then(d => (Array.isArray(d) ? d : []) as OcServeSessionMeta[])
         .catch(() => [] as OcServeSessionMeta[]),
     ]);
