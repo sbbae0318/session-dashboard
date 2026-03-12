@@ -35,7 +35,7 @@ export class RecentPromptsModule implements BackendModule {
       this.pollQueries().catch(err => {
         console.error("[RecentPrompts] Poll error:", err);
       });
-    }, 5_000);
+    }, 2_000);
   }
 
   async stop(): Promise<void> {

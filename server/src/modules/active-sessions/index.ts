@@ -37,7 +37,7 @@ export class ActiveSessionsModule implements BackendModule {
   private onUpdate: ((sessions: DashboardSession[]) => void) | null = null;
   private onSessionActivated: (() => void) | null = null;
   private previousSessionMap: Map<string, DashboardSession> = new Map();
-  private previousActiveIds: Set<string> = new Set();
+  private previousPromptKeys: Set<string> = new Set();
 
   constructor(machineManager: MachineManager) {
     this.machineManager = machineManager;
@@ -119,12 +119,14 @@ export class ActiveSessionsModule implements BackendModule {
       .sort((a, b) => b.lastActivityTime - a.lastActivityTime);
     this.onUpdate?.(this.cachedSessions);
 
-    const currentActiveIds = new Set(
-      filtered.filter(s => s.status === 'active').map(s => s.sessionId),
+    const currentPromptKeys = new Set(
+      filtered
+        .filter(s => s.lastPromptTime)
+        .map(s => `${s.sessionId}-${s.lastPromptTime}`),
     );
-    const hasNewActive = [...currentActiveIds].some(id => !this.previousActiveIds.has(id));
-    this.previousActiveIds = currentActiveIds;
-    if (hasNewActive) this.onSessionActivated?.();
+    const hasNewPrompt = [...currentPromptKeys].some(k => !this.previousPromptKeys.has(k));
+    this.previousPromptKeys = currentPromptKeys;
+    if (hasNewPrompt) this.onSessionActivated?.();
   }
 
   /** Build session map from raw data, statuses, and cached details. */
