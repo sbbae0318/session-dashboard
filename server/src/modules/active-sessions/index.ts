@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { BackendModule } from "../types.js";
 import { MachineManager } from "../../machines/machine-manager.js";
 import type { CachedSessionDetail } from "../../machines/machine-manager.js";
+import type { QueryEntry } from "../recent-prompts/queries-reader.js";
 
 // DashboardSession type (matches frontend/src/types.ts)
 interface DashboardSession {
@@ -35,7 +36,7 @@ export class ActiveSessionsModule implements BackendModule {
   private pollInterval: NodeJS.Timeout | null = null;
   private cachedSessions: DashboardSession[] = [];
   private onUpdate: ((sessions: DashboardSession[]) => void) | null = null;
-  private onSessionActivated: (() => void) | null = null;
+  private onNewPromptFromSession: ((query: QueryEntry) => void) | null = null;
   private previousSessionMap: Map<string, DashboardSession> = new Map();
   private previousPromptKeys: Set<string> = new Set();
 
@@ -53,8 +54,8 @@ export class ActiveSessionsModule implements BackendModule {
     this.onUpdate = cb;
   }
 
-  setSessionActivatedCallback(cb: () => void): void {
-    this.onSessionActivated = cb;
+  setNewPromptCallback(cb: (query: QueryEntry) => void): void {
+    this.onNewPromptFromSession = cb;
   }
 
   async start(): Promise<void> {
@@ -119,14 +120,32 @@ export class ActiveSessionsModule implements BackendModule {
       .sort((a, b) => b.lastActivityTime - a.lastActivityTime);
     this.onUpdate?.(this.cachedSessions);
 
-    const currentPromptKeys = new Set(
-      filtered
-        .filter(s => s.lastPromptTime)
-        .map(s => `${s.sessionId}-${s.lastPromptTime}`),
-    );
-    const hasNewPrompt = [...currentPromptKeys].some(k => !this.previousPromptKeys.has(k));
-    this.previousPromptKeys = currentPromptKeys;
-    if (hasNewPrompt) this.onSessionActivated?.();
+    if (this.onNewPromptFromSession) {
+      const currentPromptKeys = new Set(
+        filtered
+          .filter(s => s.lastPromptTime)
+          .map(s => `${s.sessionId}-${s.lastPromptTime}`),
+      );
+      for (const session of filtered) {
+        if (!session.lastPrompt || !session.lastPromptTime) continue;
+        const key = `${session.sessionId}-${session.lastPromptTime}`;
+        if (!this.previousPromptKeys.has(key)) {
+          this.onNewPromptFromSession({
+            sessionId: session.sessionId,
+            sessionTitle: session.title,
+            timestamp: session.lastPromptTime,
+            query: session.lastPrompt,
+            isBackground: !!session.parentSessionId,
+            source: session.source ?? 'opencode',
+            completedAt: null,
+            machineId: session.machineId,
+            machineHost: session.machineHost,
+            machineAlias: session.machineAlias,
+          });
+        }
+      }
+      this.previousPromptKeys = currentPromptKeys;
+    }
   }
 
   /** Build session map from raw data, statuses, and cached details. */

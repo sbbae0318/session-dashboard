@@ -48,8 +48,8 @@ async function main(): Promise<void> {
       recentPrompts.setNewQueryCallback((query) => {
         sseManager.broadcast("query.new", query);
       });
-      activeSessions.setSessionActivatedCallback(() => {
-        recentPrompts.triggerPoll();
+      activeSessions.setNewPromptCallback((query) => {
+        sseManager.broadcast("query.new", query);
       });
       machineManager.setStatusChangeCallback((statuses) => {
         sseManager.broadcast('machine.status', statuses.map(s => ({
