@@ -30,6 +30,7 @@ export interface CachedSessionDetail {
   readonly title?: string | null;
   readonly parentSessionId?: string | null;
   readonly createdAt?: number;
+  readonly lastActiveAt?: number;
 }
 
 interface SessionsAllResponse {

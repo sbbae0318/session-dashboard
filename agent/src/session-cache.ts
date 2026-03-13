@@ -29,6 +29,7 @@ export interface SessionDetail {
   title: string | null;
   parentSessionId: string | null;
   createdAt: number;
+  lastActiveAt: number;
 }
 
 interface SessionDetailsMeta {
@@ -113,6 +114,7 @@ function defaultSessionDetail(directory: string | null): SessionDetail {
     title: null,
     parentSessionId: null,
     createdAt: 0,
+    lastActiveAt: 0,
   };
 }
 
@@ -406,6 +408,7 @@ export class SessionCache {
       waitingForInput: statusType === 'busy' ? false : existing.waitingForInput,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
+      lastActiveAt: Date.now(),
     });
     if (isNew) this.scheduleMetadataFetch(sessionID);
     if (statusType === 'busy' && !wasBusy) this.onSessionBusyCallback?.();
@@ -424,6 +427,7 @@ export class SessionCache {
       waitingForInput: false,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
+      lastActiveAt: Date.now(),
     });
 
     void this.fetchLatestUserPrompt(sessionID, directory);
@@ -696,11 +700,13 @@ export class SessionCache {
         if (meta && (!existing.title || !existing.createdAt)) {
           const timeObj = meta.time;
           const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+          const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
           this.store.upsert(sessionID, {
             ...existing,
             title: meta.title ?? existing.title ?? null,
             parentSessionId: meta.parentID ?? existing.parentSessionId ?? null,
             createdAt: createdAt || existing.createdAt,
+            lastActiveAt: lastActiveAt || existing.lastActiveAt,
           });
         }
         continue;
@@ -708,6 +714,7 @@ export class SessionCache {
 
       const timeObj = meta?.time;
       const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+      const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
 
       this.store.upsert(sessionID, {
         status: statusType,
@@ -720,6 +727,7 @@ export class SessionCache {
         title: meta?.title ?? existing?.title ?? null,
         parentSessionId: meta?.parentID ?? existing?.parentSessionId ?? null,
         createdAt: createdAt || (existing?.createdAt ?? 0),
+        lastActiveAt: lastActiveAt || (existing?.lastActiveAt ?? 0),
       });
     }
 
@@ -731,17 +739,20 @@ export class SessionCache {
         if (!existing.title || !existing.createdAt) {
           const timeObj = meta.time;
           const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+          const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
           this.store.upsert(meta.id, {
             ...existing,
             title: meta.title ?? existing.title ?? null,
             parentSessionId: meta.parentID ?? existing.parentSessionId ?? null,
             createdAt: createdAt || existing.createdAt,
+            lastActiveAt: lastActiveAt || existing.lastActiveAt,
           });
         }
         continue;
       }
       const timeObj = meta.time;
       const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+      const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
 
       this.store.upsert(meta.id, {
         status: 'idle',
@@ -754,6 +765,7 @@ export class SessionCache {
         title: meta.title ?? null,
         parentSessionId: meta.parentID ?? null,
         createdAt,
+        lastActiveAt,
       });
     }
   }

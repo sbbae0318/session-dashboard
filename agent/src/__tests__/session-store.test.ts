@@ -18,6 +18,7 @@ function makeDetail(overrides: Partial<SessionDetail> = {}): SessionDetail {
     title: null,
     parentSessionId: null,
     createdAt: 0,
+    lastActiveAt: 0,
     ...overrides,
   };
 }

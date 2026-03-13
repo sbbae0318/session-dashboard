@@ -27,6 +27,7 @@ interface SessionRow {
   title: string | null;
   parent_session_id: string | null;
   created_at: number;
+  last_active_at: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,7 @@ export class SessionStore {
       `ALTER TABLE session_status ADD COLUMN title TEXT`,
       `ALTER TABLE session_status ADD COLUMN parent_session_id TEXT`,
       `ALTER TABLE session_status ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE session_status ADD COLUMN last_active_at INTEGER NOT NULL DEFAULT 0`,
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch { /* column already exists */ }
@@ -90,9 +92,9 @@ export class SessionStore {
 
     this.stmtUpsert = this.db.prepare(`
       INSERT OR REPLACE INTO session_status
-        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, waiting_for_input, updated_at, title, parent_session_id, created_at)
+        (session_id, status, last_prompt, last_prompt_time, current_tool, directory, waiting_for_input, updated_at, title, parent_session_id, created_at, last_active_at)
       VALUES
-        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @waiting_for_input, @updated_at, @title, @parent_session_id, @created_at)
+        (@session_id, @status, @last_prompt, @last_prompt_time, @current_tool, @directory, @waiting_for_input, @updated_at, @title, @parent_session_id, @created_at, @last_active_at)
     `);
 
     this.stmtGetAll = this.db.prepare('SELECT * FROM session_status');
@@ -131,6 +133,7 @@ export class SessionStore {
       title: detail.title,
       parent_session_id: detail.parentSessionId,
       created_at: detail.createdAt,
+      last_active_at: detail.lastActiveAt,
     });
   }
 
@@ -187,5 +190,6 @@ function rowToDetail(row: SessionRow): SessionDetail {
     title: row.title ?? null,
     parentSessionId: row.parent_session_id ?? null,
     createdAt: row.created_at ?? 0,
+    lastActiveAt: row.last_active_at ?? 0,
   };
 }
