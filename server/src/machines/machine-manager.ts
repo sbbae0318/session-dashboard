@@ -266,7 +266,7 @@ export class MachineManager {
           title: detail.title ?? null,
           parentID: detail.parentSessionId ?? null,
           directory: detail.directory,
-          time: { created: detail.createdAt ?? 0, updated: detail.updatedAt },
+          time: { created: detail.createdAt ?? 0, updated: detail.lastActiveAt ?? detail.updatedAt },
         });
         statuses[id] = { type: detail.status };
         cachedDetails[id] = {
