@@ -48,6 +48,7 @@ interface SessionsAllResponse {
     title: string | null;
     parentSessionId: string | null;
     createdAt: number;
+    lastActiveAt?: number;
   }>;
 }
 
@@ -279,6 +280,7 @@ export class MachineManager {
           title: detail.title,
           parentSessionId: detail.parentSessionId,
           createdAt: detail.createdAt,
+          lastActiveAt: detail.lastActiveAt,
           sseConnected: response.meta.sseConnected,
         };
       }
