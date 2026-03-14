@@ -6,6 +6,7 @@ export interface AgentConfig {
   jwtSecret?: string;
   claudeHistoryDir?: string;    // default: ~/.claude
   source?: "opencode" | "claude-code" | "both";  // default: "opencode"
+  openCodeDbPath?: string;      // default: ~/.local/share/opencode/opencode.db
 }
 
 export interface ApiResponse<T = unknown> {

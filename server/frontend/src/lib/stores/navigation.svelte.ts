@@ -1,5 +1,30 @@
 
-type ViewType = 'overview' | 'session-detail';
+type ViewType = 
+  | 'overview'
+  | 'session-detail'
+  | 'token-cost'
+  | 'code-impact'
+  | 'timeline'
+  | 'projects'
+  | 'context-recovery';
+
+const VALID_VIEWS: ViewType[] = [
+  'overview',
+  'session-detail',
+  'token-cost',
+  'code-impact',
+  'timeline',
+  'projects',
+  'context-recovery',
+];
+
+const ENRICHMENT_VIEWS: ViewType[] = [
+  'token-cost',
+  'code-impact',
+  'timeline',
+  'projects',
+  'context-recovery',
+];
 
 interface NavigationState {
   currentView: ViewType;
@@ -12,10 +37,20 @@ function getInitialState(): NavigationState {
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session');
+    const view = params.get('view') as ViewType | null;
+
     if (sessionId) {
       return {
         currentView: 'session-detail',
         sessionId,
+        previousScrollPosition: 0,
+      };
+    }
+
+    if (view && VALID_VIEWS.includes(view)) {
+      return {
+        currentView: view,
+        sessionId: null,
         previousScrollPosition: 0,
       };
     }
@@ -32,7 +67,19 @@ let state = $state<NavigationState>(getInitialState());
 // Browser back button support
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', () => {
-    popToOverview();
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session');
+    const view = params.get('view') as ViewType | null;
+
+    if (sessionId) {
+      state.currentView = 'session-detail';
+      state.sessionId = sessionId;
+    } else if (view && VALID_VIEWS.includes(view)) {
+      state.currentView = view;
+      state.sessionId = null;
+    } else {
+      popToOverview();
+    }
   });
 }
 
@@ -58,6 +105,31 @@ export function pushSessionDetail(sessionId: string): void {
   if (typeof window !== 'undefined') {
     const url = new URL(window.location.href);
     url.searchParams.set('session', sessionId);
+    url.searchParams.delete('view');
+    history.pushState(null, '', url.toString());
+  }
+}
+
+export function pushView(view: ViewType, params?: Record<string, string>): void {
+  state.currentView = view;
+  state.sessionId = null;
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('session');
+
+    if (view === 'overview') {
+      url.searchParams.delete('view');
+    } else {
+      url.searchParams.set('view', view);
+    }
+
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.set(key, value);
+      }
+    }
+
     history.pushState(null, '', url.toString());
   }
 }
@@ -72,6 +144,7 @@ export function popToOverview(): void {
   if (typeof window !== 'undefined') {
     const url = new URL(window.location.href);
     url.searchParams.delete('session');
+    url.searchParams.delete('view');
     history.pushState(null, '', url.toString());
 
     // Restore scroll position after DOM update
@@ -86,4 +159,8 @@ export function popToOverview(): void {
 
 export function isDetailView(): boolean {
   return state.currentView === 'session-detail';
+}
+
+export function isEnrichmentPage(): boolean {
+  return ENRICHMENT_VIEWS.includes(state.currentView);
 }

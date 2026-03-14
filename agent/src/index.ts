@@ -29,6 +29,9 @@ function loadConfig(): AgentConfig {
       : undefined,
     source: (process.env['SOURCE'] as AgentConfig['source']) ?? 'opencode',
     jwtSecret: process.env['JWT_SECRET'] ?? '',
+    openCodeDbPath: process.env['OPENCODE_DB_PATH']
+      ? resolveHistoryDir(process.env['OPENCODE_DB_PATH'])
+      : undefined,
   };
 }
 

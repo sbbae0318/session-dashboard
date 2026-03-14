@@ -1,4 +1,4 @@
-import { get as httpGet, type IncomingMessage } from 'node:http';
+import { get as httpGet, request as httpRequest, type IncomingMessage } from 'node:http';
 import type { MachineConfig } from '../config/machines.js';
 
 export interface MachineStatus {
@@ -241,6 +241,17 @@ export class MachineManager {
     return { sessions: allSessions, statuses: allStatuses, cachedDetails: allCachedDetails };
   }
 
+  async fetchFromMachine<T = unknown>(machine: MachineConfig, path: string, options?: { method?: 'GET' | 'POST' }): Promise<T> {
+    const url = `http://${machine.host}:${machine.port}${path}`;
+    const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
+    if (options?.method === 'POST') {
+      const raw = await this.httpPost(url, headers, machine.timeout);
+      return JSON.parse(raw) as T;
+    }
+    const raw = await this.httpGet(url, headers, machine.timeout);
+    return JSON.parse(raw) as T;
+  }
+
   private async pollMachineCached(machine: MachineConfig): Promise<{
     sessions: Array<Record<string, unknown>>;
     statuses: Record<string, { type: string }>;
@@ -457,9 +468,6 @@ export class MachineManager {
     };
   }
 
-  /**
-   * HTTP GET with timeout and Bearer auth.
-   */
   private httpGet(url: string, headers: Record<string, string>, timeout?: number): Promise<string> {
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
@@ -482,6 +490,41 @@ export class MachineManager {
         clearTimeout(timeoutId);
         reject(error);
       });
+    });
+  }
+
+  private httpPost(url: string, headers: Record<string, string>, timeout?: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout ?? 60_000);
+
+      const req = httpRequest({
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      }, (response: IncomingMessage) => {
+        let data = '';
+        response.on('data', (chunk: Buffer) => { data += chunk; });
+        response.on('end', () => {
+          clearTimeout(timeoutId);
+          if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(data);
+          } else {
+            reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+          }
+        });
+      });
+
+      req.on('error', (error: Error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+
+      req.end();
     });
   }
 
