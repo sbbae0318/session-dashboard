@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     fetchTokenStats,
     getTokenData,
@@ -13,9 +13,19 @@
   let available = $derived(isTokenAvailable());
   let loading = $derived(isTokenLoading());
 
+  let prevMachineId: string | null = null;
+
+  onMount(() => {
+    prevMachineId = getSelectedMachineId();
+    fetchTokenStats();
+  });
+
   $effect(() => {
-    getSelectedMachineId();
-    untrack(() => { fetchTokenStats(); });
+    const mid = getSelectedMachineId();
+    if (prevMachineId !== null && mid !== prevMachineId) {
+      prevMachineId = mid;
+      setTimeout(() => fetchTokenStats(), 0);
+    }
   });
 
   function formatTokens(n: number): string {

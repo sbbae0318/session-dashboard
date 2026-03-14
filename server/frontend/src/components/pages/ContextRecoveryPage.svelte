@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     getRecoveryData,
     isRecoveryAvailable,
@@ -48,9 +48,19 @@
     pushSessionDetail(sessionId);
   }
 
+  let prevMachineId: string | null = null;
+
+  onMount(() => {
+    prevMachineId = getSelectedMachineId();
+    fetchRecoveryData();
+  });
+
   $effect(() => {
-    getSelectedMachineId();
-    untrack(() => { fetchRecoveryData(); });
+    const mid = getSelectedMachineId();
+    if (prevMachineId !== null && mid !== prevMachineId) {
+      prevMachineId = mid;
+      setTimeout(() => fetchRecoveryData(), 0);
+    }
   });
 </script>
 

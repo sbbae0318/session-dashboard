@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     fetchImpactData,
     getImpactData,
@@ -49,9 +49,19 @@
     return item.additions === 0 && item.deletions === 0;
   }
 
+  let prevMachineId: string | null = null;
+
+  onMount(() => {
+    prevMachineId = getSelectedMachineId();
+    fetchImpactData();
+  });
+
   $effect(() => {
-    getSelectedMachineId();
-    untrack(() => { fetchImpactData(); });
+    const mid = getSelectedMachineId();
+    if (prevMachineId !== null && mid !== prevMachineId) {
+      prevMachineId = mid;
+      setTimeout(() => fetchImpactData(), 0);
+    }
   });
 </script>
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     fetchProjectsData,
     getProjectsData,
@@ -30,9 +30,19 @@
     })
   );
 
+  let prevMachineId: string | null = null;
+
+  onMount(() => {
+    prevMachineId = getSelectedMachineId();
+    fetchProjectsData();
+  });
+
   $effect(() => {
-    getSelectedMachineId();
-    untrack(() => { fetchProjectsData(); });
+    const mid = getSelectedMachineId();
+    if (prevMachineId !== null && mid !== prevMachineId) {
+      prevMachineId = mid;
+      setTimeout(() => fetchProjectsData(), 0);
+    }
   });
 
   function toggleProject(id: string) {
