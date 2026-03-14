@@ -31,7 +31,8 @@ import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
-import { OpenCodeDBReader, type EnrichmentResponse } from './opencode-db-reader.js';
+import { spawn } from 'node:child_process';
+import { OpenCodeDBReader, type EnrichmentResponse, type TokensData } from './opencode-db-reader.js';
 import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -340,7 +341,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
         }
         return allStats;
       }
-      return enrichResponse(() => ocDbReader!.getAllProjectsTokenStats());
+      return enrichResponse<TokensData>(() => ocDbReader!.getTokensData());
     },
   );
 
@@ -367,14 +368,100 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     return enrichResponse(() => ocDbReader!.getAllProjects());
   });
 
-  app.get<{ Querystring: { sessionId?: string } }>(
+  app.get<{ Querystring: { sessionId?: string; limit?: string } }>(
     '/api/enrichment/recovery',
     async (request) => {
-      const { sessionId } = request.query;
-      if (!sessionId) {
-        return { data: null, available: ocDbReader?.isAvailable() ?? false, error: 'sessionId required', cachedAt: Date.now() };
+      const { sessionId, limit } = request.query;
+      if (sessionId) {
+        return enrichResponse(() => ocDbReader!.getSessionRecoveryContext(sessionId));
       }
-      return enrichResponse(() => ocDbReader!.getSessionRecoveryContext(sessionId));
+      const limitNum = parseInt(limit ?? '20', 10);
+      return enrichResponse(() => ocDbReader!.getAllRecoveryContexts({ limit: limitNum }));
+    },
+  );
+
+  const summaryCache = new Map<string, { summary: string; generatedAt: number }>();
+
+  app.post<{ Params: { sessionId: string } }>(
+    '/api/enrichment/recovery/:sessionId/summarize',
+    async (request) => {
+      const { sessionId } = request.params;
+
+      const cached = summaryCache.get(sessionId);
+      if (cached && (Date.now() - cached.generatedAt) < 3_600_000) {
+        return { summary: cached.summary, generatedAt: cached.generatedAt, cached: true };
+      }
+
+      if (!ocDbReader || !ocDbReader.isAvailable()) {
+        return { summary: null, error: 'DB not available' };
+      }
+
+      const exists = ocDbReader.getSessionRecoveryContext(sessionId);
+      if (!exists) {
+        return { summary: null, error: 'Session not found' };
+      }
+
+      const messages = ocDbReader.getSessionMessages(sessionId, { limit: 30 });
+      if (messages.length === 0) {
+        return { summary: null, error: 'No messages found' };
+      }
+
+      const formatted = messages.map(m => {
+        const d = new Date(m.time * 1000);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `[${hh}:${mm}] (${m.role}) ${m.content}`;
+      }).join('\n');
+
+      const prompt = `다음은 OpenCode AI 코딩 세션의 메시지 기록입니다.
+이 세션에서 무슨 작업을 했는지 타임라인 형식으로 간결하게 요약하세요.
+
+규칙:
+- 한국어로 작성
+- 각 항목은 "[시간] 작업내용 → 결과" 형식
+- 성공/실패/진행중 표시
+- 최대 8줄
+- 문제가 있었다면 어떤 문제인지 명시
+
+세션: ${exists.title ?? sessionId}
+프로젝트: ${exists.directory ?? 'unknown'}
+
+메시지 기록:
+${formatted}`;
+
+      try {
+        const summary = await new Promise<string>((resolve, reject) => {
+          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5'], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 60_000,
+          });
+
+          let stdout = '';
+          let stderr = '';
+          child.stdout.on('data', (chunk: Buffer) => { stdout += chunk; });
+          child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
+
+          child.on('close', (code) => {
+            if (code === 0) {
+              resolve(stdout.trim());
+            } else {
+              reject(new Error(`claude -p exited with code ${code}: ${stderr}`));
+            }
+          });
+
+          child.on('error', reject);
+          child.stdin.write(prompt);
+          child.stdin.end();
+        });
+
+        const result = { summary, generatedAt: Date.now() };
+        summaryCache.set(sessionId, result);
+        return { ...result, cached: false };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[summarize] claude -p failed:', msg);
+        return { summary: null, error: 'Summary generation failed' };
+      }
     },
   );
 

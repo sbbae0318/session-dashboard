@@ -33,6 +33,29 @@ function createTestDb(): Database.Database {
   return db;
 }
 
+function makeAssistantData(model: string, tokens: {
+  input: number; output: number; reasoning?: number;
+  cache?: { read: number; write: number };
+}): string {
+  return JSON.stringify({
+    role: 'assistant',
+    modelID: model,
+    providerID: 'anthropic',
+    cost: 0,
+    tokens: {
+      total: tokens.input + tokens.output + (tokens.reasoning ?? 0)
+        + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0),
+      input: tokens.input,
+      output: tokens.output,
+      reasoning: tokens.reasoning ?? 0,
+      cache: {
+        read: tokens.cache?.read ?? 0,
+        write: tokens.cache?.write ?? 0,
+      },
+    },
+  });
+}
+
 function seedTestData(db: Database.Database): void {
   db.exec(`
     INSERT INTO project VALUES ('proj_1', '/home/user/my-app', 1700000000, 1700100000, NULL, NULL);
@@ -46,25 +69,32 @@ function seedTestData(db: Database.Database): void {
     INSERT INTO session VALUES ('ses_4', 'proj_1', NULL, '/home/user/my-app', 'Empty session', 'v1', 'empty', NULL, NULL, NULL, 1700050000, 1700060000);
   `);
 
-  const assistantMsg = (id: string, sessionId: string, time: number, tokens: { input: number; output: number }, cost: number, model: string) =>
-    `INSERT INTO message VALUES ('${id}', '${sessionId}', ${time}, ${time}, '${JSON.stringify({
-      role: 'assistant', modelID: model, providerID: 'anthropic', cost,
-      tokens: { input: tokens.input, output: tokens.output, reasoning: 0, cache: { read: 0, write: 0 } },
-    }).replace(/'/g, "''")}')`;
+  const insertMsg = db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
 
+  // ses_1: two sonnet messages with cache tokens (realistic pattern)
+  insertMsg.run('msg_1', 'ses_1', 1700001000, 1700001000,
+    makeAssistantData('claude-sonnet-4-20250514', {
+      input: 1, output: 500, cache: { read: 43000, write: 2000 },
+    }));
+  insertMsg.run('msg_2', 'ses_1', 1700002000, 1700002000,
+    makeAssistantData('claude-sonnet-4-20250514', {
+      input: 2, output: 800, cache: { read: 44000, write: 100 },
+    }));
+
+  // ses_2: one opus message
+  insertMsg.run('msg_3', 'ses_2', 1700011000, 1700011000,
+    makeAssistantData('claude-opus-4-6', {
+      input: 1, output: 200, reasoning: 50, cache: { read: 10000, write: 500 },
+    }));
+
+  // user messages
   const userMsg = (id: string, sessionId: string, time: number, text: string) =>
-    `INSERT INTO message VALUES ('${id}', '${sessionId}', ${time}, ${time}, '${JSON.stringify({
-      role: 'user', content: text,
-    }).replace(/'/g, "''")}')`;
+    JSON.stringify({ role: 'user', content: text });
 
-  db.exec(assistantMsg('msg_1', 'ses_1', 1700001000, { input: 1000, output: 500 }, 0.05, 'claude-sonnet-4-20250514'));
-  db.exec(assistantMsg('msg_2', 'ses_1', 1700002000, { input: 2000, output: 800 }, 0.08, 'claude-sonnet-4-20250514'));
-  db.exec(assistantMsg('msg_3', 'ses_2', 1700011000, { input: 500, output: 200 }, 0.02, 'claude-opus-4-20250514'));
-
-  db.exec(userMsg('msg_u1', 'ses_1', 1700000500, 'implement user authentication'));
-  db.exec(userMsg('msg_u2', 'ses_1', 1700001500, 'add password hashing'));
-  db.exec(userMsg('msg_u3', 'ses_1', 1700002500, 'write tests for auth module'));
-  db.exec(userMsg('msg_u4', 'ses_2', 1700010500, 'fix the login bug'));
+  insertMsg.run('msg_u1', 'ses_1', 1700000500, 1700000500, userMsg('msg_u1', 'ses_1', 1700000500, 'implement user authentication'));
+  insertMsg.run('msg_u2', 'ses_1', 1700001500, 1700001500, userMsg('msg_u2', 'ses_1', 1700001500, 'add password hashing'));
+  insertMsg.run('msg_u3', 'ses_1', 1700002500, 1700002500, userMsg('msg_u3', 'ses_1', 1700002500, 'write tests for auth module'));
+  insertMsg.run('msg_u4', 'ses_2', 1700010500, 1700010500, userMsg('msg_u4', 'ses_2', 1700010500, 'fix the login bug'));
 
   db.exec(`
     INSERT INTO todo VALUES ('ses_1', 'Implement login', 'completed', 'high', 0, 1700001000, 1700002000);
@@ -86,8 +116,6 @@ describe('OpenCodeDBReader', () => {
     try { reader.close(); } catch { /* already closed */ }
   });
 
-  // ── 1. Construction + schema validation ──
-
   it('creates from in-memory database with valid schema', () => {
     expect(reader.isAvailable()).toBe(true);
   });
@@ -97,9 +125,9 @@ describe('OpenCodeDBReader', () => {
     expect(reader.isAvailable()).toBe(false);
   });
 
-  // ── 2. getAllProjects ──
+  // ── getAllProjects ──
 
-  it('getAllProjects() returns project summaries with session counts and token totals', () => {
+  it('getAllProjects() returns project summaries with calculated cost', () => {
     const projects = reader.getAllProjects();
     expect(projects).toHaveLength(2);
 
@@ -115,7 +143,7 @@ describe('OpenCodeDBReader', () => {
     expect(proj2.sessionCount).toBe(1);
   });
 
-  // ── 3. getProjectSessions ──
+  // ── getProjectSessions ──
 
   it('getProjectSessions() returns sessions for a project with model info', () => {
     const sessions = reader.getProjectSessions('proj_1');
@@ -130,34 +158,138 @@ describe('OpenCodeDBReader', () => {
     expect(reader.getProjectSessions('nonexistent')).toEqual([]);
   });
 
-  // ── 4. getSessionTokenStats ──
+  // ── getSessionTokenStats ──
 
-  it('getSessionTokenStats() returns token breakdown for a session', () => {
+  it('getSessionTokenStats() returns token breakdown including cache tokens', () => {
     const stats = reader.getSessionTokenStats('ses_1');
     expect(stats).not.toBeNull();
-    expect(stats!.totalInput).toBe(3000);
-    expect(stats!.totalOutput).toBe(1300);
-    expect(stats!.totalCost).toBeCloseTo(0.13, 5);
+    expect(stats!.sessionId).toBe('ses_1');
+    expect(stats!.totalInput).toBe(3); // 1 + 2
+    expect(stats!.totalOutput).toBe(1300); // 500 + 800
+    expect(stats!.cacheRead).toBe(87000); // 43000 + 44000
+    expect(stats!.cacheWrite).toBe(2100); // 2000 + 100
+    expect(stats!.totalReasoning).toBe(0);
     expect(stats!.models).toContain('claude-sonnet-4-20250514');
+    expect(stats!.msgCount).toBe(2);
+  });
+
+  it('getSessionTokenStats() calculates cost using model pricing UDF', () => {
+    const stats = reader.getSessionTokenStats('ses_1')!;
+    // sonnet-4: input=$3, output=$15, cacheRead=$0.30, cacheWrite=$3.75 (per MTok)
+    // msg_1: input=1*3 + output=500*15 + cacheRead=43000*0.30 + cacheWrite=2000*3.75
+    // msg_2: input=2*3 + output=800*15 + cacheRead=44000*0.30 + cacheWrite=100*3.75
+    const expectedCost = (
+      (1 * 3 + 500 * 15 + 43000 * 0.30 + 2000 * 3.75) +
+      (2 * 3 + 800 * 15 + 44000 * 0.30 + 100 * 3.75)
+    ) / 1_000_000;
+    expect(stats.totalCost).toBeCloseTo(expectedCost, 8);
+    expect(stats.totalCost).toBeGreaterThan(0);
+  });
+
+  it('getSessionTokenStats() includes reasoning tokens billed at output rate', () => {
+    const stats = reader.getSessionTokenStats('ses_2')!;
+    // opus-4-6: input=$15, output=$75, cacheRead=$1.50, cacheWrite=$18.75
+    // input=1*15 + output=200*75 + reasoning=50*75 + cacheRead=10000*1.50 + cacheWrite=500*18.75
+    const expectedCost = (1 * 15 + 200 * 75 + 50 * 75 + 10000 * 1.50 + 500 * 18.75) / 1_000_000;
+    expect(stats.totalCost).toBeCloseTo(expectedCost, 8);
+    expect(stats.totalReasoning).toBe(50);
   });
 
   it('getSessionTokenStats() returns null for session with no assistant messages', () => {
     expect(reader.getSessionTokenStats('ses_3')).toBeNull();
   });
 
-  // ── 5. getAllProjectsTokenStats ──
+  // ── getAllProjectsTokenStats ──
 
-  it('getAllProjectsTokenStats() aggregates tokens per project', () => {
+  it('getAllProjectsTokenStats() aggregates tokens per project with cache fields', () => {
     const stats = reader.getAllProjectsTokenStats();
     expect(stats.length).toBeGreaterThanOrEqual(1);
 
     const proj1Stats = stats.find(s => s.projectId === 'proj_1')!;
-    expect(proj1Stats.totalInput).toBe(3500);
-    expect(proj1Stats.totalOutput).toBe(1500);
-    expect(proj1Stats.totalCost).toBeCloseTo(0.15, 5);
+    expect(proj1Stats.totalInput).toBe(4); // 1 + 2 + 1
+    expect(proj1Stats.totalOutput).toBe(1500); // 500 + 800 + 200
+    expect(proj1Stats.totalReasoning).toBe(50);
+    expect(proj1Stats.cacheRead).toBe(97000); // 43000 + 44000 + 10000
+    expect(proj1Stats.cacheWrite).toBe(2600); // 2000 + 100 + 500
+    expect(proj1Stats.totalCost).toBeGreaterThan(0);
   });
 
-  // ── 6. getSessionCodeImpact ──
+  // ── getTokensData ──
+
+  it('getTokensData() returns sessions array and grandTotal matching TokensData format', () => {
+    const tokensData = reader.getTokensData();
+
+    expect(tokensData.sessions).toBeInstanceOf(Array);
+    expect(tokensData.sessions.length).toBeGreaterThanOrEqual(2);
+
+    const ses1 = tokensData.sessions.find(s => s.sessionId === 'ses_1')!;
+    expect(ses1.sessionTitle).toBe('Implement auth');
+    expect(ses1.projectId).toBe('proj_1');
+    expect(ses1.directory).toBe('/home/user/my-app');
+    expect(ses1.cacheRead).toBe(87000);
+    expect(ses1.cacheWrite).toBe(2100);
+    expect(ses1.totalCost).toBeGreaterThan(0);
+    expect(ses1.models).toContain('claude-sonnet-4-20250514');
+    expect(ses1.agents).toEqual([]);
+    expect(ses1.msgCount).toBe(2);
+
+    expect(tokensData.grandTotal.input).toBeGreaterThan(0);
+    expect(tokensData.grandTotal.output).toBeGreaterThan(0);
+    expect(tokensData.grandTotal.cacheRead).toBeGreaterThan(0);
+    expect(tokensData.grandTotal.cacheWrite).toBeGreaterThan(0);
+    expect(tokensData.grandTotal.cost).toBeGreaterThan(0);
+  });
+
+  it('getTokensData() grandTotal sums all sessions correctly', () => {
+    const tokensData = reader.getTokensData();
+    const sumInput = tokensData.sessions.reduce((a, s) => a + s.totalInput, 0);
+    const sumCost = tokensData.sessions.reduce((a, s) => a + s.totalCost, 0);
+
+    expect(tokensData.grandTotal.input).toBe(sumInput);
+    expect(tokensData.grandTotal.cost).toBeCloseTo(sumCost, 10);
+  });
+
+  // ── Cost calculation with different models ──
+
+  it('calculates zero cost for unknown models', () => {
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_unknown', 'ses_3', 1700031000, 1700031000,
+      makeAssistantData('unknown-model-xyz', {
+        input: 1000, output: 500, cache: { read: 5000, write: 100 },
+      }));
+
+    const stats = reader.getSessionTokenStats('ses_3');
+    expect(stats).not.toBeNull();
+    expect(stats!.totalCost).toBe(0);
+  });
+
+  it('calculates zero cost for free models', () => {
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_free', 'ses_3', 1700031000, 1700031000,
+      makeAssistantData('kimi-k2.5-free', {
+        input: 5000, output: 2000, cache: { read: 10000, write: 500 },
+      }));
+
+    const stats = reader.getSessionTokenStats('ses_3');
+    expect(stats).not.toBeNull();
+    expect(stats!.totalCost).toBe(0);
+  });
+
+  // ── SQLite UDF ──
+
+  it('model_price UDF is registered and returns correct values', () => {
+    const row = testDb.prepare(
+      "SELECT model_price('claude-sonnet-4-20250514', 'input') AS price",
+    ).get() as { price: number };
+    expect(row.price).toBe(3);
+
+    const rowCacheRead = testDb.prepare(
+      "SELECT model_price('claude-opus-4-6', 'cacheRead') AS price",
+    ).get() as { price: number };
+    expect(rowCacheRead.price).toBe(1.5);
+  });
+
+  // ── getSessionCodeImpact ──
 
   it('getSessionCodeImpact() returns additions/deletions/files', () => {
     const impact = reader.getSessionCodeImpact('ses_1');
@@ -175,7 +307,7 @@ describe('OpenCodeDBReader', () => {
     expect(reader.getSessionCodeImpact('nonexistent')).toBeNull();
   });
 
-  // ── 7. getAllSessionsCodeImpact ──
+  // ── getAllSessionsCodeImpact ──
 
   it('getAllSessionsCodeImpact() returns non-empty impacts with pagination', () => {
     const impacts = reader.getAllSessionsCodeImpact({ limit: 10 });
@@ -190,7 +322,7 @@ describe('OpenCodeDBReader', () => {
     expect(impacts).toHaveLength(0);
   });
 
-  // ── 8. getSessionTimeline ──
+  // ── getSessionTimeline ──
 
   it('getSessionTimeline() returns entries within time range', () => {
     const entries = reader.getSessionTimeline({ from: 1700000000, to: 1700100000 });
@@ -211,7 +343,7 @@ describe('OpenCodeDBReader', () => {
     expect(reader.getSessionTimeline({ from: 9999999999, to: 9999999999 })).toEqual([]);
   });
 
-  // ── 9. getSessionRecoveryContext ──
+  // ── getSessionRecoveryContext ──
 
   it('getSessionRecoveryContext() returns last user messages and todos', () => {
     const ctx = reader.getSessionRecoveryContext('ses_1');
@@ -227,14 +359,14 @@ describe('OpenCodeDBReader', () => {
     expect(reader.getSessionRecoveryContext('nonexistent')).toBeNull();
   });
 
-  // ── 10. close() ──
+  // ── close() ──
 
   it('close() prevents further operations', () => {
     reader.close();
     expect(() => reader.getAllProjects()).toThrow();
   });
 
-  // ── 11. Empty database ──
+  // ── Empty database ──
 
   it('handles empty database gracefully', () => {
     const emptyDb = createTestDb();
@@ -248,16 +380,113 @@ describe('OpenCodeDBReader', () => {
     expect(emptyReader.getSessionTimeline({ from: 0, to: 9999999999 })).toEqual([]);
     expect(emptyReader.getSessionRecoveryContext('any')).toBeNull();
 
+    const tokensData = emptyReader.getTokensData();
+    expect(tokensData.sessions).toEqual([]);
+    expect(tokensData.grandTotal).toEqual({
+      input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0,
+    });
+
     emptyReader.close();
   });
 
-  // ── 12. Invalid DB path ──
+  // ── getAllRecoveryContexts ──
+
+  it('getAllRecoveryContexts() returns idle sessions with all fields', () => {
+    const contexts = reader.getAllRecoveryContexts({ idleThresholdMs: 0 });
+    expect(contexts.length).toBeGreaterThanOrEqual(1);
+
+    const ctx = contexts.find(c => c.sessionId === 'ses_1');
+    expect(ctx).toBeDefined();
+    expect(ctx!.title).toBe('Implement auth');
+    expect(ctx!.directory).toBe('/home/user/my-app');
+    expect(ctx!.lastActivityAt).toBe(1700010000);
+    expect(ctx!.lastUserMessages.length).toBeGreaterThan(0);
+    expect(ctx!.codeImpact).not.toBeNull();
+    expect(ctx!.codeImpact!.additions).toBe(120);
+    expect(ctx!.todos).toHaveLength(2);
+  });
+
+  it('getAllRecoveryContexts() respects limit', () => {
+    const contexts = reader.getAllRecoveryContexts({ limit: 2, idleThresholdMs: 0 });
+    expect(contexts).toHaveLength(2);
+  });
+
+  it('getAllRecoveryContexts() filters by idle threshold', () => {
+    const futureThreshold = Date.now() + 100_000_000;
+    const contexts = reader.getAllRecoveryContexts({ idleThresholdMs: -futureThreshold });
+    expect(contexts.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('getAllRecoveryContexts() returns lastTools from assistant messages', () => {
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_tool_1', 'ses_1', 1700003000, 1700003000,
+      JSON.stringify({ role: 'assistant', tool: 'mcp_bash', content: 'ran command' }));
+    insertMsg.run('msg_tool_2', 'ses_1', 1700004000, 1700004000,
+      JSON.stringify({ role: 'assistant', tool: 'mcp_edit', content: 'edited file' }));
+
+    const contexts = reader.getAllRecoveryContexts({ idleThresholdMs: 0 });
+    const ctx = contexts.find(c => c.sessionId === 'ses_1');
+    expect(ctx).toBeDefined();
+    expect(ctx!.lastTools).toContain('mcp_edit');
+    expect(ctx!.lastTools).toContain('mcp_bash');
+  });
+
+  // ── getSessionMessages ──
+
+  it('getSessionMessages() returns messages in chronological order', () => {
+    const messages = reader.getSessionMessages('ses_1');
+    expect(messages.length).toBeGreaterThanOrEqual(3);
+
+    for (let i = 1; i < messages.length; i++) {
+      expect(messages[i].time).toBeGreaterThanOrEqual(messages[i - 1].time);
+    }
+  });
+
+  it('getSessionMessages() extracts role and content', () => {
+    const messages = reader.getSessionMessages('ses_1');
+    const userMsgs = messages.filter(m => m.role === 'user');
+    expect(userMsgs.length).toBeGreaterThanOrEqual(3);
+    expect(userMsgs.some(m => m.content.includes('implement user authentication'))).toBe(true);
+  });
+
+  it('getSessionMessages() respects limit', () => {
+    const messages = reader.getSessionMessages('ses_1', { limit: 2 });
+    expect(messages).toHaveLength(2);
+  });
+
+  it('getSessionMessages() returns empty for nonexistent session', () => {
+    expect(reader.getSessionMessages('nonexistent')).toEqual([]);
+  });
+
+  it('getSessionMessages() truncates content to 500 chars', () => {
+    const longContent = 'x'.repeat(1000);
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_long', 'ses_3', 1700031000, 1700031000,
+      JSON.stringify({ role: 'user', content: longContent }));
+
+    const messages = reader.getSessionMessages('ses_3');
+    const longMsg = messages.find(m => m.content.includes('xxx'));
+    expect(longMsg).toBeDefined();
+    expect(longMsg!.content.length).toBeLessThanOrEqual(500);
+  });
+
+  it('getSessionMessages() includes tool name if present', () => {
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_with_tool', 'ses_3', 1700032000, 1700032000,
+      JSON.stringify({ role: 'assistant', content: 'result', tool: 'mcp_grep' }));
+
+    const messages = reader.getSessionMessages('ses_3');
+    const toolMsg = messages.find(m => m.tool === 'mcp_grep');
+    expect(toolMsg).toBeDefined();
+  });
+
+  // ── Invalid DB path ──
 
   it('constructor with invalid path throws', () => {
     expect(() => new OpenCodeDBReader('/nonexistent/path/db.sqlite')).toThrow();
   });
 
-  // ── 13. Schema validation ──
+  // ── Schema validation ──
 
   it('rejects database missing required tables', () => {
     const badDb = new Database(':memory:');

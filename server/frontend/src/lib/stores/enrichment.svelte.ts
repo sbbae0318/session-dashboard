@@ -82,6 +82,8 @@ export interface RecoveryContext {
   deletions: number;
   files: number;
   todos: Array<{ content: string; status: string; priority: string }>;
+  summary?: string;
+  summaryGeneratedAt?: number;
 }
 
 let tokenData = $state<TokensData | null>(null);
@@ -215,5 +217,37 @@ export async function fetchRecoveryData(): Promise<void> {
     recoveryAvailable = false;
   } finally {
     recoveryLoading = false;
+  }
+}
+
+let summaryCache = $state<Map<string, { summary: string; generatedAt: number }>>(new Map());
+let summaryLoading = $state<Set<string>>(new Set());
+
+export function getSummary(sessionId: string): string | null {
+  return summaryCache.get(sessionId)?.summary ?? null;
+}
+
+export function isSummaryLoading(sessionId: string): boolean {
+  return summaryLoading.has(sessionId);
+}
+
+export async function fetchSummary(sessionId: string): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  summaryLoading = new Set([...summaryLoading, sessionId]);
+  try {
+    const res = await fetchJSON<{ summary: string; generatedAt: number }>(
+      `/api/enrichment/${machineId}/recovery/${sessionId}/summarize`,
+      { method: 'POST' },
+    );
+    if (res.summary) {
+      summaryCache = new Map([...summaryCache, [sessionId, res]]);
+    }
+  } catch (e) {
+    console.error('Failed to fetch summary:', e);
+  } finally {
+    const next = new Set(summaryLoading);
+    next.delete(sessionId);
+    summaryLoading = next;
   }
 }

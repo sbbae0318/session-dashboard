@@ -84,6 +84,8 @@ export interface RecoveryContext {
   deletions: number;
   files: number;
   todos: Array<{ content: string; status: string; priority: string }>;
+  summary?: string;
+  summaryGeneratedAt?: number;
 }
 
 export type EnrichmentFeature = 'tokens' | 'impact' | 'timeline' | 'projects' | 'recovery';

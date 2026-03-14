@@ -91,7 +91,7 @@
       </svg>
       <p class="empty-title">데이터 없음</p>
       <p class="empty-desc">
-        {!available ? 'Enrichment DB가 없거나 아직 생성되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
+        {!available ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
       </p>
     </div>
   {:else}

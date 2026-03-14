@@ -67,6 +67,20 @@ export class EnrichmentModule implements BackendModule {
         },
       );
     }
+
+    app.post<{ Params: { machineId: string; sessionId: string } }>(
+      '/api/enrichment/:machineId/recovery/:sessionId/summarize',
+      async (req) => {
+        const { machineId, sessionId } = req.params;
+        const machine = this.machineManager.getMachines().find(m => m.id === machineId);
+        if (!machine) return { error: 'Machine not found' };
+        return this.machineManager.fetchFromMachine(
+          machine,
+          `/api/enrichment/recovery/${sessionId}/summarize`,
+          { method: 'POST' },
+        );
+      },
+    );
   }
 
   async start(): Promise<void> {
