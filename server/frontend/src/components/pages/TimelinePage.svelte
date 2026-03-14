@@ -1,12 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getEnrichmentState, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
+  import { enrichmentStore, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
-
-  let timelineLoading = $derived(getEnrichmentState().timelineLoading);
-  let timelineAvailable = $derived(getEnrichmentState().timelineAvailable);
-  let timelineData = $derived(getEnrichmentState().timelineData);
 
   const SVG_WIDTH = 900;
   const LANE_HEIGHT = 40;
@@ -18,12 +14,12 @@
   let timeRange = $derived(getTimeRange(selectedPreset));
 
   let filteredSessions = $derived(
-    (timelineData ?? []).filter(s =>
+    ($enrichmentStore.timelineData ?? []).filter(s =>
       selectedProject === 'all' || s.projectId === selectedProject
     )
   );
 
-  let projects = $derived([...new Set((timelineData ?? []).map(s => s.projectId))]);
+  let projects = $derived([...new Set(($enrichmentStore.timelineData ?? []).map(s => s.projectId))]);
 
   let svgHeight = $derived(AXIS_HEIGHT + PADDING_TOP + filteredSessions.length * LANE_HEIGHT + 10);
 
@@ -75,9 +71,9 @@
     </select>
   </div>
 
-  {#if timelineLoading}
+  {#if $enrichmentStore.timelineLoading}
     <div class="loading">타임라인 로딩 중...</div>
-  {:else if !timelineAvailable}
+  {:else if !$enrichmentStore.timelineAvailable}
     <div class="empty-state" data-testid="empty-state">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</div>
   {:else if filteredSessions.length === 0}
     <div class="empty-state" data-testid="empty-state">타임라인 데이터 없음</div>

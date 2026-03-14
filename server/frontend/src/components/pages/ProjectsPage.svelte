@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getEnrichmentState,
+    enrichmentStore,
     fetchProjectsData,
     type ProjectSummary,
   } from '../../lib/stores/enrichment.svelte';
@@ -11,17 +11,13 @@
   import { relativeTime } from '../../lib/utils';
   import type { DashboardSession } from '../../types';
 
-  let projectsLoading = $derived(getEnrichmentState().projectsLoading);
-  let projectsAvailable = $derived(getEnrichmentState().projectsAvailable);
-  let projectsData = $derived(getEnrichmentState().projectsData);
-
   type SortOption = 'recent' | 'sessions' | 'tokens';
   let sortBy = $state<SortOption>('recent');
 
   let expandedProjects = $state<Set<string>>(new Set());
 
   let sortedProjects = $derived(
-    [...(projectsData ?? [])].sort((a, b) => {
+    [...($enrichmentStore.projectsData ?? [])].sort((a, b) => {
       if (sortBy === 'recent') return b.lastActivityAt - a.lastActivityAt;
       if (sortBy === 'sessions') return b.sessionCount - a.sessionCount;
       return b.totalTokens - a.totalTokens;
@@ -92,15 +88,15 @@
     </div>
   </div>
 
-  {#if projectsLoading}
+  {#if $enrichmentStore.projectsLoading}
     <div class="loading-state">데이터 로딩 중…</div>
-  {:else if !projectsAvailable}
+  {:else if !$enrichmentStore.projectsAvailable}
     <div class="unavailable-state" data-testid="empty-state">
       <div class="unavailable-icon">⚠</div>
       <p>프로젝트 데이터를 불러올 수 없습니다.</p>
       <p class="unavailable-hint">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</p>
     </div>
-  {:else if !projectsData || sortedProjects.length === 0}
+  {:else if !$enrichmentStore.projectsData || sortedProjects.length === 0}
     <div class="empty-state-container" data-testid="empty-state">
       <div class="empty-icon">📁</div>
       <p class="empty-title">등록된 프로젝트 없음</p>

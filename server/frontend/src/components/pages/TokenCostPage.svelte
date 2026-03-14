@@ -1,12 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getEnrichmentState, fetchTokenStats } from '../../lib/stores/enrichment.svelte';
+  import { enrichmentStore, fetchTokenStats } from '../../lib/stores/enrichment.svelte';
   import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
-
-  let tokenLoading = $derived(getEnrichmentState().tokenLoading);
-  let tokenAvailable = $derived(getEnrichmentState().tokenAvailable);
-  let tokenData = $derived(getEnrichmentState().tokenData);
 
   onMount(() => {
     fetchTokenStats();
@@ -38,10 +34,9 @@
     cost: number;
   }
 
-  let projectRows = $derived((): ProjectRow[] => {
-    if (!tokenData) return [];
+  function getProjectRows(sessions: SessionTokenStats[]): ProjectRow[] {
     const map = new Map<string, ProjectRow>();
-    for (const s of tokenData.sessions) {
+    for (const s of sessions) {
       const key = s.directory || s.projectId;
       const existing = map.get(key);
       if (existing) {
@@ -64,64 +59,63 @@
       }
     }
     return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
-  });
+  }
 
-  let sessionRows = $derived((): SessionTokenStats[] => {
-    if (!tokenData) return [];
-    return [...tokenData.sessions].sort((a, b) => b.totalCost - a.totalCost);
-  });
+  function getSessionRows(sessions: SessionTokenStats[]): SessionTokenStats[] {
+    return [...sessions].sort((a, b) => b.totalCost - a.totalCost);
+  }
 </script>
 
 <div class="page-container" data-testid="page-token-cost">
   <h2 class="page-title">Token &amp; Cost Analytics</h2>
 
-  {#if tokenLoading}
+  {#if $enrichmentStore.tokenLoading}
     <div class="loading-state">
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
     </div>
-  {:else if !tokenAvailable || !tokenData}
+  {:else if !$enrichmentStore.tokenAvailable || !$enrichmentStore.tokenData}
     <div class="empty-state" data-testid="empty-state">
       <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
       </svg>
       <p class="empty-title">데이터 없음</p>
       <p class="empty-desc">
-        {!tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
+        {!$enrichmentStore.tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
       </p>
     </div>
   {:else}
     <div class="summary-grid" data-testid="token-summary">
       <div class="summary-card">
         <div class="card-label">Input Tokens</div>
-        <div class="card-value accent">{formatTokens(tokenData.grandTotal.input)}</div>
+        <div class="card-value accent">{formatTokens($enrichmentStore.tokenData.grandTotal.input)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Output Tokens</div>
-        <div class="card-value">{formatTokens(tokenData.grandTotal.output)}</div>
+        <div class="card-value">{formatTokens($enrichmentStore.tokenData.grandTotal.output)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Reasoning</div>
-        <div class="card-value">{formatTokens(tokenData.grandTotal.reasoning)}</div>
+        <div class="card-value">{formatTokens($enrichmentStore.tokenData.grandTotal.reasoning)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Total Cost</div>
-        <div class="card-value success">{formatCost(tokenData.grandTotal.cost)}</div>
+        <div class="card-value success">{formatCost($enrichmentStore.tokenData.grandTotal.cost)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Read</div>
-        <div class="card-value muted">{formatTokens(tokenData.grandTotal.cacheRead)}</div>
+        <div class="card-value muted">{formatTokens($enrichmentStore.tokenData.grandTotal.cacheRead)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Write</div>
-        <div class="card-value muted">{formatTokens(tokenData.grandTotal.cacheWrite)}</div>
+        <div class="card-value muted">{formatTokens($enrichmentStore.tokenData.grandTotal.cacheWrite)}</div>
       </div>
     </div>
 
     <div class="section" data-testid="project-table">
       <h3 class="section-title">프로젝트별</h3>
-      {#if projectRows().length === 0}
+      {#if getProjectRows($enrichmentStore.tokenData.sessions).length === 0}
         <div class="table-empty">프로젝트 데이터 없음</div>
       {:else}
         <div class="table-wrapper">
@@ -137,7 +131,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each projectRows() as row (row.name)}
+              {#each getProjectRows($enrichmentStore.tokenData.sessions) as row (row.name)}
                 <tr>
                   <td class="project-name" title={row.name}>{row.name}</td>
                   <td class="num">{row.sessionCount}</td>
@@ -155,7 +149,7 @@
 
     <div class="section" data-testid="session-table">
       <h3 class="section-title">세션별</h3>
-      {#if sessionRows().length === 0}
+      {#if getSessionRows($enrichmentStore.tokenData.sessions).length === 0}
         <div class="table-empty">세션 데이터 없음</div>
       {:else}
         <div class="table-wrapper">
@@ -171,7 +165,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each sessionRows() as s (s.sessionId)}
+              {#each getSessionRows($enrichmentStore.tokenData.sessions) as s (s.sessionId)}
                 <tr>
                   <td class="session-title-cell" title={s.sessionTitle || s.sessionId}>
                     {s.sessionTitle || s.sessionId.slice(0, 8)}

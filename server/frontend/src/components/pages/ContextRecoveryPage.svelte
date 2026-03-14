@@ -1,24 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getEnrichmentState,
+    enrichmentStore,
     fetchRecoveryData,
     fetchSummary,
-    getSummary,
-    isSummaryLoading,
     type RecoveryContext,
   } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
 
-  let recoveryLoading = $derived(getEnrichmentState().recoveryLoading);
-  let recoveryAvailable = $derived(getEnrichmentState().recoveryAvailable);
-  let recoveryData = $derived(getEnrichmentState().recoveryData);
-
   let sortedSessions = $derived(
-    recoveryData
-      ? [...recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+    $enrichmentStore.recoveryData
+      ? [...$enrichmentStore.recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
       : []
   );
 
@@ -57,9 +51,9 @@
     <p class="page-subtitle">Idle 세션을 재개하려면 Resume 버튼을 클릭하세요</p>
   </div>
 
-  {#if recoveryLoading}
+  {#if $enrichmentStore.recoveryLoading}
     <div class="loading-state">불러오는 중...</div>
-  {:else if !recoveryAvailable}
+  {:else if !$enrichmentStore.recoveryAvailable}
     <div class="unavailable-state">
       Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.
     </div>
@@ -91,9 +85,9 @@
                   class="summary-btn"
                   data-testid="summary-btn"
                   onclick={() => fetchSummary(ctx.sessionId)}
-                  disabled={isSummaryLoading(ctx.sessionId)}
+                  disabled={$enrichmentStore.summaryLoadingIds.includes(ctx.sessionId)}
                 >
-                  {isSummaryLoading(ctx.sessionId) ? '생성 중...' : '요약'}
+                  {$enrichmentStore.summaryLoadingIds.includes(ctx.sessionId) ? '생성 중...' : '요약'}
                 </button>
                 <button
                   class="view-btn"
@@ -150,10 +144,10 @@
             </div>
           {/if}
 
-          {#if getSummary(ctx.sessionId)}
+          {#if $enrichmentStore.summaryCache[ctx.sessionId]}
             <div class="card-section summary-section" data-testid="recovery-summary">
               <div class="section-label">세션 요약:</div>
-              <pre class="summary-text">{getSummary(ctx.sessionId)}</pre>
+              <pre class="summary-text">{$enrichmentStore.summaryCache[ctx.sessionId].summary}</pre>
             </div>
           {/if}
         </div>
