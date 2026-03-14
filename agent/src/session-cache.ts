@@ -417,7 +417,8 @@ export class SessionCache {
       updatedAt: Date.now(),
       lastActiveAt: Date.now(),
     });
-    if (isNew) this.scheduleMetadataFetch(sessionID);
+    const needsMeta = isNew || !existing.title || existing.title.startsWith('New session');
+    if (needsMeta) this.scheduleMetadataFetch(sessionID);
     if (statusType === 'busy' && !wasBusy) this.onSessionBusyCallback?.();
   }
 
@@ -699,6 +700,22 @@ export class SessionCache {
         );
       }
       await this.bootstrapPendingInputs(baseUrl);
+
+      // Re-fetch metadata for sessions with placeholder titles
+      const allSessions = this.store.getAll();
+      const staleTitleSessions: string[] = [];
+      for (const [sid, detail] of Object.entries(allSessions)) {
+        if (!detail.title || detail.title.startsWith('New session')) {
+          staleTitleSessions.push(sid);
+        }
+      }
+      if (staleTitleSessions.length > 0) {
+        console.log(`[SessionCache] Refreshing ${staleTitleSessions.length} stale title(s)`);
+        for (const sid of staleTitleSessions) {
+          this.scheduleMetadataFetch(sid);
+        }
+      }
+
       console.log(`[SessionCache] Bootstrap complete — ${this.store.count()} sessions cached`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -765,7 +782,8 @@ export class SessionCache {
       const meta = metaMap.get(sessionID);
 
       if (existing && existing.updatedAt >= this.sseConnectedAt) {
-        if (meta && (!existing.title || !existing.createdAt)) {
+        const titleStale = !existing.title || existing.title.startsWith('New session');
+        if (meta && (titleStale || !existing.createdAt)) {
           const timeObj = meta.time;
           const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
           const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
@@ -804,7 +822,8 @@ export class SessionCache {
       if (!meta.id) continue;
       const existing = this.store.get(meta.id);
       if (existing) {
-        if (!existing.title || !existing.createdAt) {
+        const titleStale = !existing.title || existing.title.startsWith('New session');
+        if (titleStale || !existing.createdAt) {
           const timeObj = meta.time;
           const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
           const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
