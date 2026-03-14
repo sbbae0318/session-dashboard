@@ -385,6 +385,13 @@ export class SessionCache {
       case 'permission.updated':
         this.handlePermissionUpdated(props, directory);
         break;
+      case 'question.asked':
+        this.handleQuestionAsked(props, directory);
+        break;
+      case 'question.replied':
+      case 'question.rejected':
+        this.handleQuestionResolved(props, directory);
+        break;
       case 'session.deleted':
         this.handleSessionDeleted(props);
         break;
@@ -490,6 +497,34 @@ export class SessionCache {
     this.store.upsert(sessionID, {
       ...existing,
       waitingForInput: true,
+      directory: directory ?? existing.directory,
+      updatedAt: Date.now(),
+    });
+  }
+
+  private handleQuestionAsked(props: Record<string, unknown>, directory: string | null): void {
+    const sessionID = props['sessionID'] as string | undefined;
+    if (!sessionID) return;
+
+    const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
+    this.store.upsert(sessionID, {
+      ...existing,
+      waitingForInput: true,
+      directory: directory ?? existing.directory,
+      updatedAt: Date.now(),
+    });
+  }
+
+  private handleQuestionResolved(props: Record<string, unknown>, directory: string | null): void {
+    const sessionID = props['sessionID'] as string | undefined;
+    if (!sessionID) return;
+
+    const existing = this.store.get(sessionID);
+    if (!existing) return;
+
+    this.store.upsert(sessionID, {
+      ...existing,
+      waitingForInput: false,
       directory: directory ?? existing.directory,
       updatedAt: Date.now(),
     });
@@ -664,10 +699,44 @@ export class SessionCache {
           batch.map((project) => this.bootstrapProject(baseUrl, project.worktree)),
         );
       }
+      await this.bootstrapPendingInputs(baseUrl);
       console.log(`[SessionCache] Bootstrap complete — ${this.store.count()} sessions cached`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[SessionCache] Bootstrap failed:', msg);
+    }
+  }
+
+  private async bootstrapPendingInputs(baseUrl: string): Promise<void> {
+    const [questions, permissions] = await Promise.all([
+      fetchJson(`${baseUrl}/question`, {}, 3000)
+        .then(d => (Array.isArray(d) ? d : []) as Array<{ sessionID?: string }>)
+        .catch(() => [] as Array<{ sessionID?: string }>),
+      fetchJson(`${baseUrl}/permission`, {}, 3000)
+        .then(d => (Array.isArray(d) ? d : []) as Array<{ sessionID?: string }>)
+        .catch(() => [] as Array<{ sessionID?: string }>),
+    ]);
+
+    const pendingSessionIds = new Set<string>();
+    for (const q of questions) {
+      if (q.sessionID) pendingSessionIds.add(q.sessionID);
+    }
+    for (const p of permissions) {
+      if (p.sessionID) pendingSessionIds.add(p.sessionID);
+    }
+
+    for (const sessionID of pendingSessionIds) {
+      const existing = this.store.get(sessionID);
+      if (!existing) continue;
+      this.store.upsert(sessionID, {
+        ...existing,
+        waitingForInput: true,
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (pendingSessionIds.size > 0) {
+      console.log(`[SessionCache] Bootstrap: ${pendingSessionIds.size} session(s) waiting for input`);
     }
   }
 

@@ -206,8 +206,9 @@ describe('SessionCache', () => {
       },
     ];
 
-    // bootstrap /project → [], then fetchFirstUserPrompt → messages
     mockFetchJson
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(userMessages);
 
@@ -244,6 +245,8 @@ describe('SessionCache', () => {
     ];
 
     mockFetchJson
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(systemMessages);
 
@@ -458,8 +461,10 @@ describe('SessionCache', () => {
   // ── 14. 멱등성 — 이미 lastPrompt가 있는 세션은 REST 호출 skip ──
 
   it('lastPrompt가 저장된 세션도 message.updated 시 REST 재호출', async () => {
-    // bootstrap 호출에만 응답
-    mockFetchJson.mockResolvedValueOnce([]);
+    mockFetchJson
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
@@ -525,6 +530,8 @@ describe('SessionCache', () => {
     ];
 
     mockFetchJson
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(userMessages);
 
@@ -1018,6 +1025,347 @@ describe('SessionCache', () => {
     expect(entry).toBeDefined();
     expect(entry.waitingForInput).toBe(false);
     expect(entry.status).toBe('idle');
+  });
+
+  // ── 32. question.asked → waitingForInput: true ──
+
+  it('sets waitingForInput=true on question.asked event', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // 세션 생성 (busy)
+    simulateSseEvent(mockRes, {
+      directory: '/project/question',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-question', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-question']?.waitingForInput).toBe(false);
+
+    // question.asked → waitingForInput = true
+    simulateSseEvent(mockRes, {
+      directory: '/project/question',
+      payload: {
+        type: 'question.asked',
+        properties: {
+          id: 'question_001',
+          sessionID: 'sess-question',
+          questions: [{ question: 'Pick one', header: 'Choice', options: [] }],
+        },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-question'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(true);
+  });
+
+  // ── 33. question.asked creates session entry if none exists ──
+
+  it('creates session entry on question.asked for unknown session', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/new-question',
+      payload: {
+        type: 'question.asked',
+        properties: {
+          id: 'question_002',
+          sessionID: 'sess-new-q',
+          questions: [{ question: 'Choose', header: 'Q', options: [] }],
+        },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-new-q'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(true);
+    expect(entry.directory).toBe('/project/new-question');
+  });
+
+  // ── 34. question.replied → waitingForInput: false ──
+
+  it('resets waitingForInput=false on question.replied event', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // 세션 생성 + question pending
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reply',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-reply', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reply',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_003', sessionID: 'sess-q-reply', questions: [] },
+      },
+    });
+    expect(cache.getSessionDetails().sessions['sess-q-reply']?.waitingForInput).toBe(true);
+
+    // question.replied → waitingForInput = false
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reply',
+      payload: {
+        type: 'question.replied',
+        properties: {
+          sessionID: 'sess-q-reply',
+          requestID: 'question_003',
+          answers: [['Option A']],
+        },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-q-reply'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(false);
+  });
+
+  // ── 35. question.rejected → waitingForInput: false ──
+
+  it('resets waitingForInput=false on question.rejected event', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    // 세션 생성 + question pending
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reject',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-reject', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reject',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_004', sessionID: 'sess-q-reject', questions: [] },
+      },
+    });
+    expect(cache.getSessionDetails().sessions['sess-q-reject']?.waitingForInput).toBe(true);
+
+    // question.rejected → waitingForInput = false
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-reject',
+      payload: {
+        type: 'question.rejected',
+        properties: { sessionID: 'sess-q-reject', requestID: 'question_004' },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-q-reject'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(false);
+  });
+
+  // ── 36. question.asked → session.status busy → waitingForInput: false ──
+
+  it('resets waitingForInput=false when session.status transitions to busy after question.asked', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-busy',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-busy', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-busy',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_005', sessionID: 'sess-q-busy', questions: [] },
+      },
+    });
+    expect(cache.getSessionDetails().sessions['sess-q-busy']?.waitingForInput).toBe(true);
+
+    // session.status busy → waitingForInput 리셋
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-busy',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-busy', status: { type: 'busy' } },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-q-busy']?.waitingForInput).toBe(false);
+  });
+
+  // ── 37. question.asked → session.idle → waitingForInput: false ──
+
+  it('resets waitingForInput=false when session.idle fires after question.asked', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-idle',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-idle', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-idle',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_006', sessionID: 'sess-q-idle', questions: [] },
+      },
+    });
+    expect(cache.getSessionDetails().sessions['sess-q-idle']?.waitingForInput).toBe(true);
+
+    // session.idle → 모든 waitingForInput 리셋
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-idle',
+      payload: {
+        type: 'session.idle',
+        properties: { sessionID: 'sess-q-idle' },
+      },
+    });
+
+    const entry = cache.getSessionDetails().sessions['sess-q-idle'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(false);
+    expect(entry.status).toBe('idle');
+  });
+
+  // ── 38. question.replied for unknown session is a no-op ──
+
+  it('ignores question.replied for unknown session (no crash)', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/unknown',
+      payload: {
+        type: 'question.replied',
+        properties: { sessionID: 'sess-unknown', requestID: 'q_999', answers: [] },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-unknown']).toBeUndefined();
+  });
+
+  // ── 39. question.asked without sessionID is a no-op ──
+
+  it('ignores question.asked without sessionID', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    const sessionsBefore = Object.keys(cache.getSessionDetails().sessions).length;
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/no-id',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_007', questions: [] },
+      },
+    });
+
+    const sessionsAfter = Object.keys(cache.getSessionDetails().sessions).length;
+    expect(sessionsAfter).toBe(sessionsBefore);
+  });
+
+  // ── 40. question.asked → tool running → waitingForInput: false ──
+
+  it('resets waitingForInput=false when tool starts running after question.asked', async () => {
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-tool',
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'sess-q-tool', status: { type: 'busy' } },
+      },
+    });
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-tool',
+      payload: {
+        type: 'question.asked',
+        properties: { id: 'question_008', sessionID: 'sess-q-tool', questions: [] },
+      },
+    });
+    expect(cache.getSessionDetails().sessions['sess-q-tool']?.waitingForInput).toBe(true);
+
+    // tool running → waitingForInput 리셋
+    simulateSseEvent(mockRes, {
+      directory: '/project/q-tool',
+      payload: {
+        type: 'message.part.updated',
+        properties: {
+          part: { sessionID: 'sess-q-tool', type: 'tool', tool: 'mcp_bash', state: { status: 'running' } },
+        },
+      },
+    });
+
+    expect(cache.getSessionDetails().sessions['sess-q-tool']?.waitingForInput).toBe(false);
+  });
+
+  // ── 41. bootstrap sets waitingForInput for pending questions ──
+
+  it('bootstrap sets waitingForInput=true for sessions with pending questions', async () => {
+    const projectData = [{ id: 'proj-1', worktree: '/project/bootstrap-q', vcs: null, time: null, sandboxes: null }];
+    const statusData = { 'sess-bq': { type: 'busy' } };
+    const sessionList = [{ id: 'sess-bq', title: 'Bootstrap Q', time: { created: 1000, updated: 2000 } }];
+    const pendingQuestions = [{ id: 'q_001', sessionID: 'sess-bq', questions: [] }];
+    const pendingPermissions: unknown[] = [];
+
+    mockFetchJson
+      .mockResolvedValueOnce(projectData)
+      .mockResolvedValueOnce(statusData)
+      .mockResolvedValueOnce(sessionList)
+      .mockResolvedValueOnce(pendingQuestions)
+      .mockResolvedValueOnce(pendingPermissions);
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    const entry = cache.getSessionDetails().sessions['sess-bq'];
+    expect(entry).toBeDefined();
+    expect(entry.status).toBe('busy');
+    expect(entry.waitingForInput).toBe(true);
+  });
+
+  // ── 42. bootstrap sets waitingForInput for pending permissions ──
+
+  it('bootstrap sets waitingForInput=true for sessions with pending permissions', async () => {
+    const projectData = [{ id: 'proj-2', worktree: '/project/bootstrap-p', vcs: null, time: null, sandboxes: null }];
+    const statusData = { 'sess-bp': { type: 'busy' } };
+    const sessionList = [{ id: 'sess-bp', title: 'Bootstrap P', time: { created: 1000, updated: 2000 } }];
+    const pendingQuestions: unknown[] = [];
+    const pendingPermissions = [{ id: 'perm_001', sessionID: 'sess-bp' }];
+
+    mockFetchJson
+      .mockResolvedValueOnce(projectData)
+      .mockResolvedValueOnce(statusData)
+      .mockResolvedValueOnce(sessionList)
+      .mockResolvedValueOnce(pendingQuestions)
+      .mockResolvedValueOnce(pendingPermissions);
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    const entry = cache.getSessionDetails().sessions['sess-bp'];
+    expect(entry).toBeDefined();
+    expect(entry.waitingForInput).toBe(true);
   });
 
 });
