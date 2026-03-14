@@ -184,6 +184,27 @@ machines:
 ./install/oc-serve.sh --uninstall   # 제거
 ```
 
+## 권장 설정: 입력 대기 상태 감지
+
+대시보드는 AI 에이전트가 OpenCode의 구조화된 입력 도구(`mcp_question`, permission 시스템)를
+사용할 때 "Waiting for Input" 상태를 감지합니다. 그러나 AI가 텍스트로 질문하는 경우
+(예: "선택하세요: 1) 옵션 A 2) 옵션 B"), 구조화된 이벤트가 발행되지 않아 **Idle**로 표시됩니다.
+
+모든 사용자 질문이 대시보드에서 "Waiting" 상태로 올바르게 표시되려면,
+모니터링 대상 각 머신의 **글로벌** OpenCode AGENTS.md에 다음 규칙을 추가하세요:
+
+**파일: `~/.config/opencode/AGENTS.md`**
+
+```markdown
+## Critical Rules (Always Active)
+
+- **Always use `mcp_question` tool** when asking user questions or offering choices — never ask inline via text
+```
+
+> **왜 글로벌인가?** 대시보드는 모든 프로젝트의 세션을 모니터링합니다. 프로젝트 레벨
+> AGENTS.md는 해당 프로젝트 작업 시에만 적용됩니다. 글로벌 설정을 사용해야 머신의
+> 모든 세션에서 `question.asked` 이벤트가 발행되어 대시보드 에이전트가 감지할 수 있습니다.
+
 ## 고급 설정
 
 컴포넌트별 수동 설정 (저장소 루트에서 실행):

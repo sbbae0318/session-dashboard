@@ -184,6 +184,29 @@ machines:
 ./install/oc-serve.sh --uninstall   # Remove
 ```
 
+## Recommended: Waiting for Input Detection
+
+The dashboard detects "Waiting for Input" status when the AI agent uses OpenCode's
+structured input tools (`mcp_question` for questions, permission system for approvals).
+However, if the AI asks questions as inline text (e.g., "Choose: 1) Option A 2) Option B"),
+no structured event is emitted and the session appears as **Idle** instead of **Waiting**.
+
+To ensure all user-facing questions trigger proper "Waiting" status in the dashboard,
+add the following rule to your **global** OpenCode AGENTS.md on each monitored machine:
+
+**File: `~/.config/opencode/AGENTS.md`**
+
+```markdown
+## Critical Rules (Always Active)
+
+- **Always use `mcp_question` tool** when asking user questions or offering choices — never ask inline via text
+```
+
+> **Why global?** The dashboard monitors sessions across all projects. A project-level
+> AGENTS.md would only apply when working inside that specific project. The global config
+> ensures every session on the machine emits proper `question.asked` events that the
+> dashboard agent can detect.
+
 ## Advanced Setup
 
 Manual per-component setup, run from repo root:
