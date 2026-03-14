@@ -5,6 +5,9 @@
     isRecoveryAvailable,
     isRecoveryLoading,
     fetchRecoveryData,
+    getSummary,
+    isSummaryLoading,
+    fetchSummary,
     type RecoveryContext,
   } from '../../lib/stores/enrichment.svelte';
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
@@ -59,7 +62,7 @@
     <div class="loading-state">불러오는 중...</div>
   {:else if !recoveryAvailable}
     <div class="unavailable-state">
-      Recovery 데이터를 사용할 수 없습니다. OpenCode enrichment가 활성화되어 있는지 확인하세요.
+      Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.
     </div>
   {:else if sortedSessions.length === 0}
     <div class="empty-state" data-testid="empty-state">
@@ -84,6 +87,14 @@
                   title="Resume session (copy opencode attach command)"
                 >
                   Resume
+                </button>
+                <button
+                  class="summary-btn"
+                  data-testid="summary-btn"
+                  onclick={() => fetchSummary(ctx.sessionId)}
+                  disabled={isSummaryLoading(ctx.sessionId)}
+                >
+                  {isSummaryLoading(ctx.sessionId) ? '생성 중...' : '요약'}
                 </button>
                 <button
                   class="view-btn"
@@ -137,6 +148,13 @@
                   </span>
                 {/each}
               </div>
+            </div>
+          {/if}
+
+          {#if getSummary(ctx.sessionId)}
+            <div class="card-section summary-section" data-testid="recovery-summary">
+              <div class="section-label">세션 요약:</div>
+              <pre class="summary-text">{getSummary(ctx.sessionId)}</pre>
             </div>
           {/if}
         </div>
@@ -424,6 +442,45 @@
     opacity: 0.7;
   }
 
+  /* Summary */
+
+  .summary-text {
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    margin-top: 0.25rem;
+    font-family: inherit;
+    overflow-x: auto;
+  }
+
+  .summary-btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    background: rgba(63, 185, 80, 0.12);
+    color: var(--success);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+
+  .summary-btn:hover:not(:disabled) {
+    background: rgba(63, 185, 80, 0.25);
+    border-color: var(--success);
+  }
+
+  .summary-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
   /* ── Toast ── */
 
   .copy-toast {
@@ -467,7 +524,8 @@
     }
 
     .resume-btn,
-    .view-btn {
+    .view-btn,
+    .summary-btn {
       font-size: 0.7rem;
       padding: 0.2rem 0.5rem;
     }
