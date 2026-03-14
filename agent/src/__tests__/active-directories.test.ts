@@ -62,8 +62,8 @@ describe('active-directories', () => {
       const dirs = await detectActiveDirectoriesUncached();
       expect(dirs).toEqual([
         '/Users/user/mule',
-        '/Users/user/project/web-server',
         '/Users/user/project/my-app',
+        '/Users/user/project/web-server',
       ]);
     });
 
