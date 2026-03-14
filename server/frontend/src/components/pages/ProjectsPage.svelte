@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     fetchProjectsData,
     getProjectsData,
@@ -31,7 +32,7 @@
 
   $effect(() => {
     getSelectedMachineId();
-    fetchProjectsData();
+    untrack(() => { fetchProjectsData(); });
   });
 
   function toggleProject(id: string) {

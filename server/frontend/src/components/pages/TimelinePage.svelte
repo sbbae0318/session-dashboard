@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { getTimelineData, isTimelineAvailable, isTimelineLoading, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
   import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
@@ -37,7 +38,8 @@
 
   $effect(() => {
     getSelectedMachineId();
-    fetchTimelineData(timeRange.from, timeRange.to);
+    const range = timeRange;
+    untrack(() => { fetchTimelineData(range.from, range.to); });
   });
 
   async function handlePresetChange(preset: TimeRangePreset) {

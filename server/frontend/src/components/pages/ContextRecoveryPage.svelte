@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     getRecoveryData,
     isRecoveryAvailable,
@@ -49,7 +50,7 @@
 
   $effect(() => {
     getSelectedMachineId();
-    fetchRecoveryData();
+    untrack(() => { fetchRecoveryData(); });
   });
 </script>
 

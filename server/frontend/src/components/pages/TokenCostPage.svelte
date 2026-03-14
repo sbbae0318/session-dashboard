@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     fetchTokenStats,
     getTokenData,
@@ -14,7 +15,7 @@
 
   $effect(() => {
     getSelectedMachineId();
-    fetchTokenStats();
+    untrack(() => { fetchTokenStats(); });
   });
 
   function formatTokens(n: number): string {

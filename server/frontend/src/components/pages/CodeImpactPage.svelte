@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     fetchImpactData,
     getImpactData,
@@ -50,7 +51,7 @@
 
   $effect(() => {
     getSelectedMachineId();
-    fetchImpactData();
+    untrack(() => { fetchImpactData(); });
   });
 </script>
 
