@@ -86,151 +86,176 @@ export interface RecoveryContext {
   summaryGeneratedAt?: number;
 }
 
-class EnrichmentStore {
-  tokenData = $state<TokensData | null>(null);
-  tokenAvailable = $state(false);
-  tokenLoading = $state(false);
+interface EnrichmentState {
+  tokenData: TokensData | null;
+  tokenAvailable: boolean;
+  tokenLoading: boolean;
 
-  impactData = $state<SessionCodeImpact[] | null>(null);
-  impactAvailable = $state(false);
-  impactLoading = $state(false);
+  impactData: SessionCodeImpact[] | null;
+  impactAvailable: boolean;
+  impactLoading: boolean;
 
-  timelineData = $state<TimelineEntry[] | null>(null);
-  timelineAvailable = $state(false);
-  timelineLoading = $state(false);
+  timelineData: TimelineEntry[] | null;
+  timelineAvailable: boolean;
+  timelineLoading: boolean;
 
-  projectsData = $state<ProjectSummary[] | null>(null);
-  projectsAvailable = $state(false);
-  projectsLoading = $state(false);
+  projectsData: ProjectSummary[] | null;
+  projectsAvailable: boolean;
+  projectsLoading: boolean;
 
-  recoveryData = $state<RecoveryContext[] | null>(null);
-  recoveryAvailable = $state(false);
-  recoveryLoading = $state(false);
+  recoveryData: RecoveryContext[] | null;
+  recoveryAvailable: boolean;
+  recoveryLoading: boolean;
 
-  summaryCache = $state<Map<string, { summary: string; generatedAt: number }>>(new Map());
-  summaryLoading = $state<Set<string>>(new Set());
+  summaryCache: Record<string, { summary: string; generatedAt: number }>;
+  summaryLoadingIds: string[];
+}
 
-  async fetchTokenStats(): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.tokenLoading = true;
-    try {
-      const res = await fetchJSON<EnrichmentResponse<TokensData>>(
-        `/api/enrichment/${machineId}/tokens`
-      );
-      this.tokenData = res.data;
-      this.tokenAvailable = res.available;
-    } catch (e) {
-      console.error('Failed to fetch token stats:', e);
-      this.tokenAvailable = false;
-    } finally {
-      this.tokenLoading = false;
-    }
-  }
+let state = $state<EnrichmentState>({
+  tokenData: null,
+  tokenAvailable: false,
+  tokenLoading: false,
 
-  async fetchImpactData(): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.impactLoading = true;
-    try {
-      const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
-        `/api/enrichment/${machineId}/impact`
-      );
-      this.impactData = res.data;
-      this.impactAvailable = res.available;
-    } catch (e) {
-      this.impactAvailable = false;
-    } finally {
-      this.impactLoading = false;
-    }
-  }
+  impactData: null,
+  impactAvailable: false,
+  impactLoading: false,
 
-  async fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.timelineLoading = true;
-    try {
-      const params = new URLSearchParams();
-      if (from) params.set('from', from.toString());
-      if (to) params.set('to', to.toString());
-      if (projectId) params.set('projectId', projectId);
-      const qs = params.toString();
-      const url = `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`;
-      const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(url);
-      this.timelineData = res.data;
-      this.timelineAvailable = res.available;
-    } catch (e) {
-      console.error('Failed to fetch timeline data:', e);
-      this.timelineAvailable = false;
-    } finally {
-      this.timelineLoading = false;
-    }
-  }
+  timelineData: null,
+  timelineAvailable: false,
+  timelineLoading: false,
 
-  async fetchProjectsData(): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.projectsLoading = true;
-    try {
-      const res = await fetchJSON<EnrichmentResponse<ProjectSummary[]>>(
-        `/api/enrichment/${machineId}/projects`
-      );
-      this.projectsData = res.data;
-      this.projectsAvailable = res.available;
-    } catch (e) {
-      console.error('Failed to fetch projects data:', e);
-      this.projectsAvailable = false;
-    } finally {
-      this.projectsLoading = false;
-    }
-  }
+  projectsData: null,
+  projectsAvailable: false,
+  projectsLoading: false,
 
-  async fetchRecoveryData(): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.recoveryLoading = true;
-    try {
-      const res = await fetchJSON<EnrichmentResponse<RecoveryContext[]>>(
-        `/api/enrichment/${machineId}/recovery`
-      );
-      this.recoveryData = res.data;
-      this.recoveryAvailable = res.available;
-    } catch (e) {
-      console.error('Failed to fetch recovery data:', e);
-      this.recoveryAvailable = false;
-    } finally {
-      this.recoveryLoading = false;
-    }
-  }
+  recoveryData: null,
+  recoveryAvailable: false,
+  recoveryLoading: false,
 
-  getSummary(sessionId: string): string | null {
-    return this.summaryCache.get(sessionId)?.summary ?? null;
-  }
+  summaryCache: {},
+  summaryLoadingIds: [],
+});
 
-  isSummaryLoading(sessionId: string): boolean {
-    return this.summaryLoading.has(sessionId);
-  }
+export function getEnrichmentState(): EnrichmentState {
+  return state;
+}
 
-  async fetchSummary(sessionId: string): Promise<void> {
-    const machineId = getSelectedMachineId();
-    if (!machineId) return;
-    this.summaryLoading = new Set([...this.summaryLoading, sessionId]);
-    try {
-      const res = await fetchJSON<{ summary: string; generatedAt: number }>(
-        `/api/enrichment/${machineId}/recovery/${sessionId}/summarize`,
-        { method: 'POST' },
-      );
-      if (res.summary) {
-        this.summaryCache = new Map([...this.summaryCache, [sessionId, res]]);
-      }
-    } catch (e) {
-      console.error('Failed to fetch summary:', e);
-    } finally {
-      const next = new Set(this.summaryLoading);
-      next.delete(sessionId);
-      this.summaryLoading = next;
-    }
+export async function fetchTokenStats(): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.tokenLoading = true;
+  try {
+    const res = await fetchJSON<EnrichmentResponse<TokensData>>(
+      `/api/enrichment/${machineId}/tokens`
+    );
+    state.tokenData = res.data;
+    state.tokenAvailable = res.available;
+  } catch (e) {
+    console.error('Failed to fetch token stats:', e);
+    state.tokenAvailable = false;
+  } finally {
+    state.tokenLoading = false;
   }
 }
 
-export const enrichment = new EnrichmentStore();
+export async function fetchImpactData(): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.impactLoading = true;
+  try {
+    const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
+      `/api/enrichment/${machineId}/impact`
+    );
+    state.impactData = res.data;
+    state.impactAvailable = res.available;
+  } catch (e) {
+    state.impactAvailable = false;
+  } finally {
+    state.impactLoading = false;
+  }
+}
+
+export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.timelineLoading = true;
+  try {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from.toString());
+    if (to) params.set('to', to.toString());
+    if (projectId) params.set('projectId', projectId);
+    const qs = params.toString();
+    const url = `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`;
+    const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(url);
+    state.timelineData = res.data;
+    state.timelineAvailable = res.available;
+  } catch (e) {
+    console.error('Failed to fetch timeline data:', e);
+    state.timelineAvailable = false;
+  } finally {
+    state.timelineLoading = false;
+  }
+}
+
+export async function fetchProjectsData(): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.projectsLoading = true;
+  try {
+    const res = await fetchJSON<EnrichmentResponse<ProjectSummary[]>>(
+      `/api/enrichment/${machineId}/projects`
+    );
+    state.projectsData = res.data;
+    state.projectsAvailable = res.available;
+  } catch (e) {
+    console.error('Failed to fetch projects data:', e);
+    state.projectsAvailable = false;
+  } finally {
+    state.projectsLoading = false;
+  }
+}
+
+export async function fetchRecoveryData(): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.recoveryLoading = true;
+  try {
+    const res = await fetchJSON<EnrichmentResponse<RecoveryContext[]>>(
+      `/api/enrichment/${machineId}/recovery`
+    );
+    state.recoveryData = res.data;
+    state.recoveryAvailable = res.available;
+  } catch (e) {
+    console.error('Failed to fetch recovery data:', e);
+    state.recoveryAvailable = false;
+  } finally {
+    state.recoveryLoading = false;
+  }
+}
+
+export function getSummary(sessionId: string): string | null {
+  return state.summaryCache[sessionId]?.summary ?? null;
+}
+
+export function isSummaryLoading(sessionId: string): boolean {
+  return state.summaryLoadingIds.includes(sessionId);
+}
+
+export async function fetchSummary(sessionId: string): Promise<void> {
+  const machineId = getSelectedMachineId();
+  if (!machineId) return;
+  state.summaryLoadingIds = [...state.summaryLoadingIds, sessionId];
+  try {
+    const res = await fetchJSON<{ summary: string; generatedAt: number }>(
+      `/api/enrichment/${machineId}/recovery/${sessionId}/summarize`,
+      { method: 'POST' },
+    );
+    if (res.summary) {
+      state.summaryCache = { ...state.summaryCache, [sessionId]: res };
+    }
+  } catch (e) {
+    console.error('Failed to fetch summary:', e);
+  } finally {
+    state.summaryLoadingIds = state.summaryLoadingIds.filter(id => id !== sessionId);
+  }
+}
