@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import {
     fetchImpactData,
     getImpactData,
@@ -7,6 +6,7 @@
     isImpactLoading,
   } from '../../lib/stores/enrichment.svelte';
   import type { SessionCodeImpact } from '../../lib/stores/enrichment.svelte';
+  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
 
   let impactData = $derived(getImpactData());
@@ -48,7 +48,8 @@
     return item.additions === 0 && item.deletions === 0;
   }
 
-  onMount(() => {
+  $effect(() => {
+    getSelectedMachineId();
     fetchImpactData();
   });
 </script>

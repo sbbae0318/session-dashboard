@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import {
     getRecoveryData,
     isRecoveryAvailable,
@@ -10,6 +9,7 @@
     fetchSummary,
     type RecoveryContext,
   } from '../../lib/stores/enrichment.svelte';
+  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
 
@@ -47,7 +47,8 @@
     pushSessionDetail(sessionId);
   }
 
-  onMount(() => {
+  $effect(() => {
+    getSelectedMachineId();
     fetchRecoveryData();
   });
 </script>

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import {
     fetchProjectsData,
     getProjectsData,
@@ -7,6 +6,7 @@
     isProjectsLoading,
     type ProjectSummary,
   } from '../../lib/stores/enrichment.svelte';
+  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
   import { relativeTime } from '../../lib/utils';
@@ -29,7 +29,8 @@
     })
   );
 
-  onMount(() => {
+  $effect(() => {
+    getSelectedMachineId();
     fetchProjectsData();
   });
 

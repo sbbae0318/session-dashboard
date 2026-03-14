@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { getTimelineData, isTimelineAvailable, isTimelineLoading, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
+  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
 
   const SVG_WIDTH = 900;
@@ -35,8 +35,9 @@
     return parts.slice(-2).join('/');
   }
 
-  onMount(async () => {
-    await fetchTimelineData(timeRange.from, timeRange.to);
+  $effect(() => {
+    getSelectedMachineId();
+    fetchTimelineData(timeRange.from, timeRange.to);
   });
 
   async function handlePresetChange(preset: TimeRangePreset) {

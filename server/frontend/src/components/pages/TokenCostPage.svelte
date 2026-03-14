@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import {
     fetchTokenStats,
     getTokenData,
@@ -7,12 +6,14 @@
     isTokenLoading,
   } from '../../lib/stores/enrichment.svelte';
   import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
+  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
 
   let data = $derived(getTokenData());
   let available = $derived(isTokenAvailable());
   let loading = $derived(isTokenLoading());
 
-  onMount(() => {
+  $effect(() => {
+    getSelectedMachineId();
     fetchTokenStats();
   });
 
