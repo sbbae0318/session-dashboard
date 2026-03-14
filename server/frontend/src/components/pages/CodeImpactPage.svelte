@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { enrichmentStore, fetchImpactData } from '../../lib/stores/enrichment.svelte';
-  import type { SessionCodeImpact } from '../../lib/stores/enrichment.svelte';
+  import { enrichmentStore, fetchImpactData } from '../../lib/stores/enrichment';
+  import type { SessionCodeImpact } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
 

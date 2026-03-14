@@ -4,7 +4,7 @@
     enrichmentStore,
     fetchProjectsData,
     type ProjectSummary,
-  } from '../../lib/stores/enrichment.svelte';
+  } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';

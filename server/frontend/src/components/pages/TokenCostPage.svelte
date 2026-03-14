@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { enrichmentStore, fetchTokenStats } from '../../lib/stores/enrichment.svelte';
-  import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
+  import { enrichmentStore, fetchTokenStats } from '../../lib/stores/enrichment';
+  import type { SessionTokenStats } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
 
   onMount(() => {

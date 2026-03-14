@@ -5,7 +5,7 @@
     fetchRecoveryData,
     fetchSummary,
     type RecoveryContext,
-  } from '../../lib/stores/enrichment.svelte';
+  } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';

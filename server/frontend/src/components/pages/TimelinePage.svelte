@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { enrichmentStore, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
+  import { enrichmentStore, fetchTimelineData } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
 
