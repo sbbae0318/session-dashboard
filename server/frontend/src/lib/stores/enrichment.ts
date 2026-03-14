@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { fetchJSON } from '../api';
 import { getSelectedMachineId } from './machine.svelte';
 
@@ -87,93 +87,69 @@ export interface RecoveryContext {
   summaryGeneratedAt?: number;
 }
 
-interface EnrichmentState {
-  tokenData: TokensData | null;
-  tokenAvailable: boolean;
-  tokenLoading: boolean;
+export const tokenData = writable<TokensData | null>(null);
+export const tokenAvailable = writable<boolean>(false);
+export const tokenLoading = writable<boolean>(false);
 
-  impactData: SessionCodeImpact[] | null;
-  impactAvailable: boolean;
-  impactLoading: boolean;
+export const impactData = writable<SessionCodeImpact[] | null>(null);
+export const impactAvailable = writable<boolean>(false);
+export const impactLoading = writable<boolean>(false);
 
-  timelineData: TimelineEntry[] | null;
-  timelineAvailable: boolean;
-  timelineLoading: boolean;
+export const timelineData = writable<TimelineEntry[] | null>(null);
+export const timelineAvailable = writable<boolean>(false);
+export const timelineLoading = writable<boolean>(false);
 
-  projectsData: ProjectSummary[] | null;
-  projectsAvailable: boolean;
-  projectsLoading: boolean;
+export const projectsData = writable<ProjectSummary[] | null>(null);
+export const projectsAvailable = writable<boolean>(false);
+export const projectsLoading = writable<boolean>(false);
 
-  recoveryData: RecoveryContext[] | null;
-  recoveryAvailable: boolean;
-  recoveryLoading: boolean;
+export const recoveryData = writable<RecoveryContext[] | null>(null);
+export const recoveryAvailable = writable<boolean>(false);
+export const recoveryLoading = writable<boolean>(false);
 
-  summaryCache: Record<string, { summary: string; generatedAt: number }>;
-  summaryLoadingIds: string[];
-}
-
-export const enrichmentStore = writable<EnrichmentState>({
-  tokenData: null,
-  tokenAvailable: false,
-  tokenLoading: false,
-
-  impactData: null,
-  impactAvailable: false,
-  impactLoading: false,
-
-  timelineData: null,
-  timelineAvailable: false,
-  timelineLoading: false,
-
-  projectsData: null,
-  projectsAvailable: false,
-  projectsLoading: false,
-
-  recoveryData: null,
-  recoveryAvailable: false,
-  recoveryLoading: false,
-
-  summaryCache: {},
-  summaryLoadingIds: [],
-});
+export const summaryCache = writable<Record<string, { summary: string; generatedAt: number }>>({});
+export const summaryLoadingIds = writable<string[]>([]);
 
 export async function fetchTokenStats(): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, tokenLoading: true }));
+  tokenLoading.set(true);
   try {
     const res = await fetchJSON<EnrichmentResponse<TokensData>>(
       `/api/enrichment/${machineId}/tokens`
     );
-    enrichmentStore.update(s => ({ ...s, tokenData: res.data, tokenAvailable: res.available }));
+    tokenData.set(res.data);
+    tokenAvailable.set(res.available);
   } catch (e) {
     console.error('Failed to fetch token stats:', e);
-    enrichmentStore.update(s => ({ ...s, tokenAvailable: false }));
+    tokenAvailable.set(false);
   } finally {
-    enrichmentStore.update(s => ({ ...s, tokenLoading: false }));
+    tokenLoading.set(false);
   }
 }
 
 export async function fetchImpactData(): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, impactLoading: true }));
+  impactLoading.set(true);
   try {
     const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
       `/api/enrichment/${machineId}/impact`
     );
-    enrichmentStore.update(s => ({ ...s, impactData: res.data, impactAvailable: res.available }));
+    impactData.set(res.data);
+    impactAvailable.set(res.available);
   } catch (e) {
-    enrichmentStore.update(s => ({ ...s, impactAvailable: false }));
+    console.error('Failed to fetch impact data:', e);
+    impactAvailable.set(false);
   } finally {
-    enrichmentStore.update(s => ({ ...s, impactLoading: false }));
+    impactLoading.set(false);
   }
 }
 
 export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, timelineLoading: true }));
+  timelineLoading.set(true);
   try {
     const params = new URLSearchParams();
     if (from) params.set('from', from.toString());
@@ -182,70 +158,67 @@ export async function fetchTimelineData(from?: number, to?: number, projectId?: 
     const qs = params.toString();
     const url = `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`;
     const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(url);
-    enrichmentStore.update(s => ({ ...s, timelineData: res.data, timelineAvailable: res.available }));
+    timelineData.set(res.data);
+    timelineAvailable.set(res.available);
   } catch (e) {
     console.error('Failed to fetch timeline data:', e);
-    enrichmentStore.update(s => ({ ...s, timelineAvailable: false }));
+    timelineAvailable.set(false);
   } finally {
-    enrichmentStore.update(s => ({ ...s, timelineLoading: false }));
+    timelineLoading.set(false);
   }
 }
 
 export async function fetchProjectsData(): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, projectsLoading: true }));
+  projectsLoading.set(true);
   try {
     const res = await fetchJSON<EnrichmentResponse<ProjectSummary[]>>(
       `/api/enrichment/${machineId}/projects`
     );
-    enrichmentStore.update(s => ({ ...s, projectsData: res.data, projectsAvailable: res.available }));
+    projectsData.set(res.data);
+    projectsAvailable.set(res.available);
   } catch (e) {
     console.error('Failed to fetch projects data:', e);
-    enrichmentStore.update(s => ({ ...s, projectsAvailable: false }));
+    projectsAvailable.set(false);
   } finally {
-    enrichmentStore.update(s => ({ ...s, projectsLoading: false }));
+    projectsLoading.set(false);
   }
 }
 
 export async function fetchRecoveryData(): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, recoveryLoading: true }));
+  recoveryLoading.set(true);
   try {
     const res = await fetchJSON<EnrichmentResponse<RecoveryContext[]>>(
       `/api/enrichment/${machineId}/recovery`
     );
-    enrichmentStore.update(s => ({ ...s, recoveryData: res.data, recoveryAvailable: res.available }));
+    recoveryData.set(res.data);
+    recoveryAvailable.set(res.available);
   } catch (e) {
     console.error('Failed to fetch recovery data:', e);
-    enrichmentStore.update(s => ({ ...s, recoveryAvailable: false }));
+    recoveryAvailable.set(false);
   } finally {
-    enrichmentStore.update(s => ({ ...s, recoveryLoading: false }));
+    recoveryLoading.set(false);
   }
 }
 
 export async function fetchSummary(sessionId: string): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
-  enrichmentStore.update(s => ({ ...s, summaryLoadingIds: [...s.summaryLoadingIds, sessionId] }));
+  summaryLoadingIds.update(ids => [...ids, sessionId]);
   try {
     const res = await fetchJSON<{ summary: string; generatedAt: number }>(
       `/api/enrichment/${machineId}/recovery/${sessionId}/summarize`,
       { method: 'POST' },
     );
     if (res.summary) {
-      enrichmentStore.update(s => ({
-        ...s,
-        summaryCache: { ...s.summaryCache, [sessionId]: res },
-      }));
+      summaryCache.update(cache => ({ ...cache, [sessionId]: res }));
     }
   } catch (e) {
     console.error('Failed to fetch summary:', e);
   } finally {
-    enrichmentStore.update(s => ({
-      ...s,
-      summaryLoadingIds: s.summaryLoadingIds.filter(id => id !== sessionId),
-    }));
+    summaryLoadingIds.update(ids => ids.filter(id => id !== sessionId));
   }
 }

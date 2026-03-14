@@ -328,8 +328,8 @@ describe('OpenCodeDBReader', () => {
     const entries = reader.getSessionTimeline({ from: 1700000000, to: 1700100000 });
     expect(entries.length).toBeGreaterThanOrEqual(3);
     for (const entry of entries) {
-      expect(entry.timeCreated).toBeGreaterThanOrEqual(1700000000);
-      expect(entry.timeCreated).toBeLessThanOrEqual(1700100000);
+      expect(entry.startTime).toBeGreaterThanOrEqual(1700000000);
+      expect(entry.startTime).toBeLessThanOrEqual(1700100000);
     }
   });
 
@@ -348,11 +348,10 @@ describe('OpenCodeDBReader', () => {
   it('getSessionRecoveryContext() returns last user messages and todos', () => {
     const ctx = reader.getSessionRecoveryContext('ses_1');
     expect(ctx).not.toBeNull();
-    expect(ctx!.lastUserMessages).toHaveLength(3);
-    expect(ctx!.lastUserMessages[0]).toContain('write tests');
+    expect(ctx!.lastPrompts).toHaveLength(3);
+    expect(ctx!.lastPrompts[0]).toContain('write tests');
     expect(ctx!.todos).toHaveLength(2);
-    expect(ctx!.codeImpact).not.toBeNull();
-    expect(ctx!.codeImpact!.additions).toBe(120);
+    expect(ctx!.additions).toBe(120);
   });
 
   it('getSessionRecoveryContext() returns null for nonexistent session', () => {
@@ -397,12 +396,11 @@ describe('OpenCodeDBReader', () => {
 
     const ctx = contexts.find(c => c.sessionId === 'ses_1');
     expect(ctx).toBeDefined();
-    expect(ctx!.title).toBe('Implement auth');
+    expect(ctx!.sessionTitle).toBe('Implement auth');
     expect(ctx!.directory).toBe('/home/user/my-app');
     expect(ctx!.lastActivityAt).toBe(1700010000);
-    expect(ctx!.lastUserMessages.length).toBeGreaterThan(0);
-    expect(ctx!.codeImpact).not.toBeNull();
-    expect(ctx!.codeImpact!.additions).toBe(120);
+    expect(ctx!.lastPrompts.length).toBeGreaterThan(0);
+    expect(ctx!.additions).toBe(120);
     expect(ctx!.todos).toHaveLength(2);
   });
 

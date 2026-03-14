@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { enrichmentStore, fetchImpactData } from '../../lib/stores/enrichment';
+  import {
+    impactData,
+    impactAvailable,
+    impactLoading,
+    fetchImpactData,
+  } from '../../lib/stores/enrichment';
   import type { SessionCodeImpact } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
@@ -8,13 +13,13 @@
   let selectedProject = $state<string>('all');
 
   let projects = $derived(
-    [...new Set(($enrichmentStore.impactData ?? []).map((i) => i.projectId))]
+    [...new Set(($impactData ?? []).map((i) => i.projectId))]
   );
 
   let filteredImpact = $derived(
     selectedProject === 'all'
-      ? ($enrichmentStore.impactData ?? [])
-      : ($enrichmentStore.impactData ?? []).filter((i) => i.projectId === selectedProject)
+      ? ($impactData ?? [])
+      : ($impactData ?? []).filter((i) => i.projectId === selectedProject)
   );
 
   const maxChange = $derived(
@@ -65,13 +70,13 @@
     </div>
   </div>
 
-  {#if $enrichmentStore.impactLoading}
+  {#if $impactLoading}
     <div class="loading-state">
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
     </div>
-  {:else if !$enrichmentStore.impactAvailable}
+  {:else if !$impactAvailable}
     <div class="empty-state" data-testid="empty-state">
       <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />

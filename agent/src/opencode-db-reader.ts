@@ -85,30 +85,33 @@ export interface CodeImpact {
 
 export interface SessionCodeImpact extends CodeImpact {
   sessionId: string;
+  sessionTitle: string;
   projectId: string;
-  title: string | null;
-  timeCreated: number;
+  directory: string;
+  timeUpdated: number;
 }
 
 export interface TimelineEntry {
   sessionId: string;
+  sessionTitle: string;
   projectId: string;
-  title: string | null;
-  timeCreated: number;
-  timeUpdated: number;
-  additions: number;
-  deletions: number;
-  files: number;
+  directory: string;
+  startTime: number;
+  endTime: number | null;
+  status: 'busy' | 'idle' | 'completed';
+  parentId: string | null;
 }
 
 export interface RecoveryContext {
   sessionId: string;
-  title: string | null;
-  directory: string | null;
+  sessionTitle: string;
+  directory: string;
   lastActivityAt: number;
-  lastUserMessages: string[];
+  lastPrompts: string[];
   lastTools: string[];
-  codeImpact: CodeImpact | null;
+  additions: number;
+  deletions: number;
+  files: number;
   todos: Array<{ content: string; status: string; priority: string }>;
 }
 
@@ -378,22 +381,23 @@ export class OpenCodeDBReader {
       ? this.stmtAllCodeImpactByProject.all(projectId, limit, offset) as Array<{
           id: string; project_id: string; title: string | null;
           summary_additions: number; summary_deletions: number; summary_files: number;
-          time_created: number;
+          time_created: number; time_updated: number;
         }>
       : this.stmtAllCodeImpact.all(limit, offset) as Array<{
           id: string; project_id: string; title: string | null;
           summary_additions: number; summary_deletions: number; summary_files: number;
-          time_created: number;
+          time_created: number; time_updated: number;
         }>;
 
     return rows.map(r => ({
       sessionId: r.id,
+      sessionTitle: r.title ?? r.id.slice(0, 8),
       projectId: r.project_id,
-      title: r.title,
+      directory: r.project_id,
       additions: r.summary_additions,
       deletions: r.summary_deletions,
       files: r.summary_files,
-      timeCreated: r.time_created,
+      timeUpdated: r.time_updated ?? r.time_created,
     }));
   }
 
@@ -414,16 +418,24 @@ export class OpenCodeDBReader {
           summary_files: number | null;
         }>;
 
-    return rows.map(r => ({
-      sessionId: r.id,
-      projectId: r.project_id,
-      title: r.title,
-      timeCreated: r.time_created,
-      timeUpdated: r.time_updated,
-      additions: r.summary_additions ?? 0,
-      deletions: r.summary_deletions ?? 0,
-      files: r.summary_files ?? 0,
-    }));
+    const now = Date.now();
+    return rows.map(r => {
+      const endTime = r.time_updated && r.time_updated !== r.time_created ? r.time_updated : null;
+      const lastActivity = r.time_updated ?? r.time_created;
+      const idleThreshold = 5 * 60 * 1000;
+      const status: 'busy' | 'idle' | 'completed' =
+        (now - lastActivity) < idleThreshold ? 'busy' : endTime ? 'completed' : 'idle';
+      return {
+        sessionId: r.id,
+        sessionTitle: r.title ?? r.id.slice(0, 8),
+        projectId: r.project_id,
+        directory: r.project_id,
+        startTime: r.time_created,
+        endTime,
+        status,
+        parentId: null,
+      };
+    });
   }
 
   getSessionRecoveryContext(sessionId: string): RecoveryContext | null {
@@ -450,18 +462,16 @@ export class OpenCodeDBReader {
       content: string; status: string; priority: string;
     }>;
 
-    const codeImpact = (row.summary_additions !== null || row.summary_deletions !== null)
-      ? { additions: row.summary_additions ?? 0, deletions: row.summary_deletions ?? 0, files: row.summary_files ?? 0 }
-      : null;
-
     return {
       sessionId,
-      title: row.title,
-      directory: row.directory,
+      sessionTitle: row.title ?? sessionId.slice(0, 8),
+      directory: row.directory ?? '',
       lastActivityAt: row.time_updated,
-      lastUserMessages,
+      lastPrompts: lastUserMessages,
       lastTools,
-      codeImpact,
+      additions: row.summary_additions ?? 0,
+      deletions: row.summary_deletions ?? 0,
+      files: row.summary_files ?? 0,
       todos: todoRows.map(t => ({ content: t.content, status: t.status, priority: t.priority })),
     };
   }
@@ -498,18 +508,16 @@ export class OpenCodeDBReader {
         content: string; status: string; priority: string;
       }>;
 
-      const codeImpact = (row.summary_additions !== null || row.summary_deletions !== null)
-        ? { additions: row.summary_additions ?? 0, deletions: row.summary_deletions ?? 0, files: row.summary_files ?? 0 }
-        : null;
-
       return {
         sessionId: row.id,
-        title: row.title,
-        directory: row.directory,
+        sessionTitle: row.title ?? row.id.slice(0, 8),
+        directory: row.directory ?? '',
         lastActivityAt: row.time_updated,
-        lastUserMessages,
+        lastPrompts: lastUserMessages,
         lastTools,
-        codeImpact,
+        additions: row.summary_additions ?? 0,
+        deletions: row.summary_deletions ?? 0,
+        files: row.summary_files ?? 0,
         todos: todoRows.map(t => ({ content: t.content, status: t.status, priority: t.priority })),
       };
     });
@@ -657,7 +665,7 @@ export class OpenCodeDBReader {
 
   private prepareAllCodeImpactStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created
+      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created, time_updated
       FROM session
       WHERE (COALESCE(summary_additions, 0) + COALESCE(summary_deletions, 0)) > 0
       ORDER BY time_created DESC
@@ -667,7 +675,7 @@ export class OpenCodeDBReader {
 
   private prepareAllCodeImpactByProjectStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created
+      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created, time_updated
       FROM session
       WHERE project_id = ? AND (COALESCE(summary_additions, 0) + COALESCE(summary_deletions, 0)) > 0
       ORDER BY time_created DESC
