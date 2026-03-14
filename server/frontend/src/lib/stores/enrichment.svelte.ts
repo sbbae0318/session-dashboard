@@ -122,18 +122,22 @@ export function isImpactLoading(): boolean { return impactLoading; }
 
 export async function fetchImpactData(): Promise<void> {
   const machineId = getSelectedMachineId();
+  console.log('[enrichment] fetchImpactData called, machineId=', machineId);
   if (!machineId) return;
   impactLoading = true;
   try {
+    console.log('[enrichment] fetching impact data...');
     const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
       `/api/enrichment/${machineId}/impact`
     );
+    console.log('[enrichment] impact response:', res.available, res.data?.length);
     impactData = res.data;
     impactAvailable = res.available;
   } catch (e) {
-    console.error('Failed to fetch impact data:', e);
+    console.error('[enrichment] Failed to fetch impact data:', e);
     impactAvailable = false;
   } finally {
+    console.log('[enrichment] fetchImpactData finally, loading=false');
     impactLoading = false;
   }
 }
