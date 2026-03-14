@@ -469,7 +469,7 @@ export class OpenCodeDBReader {
   getAllRecoveryContexts(options?: { limit?: number; idleThresholdMs?: number }): RecoveryContext[] {
     const limit = options?.limit ?? 20;
     const idleThresholdMs = options?.idleThresholdMs ?? 600_000;
-    const cutoffTime = Math.floor((Date.now() - idleThresholdMs) / 1000);
+    const cutoffTime = Date.now() - idleThresholdMs;
 
     const rows = this.stmtAllRecoverySessions.all(cutoffTime, limit) as Array<{
       id: string;
