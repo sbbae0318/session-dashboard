@@ -119,22 +119,30 @@ export class OcQueryCollector {
    * oc-serve에서 최근 세션들의 user 프롬프트를 수집하여 QueryEntry 배열로 반환.
    * oc-serve 다운 시 빈 배열 + console.warn.
    */
-  async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
+   async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
     // Step 1: 모든 프로젝트 worktree에서 세션 수집 (multi-project)
     let sessions: OcServeSession[] = [];
     const worktrees = await this.fetchProjectWorktrees();
     if (worktrees.length > 0) {
       sessions = await this.fetchSessionsFromAllProjects(worktrees);
     }
-    // Fallback: /project 실패 시 기존 동작 (directory 없이)
-    if (sessions.length === 0) {
-      try {
-        const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
-        const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
-        if (Array.isArray(data)) {
-          sessions = data as OcServeSession[];
+
+    // Step 1.5: 전역 세션 보완 — 등록 안 된 프로젝트의 세션도 수집
+    // per-project 쿼리는 oc-serve에 등록된 프로젝트만 반환하므로,
+    // directory 필터 없이 전체 세션을 가져와서 누락분을 추가
+    try {
+      const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
+      const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
+      if (Array.isArray(data)) {
+        const existingIds = new Set(sessions.map(s => s.id));
+        for (const session of data as OcServeSession[]) {
+          if (!existingIds.has(session.id)) {
+            sessions.push(session);
+          }
         }
-      } catch {
+      }
+    } catch {
+      if (sessions.length === 0) {
         console.warn('[oc-query-collector] session list fetch failed, falling back to SessionCache only');
       }
     }

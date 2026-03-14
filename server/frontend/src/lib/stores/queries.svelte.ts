@@ -16,11 +16,11 @@ export function addQuery(query: QueryEntry): void {
   const key = `${query.sessionId}-${query.timestamp}`;
   const exists = queries.some(q => `${q.sessionId}-${q.timestamp}` === key);
   if (!exists) {
-    queries = [query, ...queries].slice(0, 30);
+    queries = [query, ...queries].slice(0, 200);
   }
 }
 
-export async function fetchQueries(limit: number = 30): Promise<void> {
+export async function fetchQueries(limit: number = 200): Promise<void> {
   try {
     const data = await fetchJSON<QueriesResponse>(`/api/queries?limit=${limit}`);
     queries = data.queries ?? [];
