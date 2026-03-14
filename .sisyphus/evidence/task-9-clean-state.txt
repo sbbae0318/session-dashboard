@@ -1,0 +1,55 @@
+=== Task 9: Final Verification Evidence ===
+Date: 2026-03-10T10:53:58Z
+
+--- 1. OpenCode Git Status ---
+?? packages/opencode/CPU.1246342063154.61526.cpuprofile
+
+--- 2. git apply (patch forward) ---
+exit: 0
+
+--- 3. git apply -R (patch reverse) ---
+exit: 0
+
+--- 4. analyze.ts output (first 20 lines) ---
+# OpenCode Latency Analysis Report
+Generated: 2026-03-10T10:53:59.329Z
+Data files: 3
+
+## 1. Measurement Environment
+| Key | Value |
+|-----|-------|
+| OS | darwin arm64 |
+| Bun | 1.3.6 |
+| OpenCode Source | 1.1.60 |
+| Binary | 1.2.22 |
+| Data files | 3 |
+| Total measurements | 117 |
+
+## 2. Phase Breakdown
+| Phase | Count | Min(ms) | Mean(ms) | p50(ms) | p95(ms) | Max(ms) |
+|-------|-------|---------|----------|---------|---------|---------|
+| llm.stream | 6 | 2596.6 | 4017.0 | 4416.6 | 5520.7 | 5520.7 |
+| processor.process | 6 | 2487.8 | 3189.3 | 3220.1 | 4128.3 | 4128.3 |
+| stream.firstEvent | 6 | 777.9 | 1055.1 | 1100.5 | 1342.1 | 1342.1 |
+
+--- 5. README.md section headings ---
+## 목적 / Purpose
+## 디렉토리 구조 / Directory Structure
+## Quick Start / 빠른 시작
+### 1. 패치 적용 / Apply Instrumentation Patch
+### 2. 측정 실행 / Run Measurement
+### 3. 결과 분석 / Analyze Results
+### 4. 패치 제거 / Remove Patch
+## 버전 호환성 / Version Compatibility
+## 환경 변수 / Environment Variables
+## 계측 포인트 / Instrumentation Points
+## Data Collection / 데이터 수집
+## Analysis / 분석
+
+--- Definition of Done Checklist ---
+[✓] OpenCode git status: CPU profile 외 untracked/modified 없음
+[✓] git apply instrument.patch → exit 0
+[✓] git apply -R instrument.patch → exit 0
+[✓] bun run analyze.ts *.jsonl → 마크다운 출력
+[✓] report.md에 "Phase Breakdown", "Top Bottlenecks", "p50" 포함
+[✓] README.md에 Quick Start, Data Collection, Analysis, Version Warning, Instrumentation Points 포함

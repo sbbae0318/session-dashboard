@@ -7,25 +7,15 @@
     isTokenLoading,
   } from '../../lib/stores/enrichment.svelte';
   import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
-  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
+  import { onMachineChange } from '../../lib/stores/machine.svelte';
 
   let data = $derived(getTokenData());
   let available = $derived(isTokenAvailable());
   let loading = $derived(isTokenLoading());
 
-  let prevMachineId: string | null = null;
-
   onMount(() => {
-    prevMachineId = getSelectedMachineId();
     fetchTokenStats();
-  });
-
-  $effect(() => {
-    const mid = getSelectedMachineId();
-    if (prevMachineId !== null && mid !== prevMachineId) {
-      prevMachineId = mid;
-      setTimeout(() => fetchTokenStats(), 0);
-    }
+    return onMachineChange(() => fetchTokenStats());
   });
 
   function formatTokens(n: number): string {

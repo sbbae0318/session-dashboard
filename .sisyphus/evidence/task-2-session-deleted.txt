@@ -1,0 +1,15 @@
+== T2: session.deleted SSE 이벤트 처리 ==
+Date: 2026-03-11
+
+Changes in agent/src/session-cache.ts:
+1. handleRawEvent() switch에 'session.deleted' 케이스 추가
+2. handleSessionDeleted(props) 메서드 구현
+   - props['info']?.id 또는 props['sessionID']에서 세션 ID 추출
+   - this.store.delete(sessionID) 호출
+3. deletionCheckTimer, deletionCheckOffset 필드 추가
+4. start()에 deletion check 타이머 등록 (60초 간격)
+5. stop()에서 deletion check 타이머 정리
+
+Verification:
+$ cd agent && npx tsc --noEmit
+→ 에러 0 (clean)

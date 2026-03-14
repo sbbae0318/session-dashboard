@@ -1,0 +1,4 @@
+
+> @bae-settings/dashboard-agent@1.0.0 build
+> tsc
+

@@ -1,0 +1,11 @@
+=== Version Check: #오후 ===
+
+Binary path: /Users/sbbae/.opencode/bin/opencode
+Binary version: 1.2.22
+
+Source path: /Users/sbbae/project/research/_tmp/opencode/packages/opencode/package.json
+Source version: 1.1.60
+
+Result: ⚠️ Version mismatch: binary=1.2.22, source=1.1.60
+
+Note: Instrumentation patches will target source version 1.1.60

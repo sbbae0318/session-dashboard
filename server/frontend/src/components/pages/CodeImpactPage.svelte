@@ -7,7 +7,7 @@
     isImpactLoading,
   } from '../../lib/stores/enrichment.svelte';
   import type { SessionCodeImpact } from '../../lib/stores/enrichment.svelte';
-  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
+  import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
 
   let impactData = $derived(getImpactData());
@@ -49,19 +49,9 @@
     return item.additions === 0 && item.deletions === 0;
   }
 
-  let prevMachineId: string | null = null;
-
   onMount(() => {
-    prevMachineId = getSelectedMachineId();
     fetchImpactData();
-  });
-
-  $effect(() => {
-    const mid = getSelectedMachineId();
-    if (prevMachineId !== null && mid !== prevMachineId) {
-      prevMachineId = mid;
-      setTimeout(() => fetchImpactData(), 0);
-    }
+    return onMachineChange(() => fetchImpactData());
   });
 </script>
 

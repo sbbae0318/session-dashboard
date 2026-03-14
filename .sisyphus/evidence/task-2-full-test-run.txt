@@ -1,0 +1,45 @@
+
+> @session-dashboard/session-dashboard@1.0.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/sbbae/project/session-dashboard-ui-bugfix/server[39m
+
+[90mstderr[2m | src/__tests__/machine-manager-source.test.ts[2m > [22m[2mMachineManager — source-aware polling[2m > [22m[2mMachineStatus source field[2m > [22m[2mshould preserve source after failed poll
+[22m[39m[MachineManager] Claude Machine (10.0.0.2) poll failed (1/3): ECONNREFUSED
+
+ [32m✓[39m src/__tests__/recent-prompts-source.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/__tests__/aggregation.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/machine-manager-source.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/__tests__/machine-manager-active-dirs.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/__tests__/active-sessions-claude.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m src/__tests__/machine-manager.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould parse valid YAML and return MachineConfig[]
+[22m[39m[Config] Loaded 2 machine(s): Mac Studio, Mac Mini
+
+[90mstderr[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould return empty array for empty machines list
+[22m[39m[Config] machines.yml has 0 machines configured
+
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould parse optional timeout field
+[22m[39m[Config] Loaded 1 machine(s): Workstation
+
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould default timeout to undefined when not specified
+[22m[39m[Config] Loaded 1 machine(s): Test
+
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould ignore invalid timeout values (too low, too high, NaN)
+[22m[39m[Config] Loaded 3 machine(s): Low, High, NaN
+
+ [32m✓[39m src/__tests__/machines-config.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/__tests__/active-sessions.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m frontend/src/lib/__tests__/utils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/queries-reader.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/event-stream.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/__tests__/server.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/__tests__/jsonl-reader.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 823[2mms[22m[39m
+       [33m[2m✓[22m[39m should detect new lines appended to the file [33m 805[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[32m162 passed[39m[22m[90m (162)[39m
+[2m   Start at [22m 21:36:12
+[2m   Duration [22m 1.09s[2m (transform 794ms, setup 0ms, import 1.39s, tests 1.04s, environment 1ms)[22m
+

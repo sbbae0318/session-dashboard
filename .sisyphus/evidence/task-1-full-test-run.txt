@@ -1,0 +1,172 @@
+
+> @session-dashboard/dashboard-agent@1.0.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/sbbae/project/session-dashboard-ui-bugfix/agent[39m
+
+ [31m❯[39m src/__tests__/active-directories.test.ts [2m([22m[2m12 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 8[2mms[22m[39m
+       [32m✓[39m should extract --dir from opencode attach line[32m 1[2mms[22m[39m
+       [32m✓[39m should extract --dir from minimal attach line[32m 0[2mms[22m[39m
+       [32m✓[39m should return null for non-attach processes[32m 0[2mms[22m[39m
+       [32m✓[39m should return null for empty string[32m 0[2mms[22m[39m
+       [32m✓[39m should handle opencode run processes (not attach)[32m 0[2mms[22m[39m
+[31m       [31m×[31m should return unique directories from ps output[39m[32m 5[2mms[22m[39m
+       [32m✓[39m should deduplicate same directory from multiple processes[32m 0[2mms[22m[39m
+       [32m✓[39m should filter out root directory[32m 0[2mms[22m[39m
+       [32m✓[39m should return empty array on ps error[32m 0[2mms[22m[39m
+       [32m✓[39m should return empty array on empty output[32m 0[2mms[22m[39m
+       [32m✓[39m should cache results for subsequent calls[32m 0[2mms[22m[39m
+       [32m✓[39m should refresh after cache reset[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/prompt-store.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m src/__tests__/session-store.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/jsonl-reader.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/__tests__/auth.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 106[2mms[22m[39m
+ [32m✓[39m src/__tests__/session-cache.test.ts [2m([22m[2m31 tests[22m[2m)[22m[32m 152[2mms[22m[39m
+{"level":30,"time":1773232174729,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/sessions","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174737,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/sessions","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/sessions","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174748,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":40,"time":1773232174729,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174731,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":1.6691668033599854,"msg":"request completed"}
+{"level":30,"time":1773232174731,"pid":12378,"hostname":"mm","reqId":"req-2","req":{"method":"GET","url":"/api/claude/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":40,"time":1773232174731,"pid":12378,"hostname":"mm","reqId":"req-2","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174731,"pid":12378,"hostname":"mm","reqId":"req-2","res":{"statusCode":200},"responseTime":0.2642080783843994,"msg":"request completed"}
+{"level":40,"time":1773232174737,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174737,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.4795830249786377,"msg":"request completed"}
+{"level":40,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"Route GET:/api/claude/sessions not found"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":404},"responseTime":0.21795916557312012,"msg":"request completed"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-2","req":{"method":"GET","url":"/api/claude/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":40,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-2","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-2","msg":"Route GET:/api/claude/queries not found"}
+{"level":30,"time":1773232174744,"pid":12378,"hostname":"mm","reqId":"req-2","res":{"statusCode":404},"responseTime":0.19929194450378418,"msg":"request completed"}
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[oc-query-collector] session list fetch failed, falling back to SessionCache only
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[prompt-store] Collection error: TypeError: The database connection is not open
+    at SessionStore.getAll [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-store.ts:126:34[90m)[39m
+    at SessionCache.getSessionDetails [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-cache.ts:163:28[90m)[39m
+    at OcQueryCollector.getSupplementData [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:110:27[90m)[39m
+    at OcQueryCollector.collectQueries [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/oc-query-collector.ts:145:35[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at doCollection [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:122:25[90m)[39m
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[oc-query-collector] session list fetch failed, falling back to SessionCache only
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[prompt-store] Collection error: TypeError: The database connection is not open
+    at SessionStore.getAll [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-store.ts:126:34[90m)[39m
+    at SessionCache.getSessionDetails [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-cache.ts:163:28[90m)[39m
+    at OcQueryCollector.getSupplementData [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:110:27[90m)[39m
+    at OcQueryCollector.collectQueries [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/oc-query-collector.ts:145:35[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at doCollection [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:122:25[90m)[39m
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould include claudeSourceConnected in /health when Claude enabled
+[22m[39m[oc-query-collector] session list fetch failed, falling back to SessionCache only
+
+ [32m✓[39m src/__tests__/oc-query-collector.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+{"level":30,"time":1773232174767,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":19.38599991798401,"msg":"request completed"}
+ [32m✓[39m src/__tests__/oc-serve-proxy.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 187[2mms[22m[39m
+{"level":30,"time":1773232174773,"pid":12381,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174773,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174776,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/sessions","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174781,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174781,"pid":12381,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/queries?limit=10","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+ [32m✓[39m src/__tests__/prompt-extractor.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+{"level":30,"time":1773232174785,"pid":12378,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/claude/queries?limit=3","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1773232174773,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.11899995803833008,"msg":"request completed"}
+{"level":40,"time":1773232174776,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174776,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.0813748836517334,"msg":"request completed"}
+{"level":40,"time":1773232174781,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174782,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.3949580192565918,"msg":"request completed"}
+{"level":40,"time":1773232174785,"pid":12378,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174787,"pid":12381,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould respect limit param for /api/claude/queries
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould respect limit param for /api/claude/queries
+[22m[39m[oc-query-collector] session list fetch failed, falling back to SessionCache only
+
+[90mstderr[2m | src/__tests__/server-claude.test.ts[2m > [22m[2mserver — Claude routes[2m > [22m[2mshould respect limit param for /api/claude/queries
+[22m[39m[prompt-store] Collection error: TypeError: The database connection is not open
+    at SessionStore.getAll [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-store.ts:126:34[90m)[39m
+    at SessionCache.getSessionDetails [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/session-cache.ts:163:28[90m)[39m
+    at OcQueryCollector.getSupplementData [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:110:27[90m)[39m
+    at OcQueryCollector.collectQueries [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/oc-query-collector.ts:145:35[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at doCollection [90m(/Users/sbbae/project/session-dashboard-ui-bugfix/agent/[39msrc/server.ts:122:25[90m)[39m
+
+{"level":30,"time":1773232174790,"pid":12378,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":4.274957895278931,"msg":"request completed"}
+{"level":30,"time":1773232174791,"pid":12381,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+ [32m✓[39m src/__tests__/server-claude.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 125[2mms[22m[39m
+{"level":30,"time":1773232174795,"pid":12381,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/api/queries","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+ [32m✓[39m src/__tests__/server-queries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+{"level":40,"time":1773232174774,"pid":12381,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174775,"pid":12381,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":1.8671250343322754,"msg":"request completed"}
+{"level":40,"time":1773232174781,"pid":12381,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174782,"pid":12381,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.18349981307983398,"msg":"request completed"}
+{"level":40,"time":1773232174787,"pid":12381,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174787,"pid":12381,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.21645784378051758,"msg":"request completed"}
+{"level":40,"time":1773232174791,"pid":12381,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174791,"pid":12381,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.21491718292236328,"msg":"request completed"}
+{"level":40,"time":1773232174795,"pid":12381,"hostname":"mm","reqId":"req-1","msg":"API_KEY not set — authentication disabled"}
+{"level":30,"time":1773232174795,"pid":12381,"hostname":"mm","reqId":"req-1","res":{"statusCode":200},"responseTime":0.38279199600219727,"msg":"request completed"}
+[90mstderr[2m | ClientRequest.<anonymous> (/Users/sbbae/project/session-dashboard-ui-bugfix/agent/src/session-cache.ts:216:15)
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | ClientRequest.<anonymous> (/Users/sbbae/project/session-dashboard-ui-bugfix/agent/src/session-cache.ts:216:15)
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | ClientRequest.<anonymous> (/Users/sbbae/project/session-dashboard-ui-bugfix/agent/src/session-cache.ts:216:15)
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+[90mstderr[2m | ClientRequest.<anonymous> (/Users/sbbae/project/session-dashboard-ui-bugfix/agent/src/session-cache.ts:216:15)
+[22m[39m[SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:80
+
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts [2m([22m[2m46 tests[22m[2m)[22m[33m 2355[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/__tests__/active-directories.test.ts[2m > [22mactive-directories[2m > [22mdetectActiveDirectoriesUncached[2m > [22mshould return unique directories from ps output
+[31m[1mAssertionError[22m: expected [ '/Users/user/mule', …(2) ] to deeply equal [ '/Users/user/mule', …(2) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "/Users/user/mule",[22m
+[32m-   "/Users/user/project/web-server",[39m
+[2m    "/Users/user/project/my-app",[22m
+[31m+   "/Users/user/project/web-server",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/__tests__/active-directories.test.ts:[2m63:20[22m[39m
+    [90m 61| [39m
+    [90m 62| [39m      [35mconst[39m dirs [33m=[39m [35mawait[39m [34mdetectActiveDirectoriesUncached[39m()[33m;[39m
+    [90m 63| [39m      [34mexpect[39m(dirs)[33m.[39m[34mtoEqual[39m([
+    [90m   | [39m                   [31m^[39m
+    [90m 64| [39m        [32m'/Users/user/mule'[39m[33m,[39m
+    [90m 65| [39m        [32m'/Users/user/project/web-server'[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m12 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m239 passed[39m[22m[90m (240)[39m
+[2m   Start at [22m 21:29:34
+[2m   Duration [22m 2.61s[2m (transform 956ms, setup 0ms, import 1.75s, tests 3.16s, environment 1ms)[22m
+

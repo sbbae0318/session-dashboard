@@ -20,8 +20,22 @@ export function getSelectedMachineId(): string | null {
   return selectedMachineId;
 }
 
+type MachineChangeCallback = (machineId: string | null) => void;
+const machineChangeCallbacks: MachineChangeCallback[] = [];
+
 export function selectMachine(machineId: string | null): void {
   selectedMachineId = machineId;
+  for (const cb of machineChangeCallbacks) {
+    cb(machineId);
+  }
+}
+
+export function onMachineChange(cb: MachineChangeCallback): () => void {
+  machineChangeCallbacks.push(cb);
+  return () => {
+    const idx = machineChangeCallbacks.indexOf(cb);
+    if (idx >= 0) machineChangeCallbacks.splice(idx, 1);
+  };
 }
 
 export function shouldShowMachineFilter(): boolean {

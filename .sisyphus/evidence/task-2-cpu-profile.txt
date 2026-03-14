@@ -1,0 +1,11 @@
+CPU Profile check — #오후
+---
+Profiling method: Static code analysis (bun --cpu-prof failed due to monorepo deps)
+
+Output file:
+-rw-r--r--  1 sbbae  staff  8151  3 10 18:55 /Users/sbbae/project/investigate/results/cpu-profile.md
+
+Line count:
+     198 /Users/sbbae/project/investigate/results/cpu-profile.md
+
+Contents: Top 20 hot functions, 7 existing log.time() points, lock system analysis, 6 function call pattern analyses

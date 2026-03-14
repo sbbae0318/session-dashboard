@@ -1,0 +1,1 @@
+{"status":"ok","uptime":9870,"timestamp":1773133048716,"connectedMachines":1,"totalMachines":1}Test server: 200

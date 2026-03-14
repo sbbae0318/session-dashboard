@@ -1,0 +1,20 @@
+== T2: REST Fallback Deletion Check ==
+Date: 2026-03-11
+
+checkDeletedSessions() async 메서드 구현:
+- 60초 간격으로 setInterval 실행
+- cache에 있는 세션 ID들을 최대 10개씩 round-robin으로 확인
+- fetchJson()으로 oc-serve /session/{id} GET 요청
+- 404 응답 → this.store.delete(sessionID)
+- 네트워크 에러 → 세션 보존 (false positive 방지)
+- deletionCheckOffset 필드로 round-robin 위치 추적
+
+Round-robin 로직:
+- Object.keys(this.store.getAll())로 전체 세션 ID 목록
+- offset부터 최대 10개 슬라이스
+- offset이 전체 길이 이상이면 0으로 리셋
+- 매 사이클 offset += batch.length
+
+Verification:
+$ cd agent && npx tsc --noEmit
+→ 에러 0 (clean)

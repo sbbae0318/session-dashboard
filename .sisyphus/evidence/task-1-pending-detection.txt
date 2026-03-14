@@ -1,0 +1,28 @@
+Task 1: waitingForInput detection logic
+Date: 2026-03-11
+Worktree: /Users/sbbae/project/session-dashboard-status-simplify
+
+== tsc --noEmit result ==
+$ cd /Users/sbbae/project/session-dashboard-status-simplify/agent && npx tsc --noEmit
+(no output - 0 errors)
+EXIT_CODE=0
+
+== Changes Summary ==
+1. agent/src/session-cache.ts:
+   - SessionDetail interface: added `waitingForInput: boolean`
+   - defaultSessionDetail(): added `waitingForInput: false`
+   - handleRawEvent(): added 'permission.updated' case
+   - handleSessionStatus(): resets waitingForInput to false on busy transition
+   - handleMessagePartUpdated(): added `waitingForInput: false` reset in running/completed branches, added `pending` branch with `waitingForInput: true`
+   - handlePermissionUpdated(): new method — sets waitingForInput to true
+   - bootstrapProject(): added `waitingForInput` to upsert call
+
+2. agent/src/session-store.ts:
+   - SessionRow: added `waiting_for_input: number`
+   - CREATE TABLE: added `waiting_for_input INTEGER NOT NULL DEFAULT 0`
+   - Migration: ALTER TABLE ADD COLUMN with try/catch for existing DBs
+   - upsert(): maps `detail.waitingForInput ? 1 : 0`
+   - rowToDetail(): maps `Boolean(row.waiting_for_input)`
+
+3. agent/src/__tests__/session-store.test.ts:
+   - makeDetail(): added `waitingForInput: false` default

@@ -1,0 +1,3 @@
+ * 3. Spawns test agent (port 3198) and test server (port 3099)
+const AGENT_PORT = 3198;
+const SERVER_PORT = 3099;

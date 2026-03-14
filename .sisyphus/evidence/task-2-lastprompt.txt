@@ -1,0 +1,71 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/sbbae/project/session-dashboard-claude-parity/agent[39m
+
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould read history.jsonl and return ClaudeQueryEntry[][32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould always set source to "claude-code"[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould always set sessionTitle to null[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould always set isBackground to false[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould respect the limit parameter[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould return empty array for empty file[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould return empty array when history.jsonl does not exist[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould map entry.display to query field[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould preserve sessionId and timestamp from source entries[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mstart() and stop() should not throw[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould filter out slash commands from history[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource[2m > [22mshould filter out empty display strings[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource — getRecentQueries with extractUserPrompt[2m > [22mshould filter out system-only prompts ([SYSTEM DIRECTIVE:)[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource — getRecentQueries with extractUserPrompt[2m > [22mshould filter out <system-reminder> prompts[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource — getRecentQueries with extractUserPrompt[2m > [22mshould strip [search-mode] prefix and return actual content[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-source.test.ts[2m > [22mClaudeSource — getRecentQueries with extractUserPrompt[2m > [22mshould filter "Continue if you have next steps" system prompt[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould find existing heartbeat files on initial scan[32m 54[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould return sessions with source "claude-code"[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould clear sessions after stop()[32m 54[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould evict sessions with stale heartbeats[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould ignore files with invalid JSON[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould ignore heartbeat files with empty sessionId[32m 102[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould not crash when heartbeats directory does not exist[32m 101[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould ignore non-json files in the directory[32m 102[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould detect updated lastHeartbeat from external refresh[32m 104[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould detect idle status when last entry is assistant text[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould detect busy status when last entry is user message[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould detect busy status when assistant uses tool_use[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat[2m > [22mshould default to busy when conversation file is missing[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — project scanning[2m > [22mshould detect active sessions from recently modified project JSONL files[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — project scanning[2m > [22mshould detect busy status from project JSONL when last entry is user message[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — project scanning[2m > [22mshould not detect sessions from project JSONL files older than STALE_TTL_MS[32m 205[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — title extraction[2m > [22mshould extract title from first user message in JSONL[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — title extraction[2m > [22mshould extract title from array content with text part[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — title extraction[2m > [22mshould return null title when no user message exists[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — title extraction[2m > [22mshould truncate title to 100 characters[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPromptTime extraction[2m > [22mshould extract lastPromptTime from last user entry timestamp in ms[32m 54[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPromptTime extraction[2m > [22mshould return null lastPromptTime when no user entry exists[32m 54[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPromptTime extraction[2m > [22mshould return null lastPromptTime when user entry has no timestamp field[32m 53[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastFileModified[2m > [22mshould set lastFileModified from JSONL mtime when heartbeat file exists[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastFileModified[2m > [22mshould fallback lastFileModified to lastHeartbeat when JSONL is missing[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastResponseTime extraction[2m > [22mshould extract lastResponseTime from last assistant entry timestamp[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastResponseTime extraction[2m > [22mshould return null when no assistant entry exists[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastResponseTime extraction[2m > [22mshould return null when assistant entry has no timestamp[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — PID liveness + eviction[2m > [22mshould NOT evict session when PID is alive even if TTL expired[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — PID liveness + eviction[2m > [22mshould evict session when PID is dead AND TTL expired[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — PID liveness + eviction[2m > [22mshould keep session when PID is dead but TTL not expired[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — PID liveness + eviction[2m > [22mshould evict pid=0 session when TTL expired[32m 50[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — PID liveness + eviction[2m > [22mshould keep pid=0 session when TTL not expired[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22mhappy path: user+assistant → status=idle, correct title, lastPrompt, timestamps[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22mempty file → status=busy, title=null, lastPrompt=null[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22mincomplete last line → uses previous complete line for status[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22muser-only → status=busy, lastResponseTime=null[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22massistant-only → status=idle, lastPromptTime=null, lastPrompt=null[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22mtool_use assistant → status=busy[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22mlastPrompt 200자 제한: 200자 초과 → truncate[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — parseConversationFile (single-pass)[2m > [22marray content lastPrompt: content가 array인 경우 text part 추출[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPrompt filtering[2m > [22mshould pass through normal user prompt as lastPrompt[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPrompt filtering[2m > [22mshould filter system prompt to null (SYSTEM DIRECTIVE)[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPrompt filtering[2m > [22mshould strip [search-mode] prefix from lastPrompt[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPrompt filtering[2m > [22mshould truncate lastPrompt to 200 chars (via parseConversationFile)[32m 52[2mms[22m[39m
+ [32m✓[39m src/__tests__/claude-heartbeat.test.ts[2m > [22mClaudeHeartbeat — lastPrompt filtering[2m > [22mshould filter <system-reminder> prefix to null[32m 52[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m62 passed[39m[22m[90m (62)[39m
+[2m   Start at [22m 20:43:24
+[2m   Duration [22m 2.49s[2m (transform 116ms, setup 0ms, import 146ms, tests 2.35s, environment 0ms)[22m
+

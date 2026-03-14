@@ -1,0 +1,57 @@
+=== /Users/sbbae/project/investigate/results/raw/run-scenario1-simulated.jsonl ===
+      39 /Users/sbbae/project/investigate/results/raw/run-scenario1-simulated.jsonl
+clone.msgs
+createUserMessage
+llm.providers.resolve
+llm.stream
+llm.streamText
+mcp.listTools.parallel
+mcp.listTools.perServer
+mcp.tools.function
+mcp.tools.total
+message.count
+messages.stream
+processor.process
+registry.tools
+resolveTools.total
+session.get
+stream.firstEvent
+system.prompt
+=== /Users/sbbae/project/investigate/results/raw/run-scenario2-simulated.jsonl ===
+      39 /Users/sbbae/project/investigate/results/raw/run-scenario2-simulated.jsonl
+clone.msgs
+createUserMessage
+llm.providers.resolve
+llm.stream
+llm.streamText
+mcp.listTools.parallel
+mcp.listTools.perServer
+mcp.tools.function
+mcp.tools.total
+message.count
+messages.stream
+processor.process
+registry.tools
+resolveTools.total
+session.get
+stream.firstEvent
+system.prompt
+=== /Users/sbbae/project/investigate/results/raw/run-scenario3-simulated.jsonl ===
+      39 /Users/sbbae/project/investigate/results/raw/run-scenario3-simulated.jsonl
+clone.msgs
+createUserMessage
+llm.providers.resolve
+llm.stream
+llm.streamText
+mcp.listTools.parallel
+mcp.listTools.perServer
+mcp.tools.function
+mcp.tools.total
+message.count
+messages.stream
+processor.process
+registry.tools
+resolveTools.total
+session.get
+stream.firstEvent
+system.prompt

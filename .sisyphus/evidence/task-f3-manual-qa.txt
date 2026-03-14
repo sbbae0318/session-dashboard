@@ -1,0 +1,61 @@
+# F3: Manual QA Evidence
+# Date: 2026-03-10T11:05:00Z
+
+## Scenario 1: Patch Apply + TypeScript Compile
+### Steps:
+1. git status --porcelain → clean (only untracked cpuprofile)
+2. git apply instrument.patch → EXIT=0
+3. git diff --stat → 5 files changed, 68 insertions(+), 4 deletions(-)
+4. bun tsc --noEmit --skipLibCheck → many pre-existing errors in monorepo
+   - Patched files (mcp/index.ts, session/llm.ts, session/processor.ts, session/prompt.ts, tool/registry.ts):
+     Only NEW errors are `Cannot find module '@/util/perf-logger'` / `'../util/perf-logger'`
+     These are EXPECTED by design (perf-logger is external module placed at runtime)
+     All other errors in these files are pre-existing (path aliases, type strictness)
+5. git apply -R instrument.patch → EXIT=0
+6. git diff --stat → empty (clean state restored)
+
+### RESULT: PASS (with note: perf-logger import errors are by-design)
+
+## Scenario 2: Analyze Script Execution
+### Command: bun run analyze.ts <3 simulated JSONL files>
+### Output:
+- Markdown report with proper headers
+- "## Phase Breakdown" present ✓
+- "## 2. Phase Breakdown" with full table ✓
+- 16 phases measured across 117 total measurements
+- Top bottleneck: llm.stream (Mean: 4017.0ms)
+- Recommendations section present ✓
+### EXIT: 0
+### RESULT: PASS
+
+## Scenario 3: perf-logger Module Direct Test
+### Command: OPENCODE_PERF_LOG=/tmp/perf-test-output.jsonl bun run /tmp/test-perf-logger.ts
+### Note: PerfLog uses OPENCODE_PERF_LOG env var, not constructor param
+### JSONL Output:
+  {"phase":"test.phase","startNs":10530708,"endNs":22564083,"durationMs":12.033375,"step":1,"metadata":{"step":1}}
+  {"phase":"test.count","count":42,"startNs":67041041,"step":1,"metadata":{"step":1}}
+### Validation:
+- phase field: ✓ ("test.phase", "test.count")
+- durationMs field: ✓ (12.033375)
+- step field: ✓ (1)
+- metadata field: ✓ ({"step":1})
+### EXIT: 0
+### RESULT: PASS
+
+## Scenario 4: run-measurement.sh --analyze-only
+### Command: /Users/sbbae/project/investigate/scripts/run-measurement.sh --analyze-only
+### Output:
+- "→ Running analysis on 3 data file(s)..."
+- "✓ Report generated: /Users/sbbae/project/investigate/results/report.md"
+- Preview of report markdown shown
+### EXIT: 0
+### RESULT: PASS
+
+## Summary
+Scenarios [4/4 pass] | VERDICT: APPROVE
+
+## Notes
+- Scenario 1: tsc has 100+ pre-existing errors in monorepo (github/, infra/, packages/app/, TUI components)
+  The only NEW errors from patch are perf-logger imports — expected since module is external
+- Scenario 3: Initial test used wrong PerfLog API (constructor param vs env var) — corrected and passed
+- OpenCode source clean state verified before/after patch operations

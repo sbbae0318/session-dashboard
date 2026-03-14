@@ -1,0 +1,11 @@
+      return { label: 'Waiting', cssClass: 'status-waiting' };
+    }
+    // 3. Idle: everything else
+    return { label: 'Idle', cssClass: 'status-idle' };
+  }
+--
+  .status-waiting {
+    background: rgba(209, 105, 239, 0.15);
+    color: #d169ef;
+    border: 1px solid rgba(209, 105, 239, 0.3);
+  }

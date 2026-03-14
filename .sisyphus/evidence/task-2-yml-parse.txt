@@ -1,0 +1,10 @@
+{
+  "raw": "machines:\n  - id: test-opencode-agent\n    alias: Test OpenCode Agent E2E\n    host: 127.0.0.1\n    port: 3198\n    apiKey: e2e-oc-test-key-12345\n    source: opencode\n",
+  "checks": {
+    "source: opencode": true,
+    "port: 3198": true,
+    "apiKey: e2e-oc-test-key-12345": true,
+    "id: test-opencode-agent": true,
+    "host: 127.0.0.1": true
+  }
+}

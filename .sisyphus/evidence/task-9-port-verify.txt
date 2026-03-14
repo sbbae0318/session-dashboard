@@ -1,0 +1,25 @@
+=== OpenCode E2E Port Config ===
+ * 3. Spawns test agent (port 3198) and test server (port 3099)
+const AGENT_PORT = 3198;
+const SERVER_PORT = 3099;
+        PORT: String(AGENT_PORT),
+    [join(process.cwd(), 'dist', 'cli.js'), 'start', String(SERVER_PORT)],
+    await waitForHealth(`http://127.0.0.1:${AGENT_PORT}/health`);
+    console.log(`[E2E Setup] Test agent ready on port ${AGENT_PORT} (PID: ${agentProc.pid})`);
+    await waitForServerReady(`http://127.0.0.1:${SERVER_PORT}/api/sessions`);
+    console.log(`[E2E Setup] Test server ready on port ${SERVER_PORT} (PID: ${serverProc.pid})`);
+
+=== Claude E2E Port Config ===
+ * 3. Spawns test agent (port 3199) and test server (port 3098)
+const AGENT_PORT = 3199;
+const SERVER_PORT = 3098;
+        PORT: String(AGENT_PORT),
+    [join(process.cwd(), 'dist', 'cli.js'), 'start', String(SERVER_PORT)],
+    await waitForHealth(`http://127.0.0.1:${AGENT_PORT}/health`);
+    console.log(`[E2E Setup] Test agent ready on port ${AGENT_PORT} (PID: ${agentProc.pid})`);
+    await waitForHealth(`http://127.0.0.1:${SERVER_PORT}/api/sessions`);
+    console.log(`[E2E Setup] Test server ready on port ${SERVER_PORT} (PID: ${serverProc.pid})`);
+
+=== No Port Conflicts ===
+OpenCode: agent=3198, server=3099
+Claude:   agent=3199, server=3098

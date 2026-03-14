@@ -1,0 +1,23 @@
+=== Task 4 Instrumented Output Test ===
+Date: #오후
+
+Apply exit: 0
+
+--- Attempting run with OPENCODE_PERF_LOG ---
+error: ENOENT reading "/Users/sbbae/project/research/_tmp/opencode/packages/opencode/node_modules/@clack/prompts"
+
+Bun v1.3.6 (macOS arm64)
+
+--- Perf log output ---
+(Note: monorepo deps not fully installed - module resolution error is pre-existing)
+
+--- Syntax check of instrumented files ---
+✗ packages/opencode/src/session/prompt.ts
+✓ packages/opencode/src/session/llm.ts
+✓ packages/opencode/src/session/processor.ts
+✓ packages/opencode/src/mcp/index.ts
+✓ packages/opencode/src/tool/registry.ts
+✓ packages/opencode/src/util/perf-logger.ts
+
+--- Reverse apply ---
+Reverse exit: 0

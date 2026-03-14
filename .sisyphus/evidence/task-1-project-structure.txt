@@ -1,0 +1,31 @@
+=== /Users/sbbae/project/investigate/ ===
+total 16
+drwxr-xr-x   7 sbbae  staff   224  3 10 18:45 .
+drwxr-xr-x  50 sbbae  staff  1600  3 10 18:43 ..
+-rw-r--r--   1 sbbae  staff   278  3 10 18:44 package.json
+drwxr-xr-x   2 sbbae  staff    64  3 10 18:43 patches
+-rw-r--r--   1 sbbae  staff  2108  3 10 18:45 README.md
+drwxr-xr-x   3 sbbae  staff    96  3 10 18:43 results
+drwxr-xr-x   3 sbbae  staff    96  3 10 18:44 scripts
+
+=== patches/ ===
+total 0
+drwxr-xr-x  2 sbbae  staff   64  3 10 18:43 .
+drwxr-xr-x  7 sbbae  staff  224  3 10 18:45 ..
+
+=== scripts/ ===
+total 8
+drwxr-xr-x  3 sbbae  staff   96  3 10 18:44 .
+drwxr-xr-x  7 sbbae  staff  224  3 10 18:45 ..
+-rw-r--r--  1 sbbae  staff  548  3 10 18:44 config.ts
+
+=== results/ ===
+total 0
+drwxr-xr-x  3 sbbae  staff   96  3 10 18:43 .
+drwxr-xr-x  7 sbbae  staff  224  3 10 18:45 ..
+drwxr-xr-x  2 sbbae  staff   64  3 10 18:43 raw
+
+=== results/raw/ ===
+total 0
+drwxr-xr-x  2 sbbae  staff  64  3 10 18:43 .
+drwxr-xr-x  3 sbbae  staff  96  3 10 18:43 ..

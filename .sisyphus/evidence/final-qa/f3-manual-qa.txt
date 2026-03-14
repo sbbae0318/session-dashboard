@@ -1,0 +1,26 @@
+F3 Real Manual QA Results — 2026-03-09
+
+Scenario 1: Agent meta format when SSE connected
+  PASS: meta.sseConnected=True, lastSseEventAt>0, sseConnectedAt>0
+  sessions count: 106
+
+Scenario 2: Dashboard server API responding
+  PASS: 972 sessions, apiStatus field present
+  busy: 4, idle: 0, null: 968
+
+Scenario 3: Agent health endpoint
+  PASS: health ok, sseConnected=True, ocServeConnected=True
+
+Scenario 4: Forbidden pattern checks
+  PASS: no as any or @ts-ignore in production files
+  PASS: DashboardSession type unchanged
+  PASS: void this.bootstrap() still fire-and-forget (line 191)
+
+Scenario 5: Backward compat (undefined = trust cache)
+  PASS: condition is `cached.sseConnected !== false` (undefined passes through)
+
+Scenario 6: Bootstrap skip condition
+  PASS: `if (existing && existing.updatedAt >= this.sseConnectedAt) continue;`
+  First-boot protected: !existing → always upsert
+
+Scenarios [6/6 pass] | Integration [PASS] | Edge Cases [3 tested] | VERDICT: APPROVE

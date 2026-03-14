@@ -1,0 +1,21 @@
+Assumption Validation check — #오후
+---
+
+Verdict count in analysis:
+5
+
+Verdicts:
+**Verdict**: ✅ **CONFIRMED**
+**Verdict**: ⚠️ **LOW RISK** (PARTIALLY CONFIRMED)
+**Verdict**: ✅ **CONFIRMED**
+**Verdict**: 긴 세션(100+ messages)에서 significant overhead. 짧은 세션에서는 수용 가능.
+**Verdict**: 짧은 세션에서는 무시할 수준. 긴 세션(수백 메시지)에서 latency 기여 가능하지만, MCP.tools()나 MessageV2.stream() 대비 minor.
+| Assumption | Verdict | Confidence | Priority |
+
+Summary:
+A1 (MCP.tools no caching): CONFIRMED — zero cache/memo instances in mcp/index.ts
+A3 (Dev mode overhead): LOW RISK — no NODE_ENV/dev branching in source, Bun JIT fast
+A5 (listTools slow I/O): CONFIRMED — StdioClientTransport/HTTP transport confirmed
+
+CRITICAL FINDING: listTools() in tools() has NO timeout (only create() has timeout)
+File: /Users/sbbae/project/investigate/results/cpu-profile-analysis.md (     265 lines)

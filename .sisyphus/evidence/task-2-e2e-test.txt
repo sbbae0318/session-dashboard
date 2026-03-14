@@ -1,0 +1,233 @@
+
+Running 45 tests using 1 worker
+
+[1A[2K[1/45] [chromium] › e2e/api.spec.ts:4:3 › API Endpoints › GET /health returns 200 with status ok
+[1A[2K[2/45] [chromium] › e2e/api.spec.ts:14:3 › API Endpoints › GET /api/queries returns 200 with queries array
+[1A[2K[3/45] [chromium] › e2e/api.spec.ts:24:3 › API Endpoints › GET /api/sessions returns 200 with sessions array
+[1A[2K[4/45] [chromium] › e2e/claude-code.spec.ts:4:3 › Claude Code Integration › GET /api/queries returns 200 and includes source field
+[1A[2K[5/45] [chromium] › e2e/claude-code.spec.ts:12:3 › Claude Code Integration › claude-code queries do not contain slash commands
+[1A[2K[6/45] [chromium] › e2e/claude-code.spec.ts:26:3 › Claude Code Integration › GET /api/sessions returns sessions with valid status
+[1A[2K[7/45] [chromium] › e2e/claude-code.spec.ts:42:3 › Claude Code Integration › claude-code sessions have required fields
+[1A[2K[8/45] [chromium] › e2e/claude-real-pipeline.spec.ts:195:3 › Scenario A: Session in Active Sessions › fresh real-format session (last entry: user → busy) appears in browser
+[1A[2K[9/45] [chromium] › e2e/claude-real-pipeline.spec.ts:264:3 › Scenario B: Queries in Recent Prompts › queries from history.jsonl appear in API and browser
+[1A[2K  1) [chromium] › e2e/claude-real-pipeline.spec.ts:264:3 › Scenario B: Queries in Recent Prompts › queries from history.jsonl appear in API and browser 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mfalse[39m
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      276 |
+      277 |     // Poll real server /api/queries until queries appear with source=claude-code
+    > 278 |     await expect
+          |     ^
+      279 |       .poll(
+      280 |         async () => {
+      281 |           const r = await request.get(`${REAL_SERVER_URL}/api/queries?limit=50`);
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/claude-real-pipeline.spec.ts:278:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/claude-real-pipeline-Scena-6b1cc-l-appear-in-API-and-browser-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[10/45] [chromium] › e2e/claude-real-pipeline.spec.ts:322:3 › Scenario C: Slash command filtering › slash commands and XML excluded, real query visible
+[1A[2K[11/45] [chromium] › e2e/claude-real-pipeline.spec.ts:383:3 › Scenario D: Stale session excluded › JSONL file with old mtime is excluded from active sessions
+[1A[2K  2) [chromium] › e2e/claude-real-pipeline.spec.ts:383:3 › Scenario D: Stale session excluded › JSONL file with old mtime is excluded from active sessions 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeUndefined[2m()[22m
+
+    Received: [31m{"cwd": "/tmp/claudetest", "lastFileModified": 1773132470736, "lastHeartbeat": 1773132470736, "lastPromptTime": null, "lastResponseTime": null, "pid": 0, "project": "-tmp-claudetest", "sessionId": "e2e-real-sess-d-1773132650736", "source": "claude-code", "startTime": 1773132470736, "status": "busy", "title": "Old work from the past"}[39m
+
+      402 |     };
+      403 |     const staleSession = agentBody.sessions.find((s) => s.sessionId === sessionId);
+    > 404 |     expect(staleSession).toBeUndefined();
+          |                          ^
+      405 |   });
+      406 | });
+      407 |
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/claude-real-pipeline.spec.ts:404:26
+
+
+[1A[2K[12/45] [chromium] › e2e/claude-real-pipeline.spec.ts:419:3 › Scenario E: Source filter Claude only › Claude filter shows claude-code sessions and prompts with proper badges
+[1A[2K  3) [chromium] › e2e/claude-real-pipeline.spec.ts:419:3 › Scenario E: Source filter Claude only › Claude filter shows claude-code sessions and prompts with proper badges 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mfalse[39m
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      431 |
+      432 |     // Wait for data to propagate
+    > 433 |     await expect
+          |     ^
+      434 |       .poll(
+      435 |         async () => {
+      436 |           const [sessResp, queryResp] = await Promise.all([
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/claude-real-pipeline.spec.ts:433:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/claude-real-pipeline-Scena-61a57--prompts-with-proper-badges-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[13/45] [chromium] › e2e/claude-real-pipeline.spec.ts:489:3 › Scenario F: Real-time SSE update › session appears in browser after JSONL written (via SSE, no reload)
+[1A[2K[14/45] [chromium] › e2e/dashboard-features.spec.ts:18:3 › Feature: Prompt Click Filtering › clicking a prompt filters by session
+[1A[2K[15/45] [chromium] › e2e/dashboard-features.spec.ts:45:3 › Feature: Prompt Click Filtering › clicking same prompt again clears the filter
+[1A[2K[16/45] [chromium] › e2e/dashboard-features.spec.ts:55:3 › Feature: Prompt Click Filtering › filtered prompts all belong to the same session
+[1A[2K[17/45] [chromium] › e2e/dashboard-features.spec.ts:80:3 › Feature: Prompt Detail Modal (전문 버튼) › 전문 button opens the detail modal
+[1A[2K[18/45] [chromium] › e2e/dashboard-features.spec.ts:86:3 › Feature: Prompt Detail Modal (전문 버튼) › 전문 button does not trigger session filtering
+[1A[2K[19/45] [chromium] › e2e/dashboard-features.spec.ts:95:3 › Feature: Prompt Detail Modal (전문 버튼) › ESC key closes the modal
+[1A[2K[20/45] [chromium] › e2e/dashboard-features.spec.ts:102:3 › Feature: Prompt Detail Modal (전문 버튼) › clicking backdrop closes the modal
+[1A[2K[21/45] [chromium] › e2e/dashboard-features.spec.ts:116:3 › Feature: Background Prompt Toggle › bg toggle button is visible and shows count
+[1A[2K[22/45] [chromium] › e2e/dashboard-features.spec.ts:126:3 › Feature: Background Prompt Toggle › toggling shows background prompts
+[1A[2K[23/45] [chromium] › e2e/dashboard-features.spec.ts:146:3 › Feature: Background Prompt Toggle › toggling back hides background prompts
+[1A[2K[24/45] [chromium] › e2e/dashboard-features.spec.ts:177:3 › Feature: Session Command Copy › clicking a session card copies command to clipboard and shows toast
+[1A[2K[25/45] [chromium] › e2e/dashboard-features.spec.ts:184:3 › Feature: Session Command Copy › toast disappears after a short time
+[1A[2K[26/45] [chromium] › e2e/dashboard.spec.ts:17:3 › Dashboard Page › loads and title contains Session Dashboard
+[1A[2K[27/45] [chromium] › e2e/dashboard.spec.ts:22:3 › Dashboard Page › renders overview panels
+[1A[2K[28/45] [chromium] › e2e/dashboard.spec.ts:33:3 › Dashboard Page › connection status indicator exists
+[1A[2K[29/45] [chromium] › e2e/dashboard.spec.ts:40:3 › Dashboard Page › capture dashboard screenshot
+[1A[2K[30/45] [chromium] › e2e/machine-api.spec.ts:4:3 › Machine API Endpoints › GET /api/machines returns 200 with machines array
+[1A[2K[31/45] [chromium] › e2e/machine-api.spec.ts:12:3 › Machine API Endpoints › /api/machines items have required fields
+[1A[2K[32/45] [chromium] › e2e/machine-api.spec.ts:25:3 › Machine API Endpoints › GET /health includes machine counts
+[1A[2K[33/45] [chromium] › e2e/machine-api.spec.ts:34:3 › Machine API Endpoints › /api/machines does not expose apiKey
+[1A[2K[34/45] [chromium] › e2e/machine-filter.spec.ts:11:3 › Machine Filter UI › machine selector is hidden with single machine
+[1A[2K[35/45] [chromium] › e2e/machine-filter.spec.ts:31:3 › Machine Filter UI › machine selector shows all buttons when multiple machines
+[1A[2K[36/45] [chromium] › e2e/machine-filter.spec.ts:57:3 › Machine Filter UI › clicking machine filter button sets active state
+[1A[2K[37/45] [chromium] › e2e/machine-status.spec.ts:11:3 › Machine Status Badges › machine buttons show status dots
+[1A[2K[38/45] [chromium] › e2e/machine-status.spec.ts:30:3 › Machine Status Badges › connected machines show green status dot
+[1A[2K[39/45] [chromium] › e2e/machine-status.spec.ts:48:3 › Machine Status Badges › session cards show machine tags when multiple machines
+[1A[2K[40/45] [chromium] › e2e/machine-status.spec.ts:67:3 › Machine Status Badges › capture multi-machine dashboard screenshot
+[1A[2K[41/45] [chromium] › e2e/opencode-regression.spec.ts:47:3 › Scenario 2: Queries in Recent Prompts › query entries appear in agent /api/queries and server /api/queries
+[1A[2K[chromium] › e2e/opencode-regression.spec.ts:47:3 › Scenario 2: Queries in Recent Prompts › query entries appear in agent /api/queries and server /api/queries
+
+
+[1A[2K
+
+[1A[2K
+
+[1A[2K
+
+[1A[2K  4) [chromium] › e2e/opencode-regression.spec.ts:47:3 › Scenario 2: Queries in Recent Prompts › query entries appear in agent /api/queries and server /api/queries 
+
+    SyntaxError: Unexpected token 'N', "Not Found" is not valid JSON
+
+      54 |       async () => {
+      55 |         const r = await request.get(`${SERVER_URL}/api/queries?limit=50`);
+    > 56 |         const body = await r.json() as { queries?: Array<{ query: string; source: string }> };
+         |                      ^
+      57 |         if (!body.queries) return 0;
+      58 |         return body.queries.filter((q) => q.source === 'opencode').length;
+      59 |       },
+        at Object.expect.poll.timeout (/Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:56:22)
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:53:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/opencode-regression-Scenar-ca6c5-ries-and-server-api-queries-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[42/45] [chromium] › e2e/opencode-regression.spec.ts:80:3 › Scenario 3: oc-serve down graceful degradation › /api/sessions returns 502 when oc-serve is not running (expected)
+[1A[2K[chromium] › e2e/opencode-regression.spec.ts:80:3 › Scenario 3: oc-serve down graceful degradation › /api/sessions returns 502 when oc-serve is not running (expected)
+
+
+[1A[2K  5) [chromium] › e2e/opencode-regression.spec.ts:80:3 › Scenario 3: oc-serve down graceful degradation › /api/sessions returns 502 when oc-serve is not running (expected) 
+
+    TypeError: fetch failed
+
+      80 |   test('/api/sessions returns 502 when oc-serve is not running (expected)', async () => {
+      81 |     // oc-serve is not running in E2E environment — this is expected
+    > 82 |     const r = await agentGet('/api/sessions');
+         |               ^
+      83 |     // 502 is the expected response when oc-serve is down
+      84 |     expect([200, 502]).toContain(r.status);
+      85 |   });
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:82:15
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3198
+
+
+[1A[2K[43/45] [chromium] › e2e/opencode-regression.spec.ts:93:3 › Scenario 4: Source filter OpenCode › clicking OpenCode filter shows only opencode data
+[1A[2K[chromium] › e2e/opencode-regression.spec.ts:93:3 › Scenario 4: Source filter OpenCode › clicking OpenCode filter shows only opencode data
+
+
+[1A[2K
+
+[1A[2K
+
+[1A[2K  6) [chromium] › e2e/opencode-regression.spec.ts:93:3 › Scenario 4: Source filter OpenCode › clicking OpenCode filter shows only opencode data 
+
+    SyntaxError: Unexpected token 'N', "Not Found" is not valid JSON
+
+       99 |       async () => {
+      100 |         const r = await request.get(`${SERVER_URL}/api/queries?limit=50`);
+    > 101 |         const body = await r.json() as { queries?: Array<{ query: string; source: string }> };
+          |                      ^
+      102 |         if (!body.queries) return false;
+      103 |         return body.queries.some((q) => q.query === 'Run the OpenCode pipeline');
+      104 |       },
+        at Object.expect.poll.timeout (/Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:101:22)
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:98:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/opencode-regression-Scenar-818d2-er-shows-only-opencode-data-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[44/45] [chromium] › e2e/opencode-regression.spec.ts:126:3 › Scenario 6: Empty state › agent returns empty arrays when no JSONL files exist
+[1A[2K[chromium] › e2e/opencode-regression.spec.ts:126:3 › Scenario 6: Empty state › agent returns empty arrays when no JSONL files exist
+
+
+[1A[2K  7) [chromium] › e2e/opencode-regression.spec.ts:126:3 › Scenario 6: Empty state › agent returns empty arrays when no JSONL files exist 
+
+    TypeError: fetch failed
+
+      127 |     // cleanAgentHome() already called in beforeEach
+      128 |
+    > 129 |     const queriesResp = await agentGet('/api/queries?limit=50');
+          |                         ^
+      130 |     const queriesBody = await queriesResp.json() as { queries: unknown[] };
+      131 |     expect(queriesBody.queries).toHaveLength(0);
+      132 |   });
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:129:25
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3198
+
+
+[1A[2K[45/45] [chromium] › e2e/opencode-regression.spec.ts:141:3 › Scenario 8: Recent prompt visibility (long session) › 장기 세션에서 최신 user 메시지가 표시됨 (첫 번째가 아닌 마지막)
+[1A[2K[chromium] › e2e/opencode-regression.spec.ts:141:3 › Scenario 8: Recent prompt visibility (long session) › 장기 세션에서 최신 user 메시지가 표시됨 (첫 번째가 아닌 마지막)
+
+
+[1A[2K
+
+[1A[2K
+
+[1A[2K
+
+[1A[2K  8) [chromium] › e2e/opencode-regression.spec.ts:141:3 › Scenario 8: Recent prompt visibility (long session) › 장기 세션에서 최신 user 메시지가 표시됨 (첫 번째가 아닌 마지막) 
+
+    Error: expect: Property 'toSatisfy' not found.
+
+      161 |       },
+      162 |       { timeout: 15_000, intervals: [500] },
+    > 163 |     ).toSatisfy((entries: Array<{ query: string }>) =>
+          |      ^
+      164 |       entries.some((e) => e.query === 'Recent prompt after hours of work'),
+      165 |     );
+      166 |   });
+        at /Users/sbbae/project/session-dashboard-header-compress/server/e2e/opencode-regression.spec.ts:163:6
+
+
+[1A[2K  8 failed
+    [chromium] › e2e/claude-real-pipeline.spec.ts:264:3 › Scenario B: Queries in Recent Prompts › queries from history.jsonl appear in API and browser 
+    [chromium] › e2e/claude-real-pipeline.spec.ts:383:3 › Scenario D: Stale session excluded › JSONL file with old mtime is excluded from active sessions 
+    [chromium] › e2e/claude-real-pipeline.spec.ts:419:3 › Scenario E: Source filter Claude only › Claude filter shows claude-code sessions and prompts with proper badges 
+    [chromium] › e2e/opencode-regression.spec.ts:47:3 › Scenario 2: Queries in Recent Prompts › query entries appear in agent /api/queries and server /api/queries 
+    [chromium] › e2e/opencode-regression.spec.ts:80:3 › Scenario 3: oc-serve down graceful degradation › /api/sessions returns 502 when oc-serve is not running (expected) 
+    [chromium] › e2e/opencode-regression.spec.ts:93:3 › Scenario 4: Source filter OpenCode › clicking OpenCode filter shows only opencode data 
+    [chromium] › e2e/opencode-regression.spec.ts:126:3 › Scenario 6: Empty state › agent returns empty arrays when no JSONL files exist 
+    [chromium] › e2e/opencode-regression.spec.ts:141:3 › Scenario 8: Recent prompt visibility (long session) › 장기 세션에서 최신 user 메시지가 표시됨 (첫 번째가 아닌 마지막) 
+  37 passed (1.1m)

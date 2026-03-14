@@ -1,0 +1,100 @@
+=== Task 8: install.sh Self-Test ===
+Date: #오후
+
+--- Scenario 1: --help ---
+Usage: /Users/sbbae/project/session-dashboard-install-script/install/install.sh [--agent-only | --server-only | --dry-run | --help]
+
+Unified installer for session-dashboard (agent + server).
+Auto-detects OpenCode/Claude Code data sources and configures both.
+
+Options:
+  (no args)       Full install: detect, configure, install agent + server
+  --agent-only    Install agent only (skip Docker server)
+  --server-only   Install server only (skip agent)
+  --dry-run       Show detection results, no changes
+  --help, -h      Show this help
+EXIT: 0
+
+--- Scenario 2: --dry-run both ---
+═══════════════════════════════════════════════════════════
+ Session Dashboard Unified Installer
+═══════════════════════════════════════════════════════════
+
+Detected: SOURCE=both
+Generated: API_KEY=e796954139de7ee59e369eb5a35e8a87
+
+agent/.env would contain:
+  PORT=3098 | API_KEY=e796954139de7ee59e369eb5a35e8a87 | SOURCE=both | HISTORY_DIR=~/.opencode/history
+
+server/machines.yml would contain:
+  - id: local, host: host.docker.internal, port: 3098
+    apiKey: e796954139de7ee59e369eb5a35e8a87, source: both
+
+No changes made (dry run).
+
+═══════════════════════════════════════════════════════════
+ Session Dashboard Setup Complete
+═══════════════════════════════════════════════════════════
+
+--- Scenario 3: --dry-run opencode only ---
+═══════════════════════════════════════════════════════════
+ Session Dashboard Unified Installer
+═══════════════════════════════════════════════════════════
+
+Detected: SOURCE=opencode
+Generated: API_KEY=1a825674f9d2fb160be7848206b51e3c
+
+agent/.env would contain:
+  PORT=3098 | API_KEY=1a825674f9d2fb160be7848206b51e3c | SOURCE=opencode | HISTORY_DIR=~/.opencode/history
+
+server/machines.yml would contain:
+  - id: local, host: host.docker.internal, port: 3098
+    apiKey: 1a825674f9d2fb160be7848206b51e3c, source: opencode
+
+No changes made (dry run).
+
+═══════════════════════════════════════════════════════════
+ Session Dashboard Setup Complete
+═══════════════════════════════════════════════════════════
+
+--- Scenario 4: --dry-run claude only ---
+═══════════════════════════════════════════════════════════
+ Session Dashboard Unified Installer
+═══════════════════════════════════════════════════════════
+
+Detected: SOURCE=claude-code
+Generated: API_KEY=2e08d5ca109515dbdaacac9809270540
+
+agent/.env would contain:
+  PORT=3098 | API_KEY=2e08d5ca109515dbdaacac9809270540 | SOURCE=claude-code | HISTORY_DIR=~/.claude
+
+server/machines.yml would contain:
+  - id: local, host: host.docker.internal, port: 3098
+    apiKey: 2e08d5ca109515dbdaacac9809270540, source: claude-code
+
+No changes made (dry run).
+
+═══════════════════════════════════════════════════════════
+ Session Dashboard Setup Complete
+═══════════════════════════════════════════════════════════
+
+--- Scenario 5: --dry-run empty (default opencode) ---
+═══════════════════════════════════════════════════════════
+ Session Dashboard Unified Installer
+═══════════════════════════════════════════════════════════
+
+Detected: SOURCE=opencode
+Generated: API_KEY=9c00943d65cc2b471d22412139f66ed4
+
+agent/.env would contain:
+  PORT=3098 | API_KEY=9c00943d65cc2b471d22412139f66ed4 | SOURCE=opencode | HISTORY_DIR=~/.opencode/history
+
+server/machines.yml would contain:
+  - id: local, host: host.docker.internal, port: 3098
+    apiKey: 9c00943d65cc2b471d22412139f66ed4, source: opencode
+
+No changes made (dry run).
+
+═══════════════════════════════════════════════════════════
+ Session Dashboard Setup Complete
+═══════════════════════════════════════════════════════════

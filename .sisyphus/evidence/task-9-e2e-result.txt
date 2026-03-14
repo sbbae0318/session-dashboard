@@ -1,0 +1,138 @@
+[E2E Setup] Starting OpenCode regression test environment...
+[server] [Singleton] Lock acquired
+[server] [Config] Loaded 1 machine(s): Test OpenCode Agent E2E
+[agent] {"level":30,"time":1772989668744,"pid":91318,"hostname":"mm","msg":"Server listening at http://127.0.0.1:3198"}
+[agent] {"level":30,"time":1772989668744,"pid":91318,"hostname":"mm","msg":"Server listening at http://192.168.0.63:3198"}
+{"level":30,"time":1772989668744,"pid":91318,"hostname":"mm","msg":"dashboard-agent listening at http://127.0.0.1:3198"}
+[agent:err] [oc-query-collector] session list fetch failed, falling back to SessionCache only
+[agent:err] [SessionCache] SSE connection error: connect ECONNREFUSED 127.0.0.1:59999
+[agent] {"level":30,"time":1772989668753,"pid":91318,"hostname":"mm","reqId":"req-1","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989668754,"pid":91318,"hostname":"mm","reqId":"req-2","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+{"level":30,"time":1772989668756,"pid":91318,"hostname":"mm","reqId":"req-3","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989668757,"pid":91318,"hostname":"mm","reqId":"req-3","res":{"statusCode":200},"responseTime":0.9741668701171875,"msg":"request completed"}
+[agent] {"level":30,"time":1772989668757,"pid":91318,"hostname":"mm","reqId":"req-1","res":{"statusCode":502},"responseTime":4.278208017349243,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (1/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989668759,"pid":91318,"hostname":"mm","reqId":"req-4","req":{"method":"GET","url":"/api/cards?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989668759,"pid":91318,"hostname":"mm","reqId":"req-4","res":{"statusCode":200},"responseTime":0.2515418529510498,"msg":"request completed"}
+[agent] {"level":30,"time":1772989668761,"pid":91318,"hostname":"mm","reqId":"req-5","req":{"method":"GET","url":"/api/queries?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+[agent:err] [oc-query-collector] session list fetch failed, falling back to SessionCache only
+[agent] {"level":30,"time":1772989668762,"pid":91318,"hostname":"mm","reqId":"req-5","res":{"statusCode":200},"responseTime":0.8740420341491699,"msg":"request completed"}
+[server] [Server] Listening on http://0.0.0.0:3099
+[agent] {"level":30,"time":1772989668823,"pid":91318,"hostname":"mm","reqId":"req-2","res":{"statusCode":200},"responseTime":69.06004095077515,"msg":"request completed"}
+[agent] {"level":30,"time":1772989669160,"pid":91318,"hostname":"mm","reqId":"req-6","req":{"method":"GET","url":"/health","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52113},"msg":"incoming request"}
+[E2E Setup] Test agent ready on port 3198 (PID: 91318)
+[agent] {"level":30,"time":1772989669161,"pid":91318,"hostname":"mm","reqId":"req-6","res":{"statusCode":200},"responseTime":1.093707799911499,"msg":"request completed"}
+[E2E Setup] Test server ready on port 3099 (PID: 91340)
+[E2E Setup] Environment ready.
+
+Running 7 tests using 1 worker
+
+[agent] {"level":30,"time":1772989669921,"pid":91318,"hostname":"mm","reqId":"req-7","req":{"method":"GET","url":"/api/cards","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52122},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989669922,"pid":91318,"hostname":"mm","reqId":"req-7","res":{"statusCode":200},"responseTime":0.6737091541290283,"msg":"request completed"}
+[agent] {"level":30,"time":1772989670761,"pid":91318,"hostname":"mm","reqId":"req-8","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989670761,"pid":91318,"hostname":"mm","reqId":"req-9","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+{"level":30,"time":1772989670762,"pid":91318,"hostname":"mm","reqId":"req-9","res":{"statusCode":200},"responseTime":0.4897501468658447,"msg":"request completed"}
+{"level":30,"time":1772989670762,"pid":91318,"hostname":"mm","reqId":"req-a","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989670763,"pid":91318,"hostname":"mm","reqId":"req-a","res":{"statusCode":200},"responseTime":0.40058398246765137,"msg":"request completed"}
+[agent] {"level":30,"time":1772989670763,"pid":91318,"hostname":"mm","reqId":"req-8","res":{"statusCode":502},"responseTime":2.0946249961853027,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (2/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989672764,"pid":91318,"hostname":"mm","reqId":"req-b","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989672764,"pid":91318,"hostname":"mm","reqId":"req-c","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989672765,"pid":91318,"hostname":"mm","reqId":"req-c","res":{"statusCode":200},"responseTime":0.22191691398620605,"msg":"request completed"}
+{"level":30,"time":1772989672765,"pid":91318,"hostname":"mm","reqId":"req-d","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+{"level":30,"time":1772989672765,"pid":91318,"hostname":"mm","reqId":"req-d","res":{"statusCode":200},"responseTime":0.12120795249938965,"msg":"request completed"}
+[agent] {"level":30,"time":1772989672765,"pid":91318,"hostname":"mm","reqId":"req-b","res":{"statusCode":502},"responseTime":1.5419580936431885,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (3/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989673763,"pid":91318,"hostname":"mm","reqId":"req-e","req":{"method":"GET","url":"/api/cards?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989673763,"pid":91318,"hostname":"mm","reqId":"req-f","req":{"method":"GET","url":"/api/queries?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+[agent:err] [oc-query-collector] session list fetch failed, falling back to SessionCache only
+[agent] {"level":30,"time":1772989673764,"pid":91318,"hostname":"mm","reqId":"req-f","res":{"statusCode":200},"responseTime":0.7989161014556885,"msg":"request completed"}
+[agent] {"level":30,"time":1772989673764,"pid":91318,"hostname":"mm","reqId":"req-e","res":{"statusCode":200},"responseTime":1.251791000366211,"msg":"request completed"}
+
+  ✓  1 [chromium] › e2e/opencode-regression.spec.ts:47:3 › Scenario 1: Cards in API › cards.jsonl entries appear in agent /api/cards and server /api/history (4.4s)
+[agent] {"level":30,"time":1772989674765,"pid":91318,"hostname":"mm","reqId":"req-g","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989674766,"pid":91318,"hostname":"mm","reqId":"req-h","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+{"level":30,"time":1772989674766,"pid":91318,"hostname":"mm","reqId":"req-h","res":{"statusCode":200},"responseTime":0.10962510108947754,"msg":"request completed"}
+{"level":30,"time":1772989674766,"pid":91318,"hostname":"mm","reqId":"req-i","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989674766,"pid":91318,"hostname":"mm","reqId":"req-i","res":{"statusCode":200},"responseTime":0.2114579677581787,"msg":"request completed"}
+[agent] {"level":30,"time":1772989674767,"pid":91318,"hostname":"mm","reqId":"req-g","res":{"statusCode":502},"responseTime":1.5070419311523438,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (4/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989676767,"pid":91318,"hostname":"mm","reqId":"req-j","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989676769,"pid":91318,"hostname":"mm","reqId":"req-k","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989676770,"pid":91318,"hostname":"mm","reqId":"req-k","res":{"statusCode":200},"responseTime":0.25916600227355957,"msg":"request completed"}
+{"level":30,"time":1772989676770,"pid":91318,"hostname":"mm","reqId":"req-l","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+{"level":30,"time":1772989676770,"pid":91318,"hostname":"mm","reqId":"req-l","res":{"statusCode":200},"responseTime":0.1506669521331787,"msg":"request completed"}
+[agent] {"level":30,"time":1772989676770,"pid":91318,"hostname":"mm","reqId":"req-j","res":{"statusCode":502},"responseTime":2.6714999675750732,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (5/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989678766,"pid":91318,"hostname":"mm","reqId":"req-m","req":{"method":"GET","url":"/api/cards?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989678766,"pid":91318,"hostname":"mm","reqId":"req-m","res":{"statusCode":200},"responseTime":0.4475841522216797,"msg":"request completed"}
+{"level":30,"time":1772989678766,"pid":91318,"hostname":"mm","reqId":"req-n","req":{"method":"GET","url":"/api/queries?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52108},"msg":"incoming request"}
+{"level":30,"time":1772989678767,"pid":91318,"hostname":"mm","reqId":"req-n","res":{"statusCode":200},"responseTime":0.38129210472106934,"msg":"request completed"}
+[agent] {"level":30,"time":1772989678767,"pid":91318,"hostname":"mm","reqId":"req-o","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989678768,"pid":91318,"hostname":"mm","reqId":"req-p","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989678768,"pid":91318,"hostname":"mm","reqId":"req-p","res":{"statusCode":200},"responseTime":0.126708984375,"msg":"request completed"}
+[agent] {"level":30,"time":1772989678769,"pid":91318,"hostname":"mm","reqId":"req-o","res":{"statusCode":502},"responseTime":1.435999870300293,"msg":"request completed"}
+[agent] {"level":30,"time":1772989678769,"pid":91318,"hostname":"mm","reqId":"req-q","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52164},"msg":"incoming request"}
+{"level":30,"time":1772989678769,"pid":91318,"hostname":"mm","reqId":"req-q","res":{"statusCode":200},"responseTime":0.12425017356872559,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (6/3): HTTP 502: Bad Gateway
+
+  ✓  2 [chromium] › e2e/opencode-regression.spec.ts:81:3 › Scenario 2: Queries in Recent Prompts › query entries appear in agent /api/queries and server /api/queries (4.6s)
+[agent] {"level":30,"time":1772989679338,"pid":91318,"hostname":"mm","reqId":"req-r","req":{"method":"GET","url":"/api/sessions","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52122},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989679339,"pid":91318,"hostname":"mm","reqId":"req-r","res":{"statusCode":502},"responseTime":0.9937911033630371,"msg":"request completed"}
+
+  ✓  3 [chromium] › e2e/opencode-regression.spec.ts:114:3 › Scenario 3: oc-serve down graceful degradation › /api/sessions returns 502 when oc-serve is not running (expected) (313ms)
+[agent] {"level":30,"time":1772989680769,"pid":91318,"hostname":"mm","reqId":"req-s","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52164},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989680770,"pid":91318,"hostname":"mm","reqId":"req-t","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+{"level":30,"time":1772989680770,"pid":91318,"hostname":"mm","reqId":"req-t","res":{"statusCode":200},"responseTime":0.14720797538757324,"msg":"request completed"}
+{"level":30,"time":1772989680770,"pid":91318,"hostname":"mm","reqId":"req-u","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989680770,"pid":91318,"hostname":"mm","reqId":"req-u","res":{"statusCode":200},"responseTime":0.11037492752075195,"msg":"request completed"}
+[agent] {"level":30,"time":1772989680771,"pid":91318,"hostname":"mm","reqId":"req-s","res":{"statusCode":502},"responseTime":1.0988330841064453,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (7/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989682770,"pid":91318,"hostname":"mm","reqId":"req-v","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52164},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989682771,"pid":91318,"hostname":"mm","reqId":"req-w","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989682771,"pid":91318,"hostname":"mm","reqId":"req-w","res":{"statusCode":200},"responseTime":0.33270812034606934,"msg":"request completed"}
+{"level":30,"time":1772989682771,"pid":91318,"hostname":"mm","reqId":"req-x","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+{"level":30,"time":1772989682771,"pid":91318,"hostname":"mm","reqId":"req-x","res":{"statusCode":200},"responseTime":0.1254589557647705,"msg":"request completed"}
+[agent] {"level":30,"time":1772989682771,"pid":91318,"hostname":"mm","reqId":"req-v","res":{"statusCode":502},"responseTime":1.5193331241607666,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (8/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989683767,"pid":91318,"hostname":"mm","reqId":"req-y","req":{"method":"GET","url":"/api/cards?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52164},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989683767,"pid":91318,"hostname":"mm","reqId":"req-z","req":{"method":"GET","url":"/api/queries?limit=100","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+{"level":30,"time":1772989683767,"pid":91318,"hostname":"mm","reqId":"req-z","res":{"statusCode":200},"responseTime":0.2726249694824219,"msg":"request completed"}
+[agent] {"level":30,"time":1772989683768,"pid":91318,"hostname":"mm","reqId":"req-y","res":{"statusCode":200},"responseTime":0.8621659278869629,"msg":"request completed"}
+
+  ✓  4 [chromium] › e2e/opencode-regression.spec.ts:127:3 › Scenario 4: Source filter OpenCode › clicking OpenCode filter shows only opencode data (5.0s)
+[agent] {"level":30,"time":1772989684697,"pid":91318,"hostname":"mm","reqId":"req-10","req":{"method":"GET","url":"/api/cards","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52122},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989684698,"pid":91318,"hostname":"mm","reqId":"req-10","res":{"statusCode":200},"responseTime":0.6272499561309814,"msg":"request completed"}
+
+  ✓  5 [chromium] › e2e/opencode-regression.spec.ts:162:3 › Scenario 5: Real-time update › cards appear in browser after cards.jsonl is written (313ms)
+[agent] {"level":30,"time":1772989684772,"pid":91318,"hostname":"mm","reqId":"req-11","req":{"method":"GET","url":"/proxy/projects","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52164},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989684773,"pid":91318,"hostname":"mm","reqId":"req-12","req":{"method":"GET","url":"/proxy/active-directories","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52109},"msg":"incoming request"}
+{"level":30,"time":1772989684773,"pid":91318,"hostname":"mm","reqId":"req-12","res":{"statusCode":200},"responseTime":0.10145807266235352,"msg":"request completed"}
+{"level":30,"time":1772989684773,"pid":91318,"hostname":"mm","reqId":"req-13","req":{"method":"GET","url":"/proxy/session/details","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52110},"msg":"incoming request"}
+{"level":30,"time":1772989684773,"pid":91318,"hostname":"mm","reqId":"req-13","res":{"statusCode":200},"responseTime":0.08612513542175293,"msg":"request completed"}
+[agent] {"level":30,"time":1772989684773,"pid":91318,"hostname":"mm","reqId":"req-11","res":{"statusCode":502},"responseTime":0.8737919330596924,"msg":"request completed"}
+[server:err] [MachineManager] Test OpenCode Agent E2E (127.0.0.1) poll failed (9/3): HTTP 502: Bad Gateway
+[agent] {"level":30,"time":1772989685017,"pid":91318,"hostname":"mm","reqId":"req-14","req":{"method":"GET","url":"/api/cards","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52122},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989685017,"pid":91318,"hostname":"mm","reqId":"req-14","res":{"statusCode":200},"responseTime":0.23083281517028809,"msg":"request completed"}
+[agent] {"level":30,"time":1772989685019,"pid":91318,"hostname":"mm","reqId":"req-15","req":{"method":"GET","url":"/api/queries?limit=50","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52198},"msg":"incoming request"}
+[agent:err] [oc-query-collector] session list fetch failed, falling back to SessionCache only
+[agent] {"level":30,"time":1772989685020,"pid":91318,"hostname":"mm","reqId":"req-15","res":{"statusCode":200},"responseTime":0.7360420227050781,"msg":"request completed"}
+
+  ✓  6 [chromium] › e2e/opencode-regression.spec.ts:183:3 › Scenario 6: Empty state › agent returns empty arrays when no JSONL files exist (314ms)
+[agent] {"level":30,"time":1772989685337,"pid":91318,"hostname":"mm","reqId":"req-16","req":{"method":"GET","url":"/api/cards?limit=50","host":"127.0.0.1:3198","remoteAddress":"127.0.0.1","remotePort":52122},"msg":"incoming request"}
+[agent] {"level":30,"time":1772989685339,"pid":91318,"hostname":"mm","reqId":"req-16","res":{"statusCode":200},"responseTime":1.4880828857421875,"msg":"request completed"}
+
+  ✓  7 [chromium] › e2e/opencode-regression.spec.ts:200:3 › Scenario 7: Large file handling › 500 entries in cards.jsonl, limit=50 returns only 50 (314ms)
+[E2E Teardown] Cleaning up...
+[E2E Teardown] Sent SIGTERM to server (PID: 91340)
+[E2E Teardown] Sent SIGTERM to agent (PID: 91318)
+[agent] {"level":30,"time":1772989685381,"pid":91318,"hostname":"mm","msg":"Shutting down gracefully..."}
+[server] 
+[Singleton] Received SIGTERM, shutting down...
+[server] [Server] Stopped
+[Singleton] Lock released
+[E2E Teardown] Removed /tmp/sd-e2e-oc-agent-home
+[E2E Teardown] Removed /tmp/sd-e2e-oc-server-home
+[E2E Teardown] Done.
+
+  7 passed (17.7s)

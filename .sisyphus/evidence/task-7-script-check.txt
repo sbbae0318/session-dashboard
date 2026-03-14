@@ -1,0 +1,1 @@
+playwright test --config playwright.opencode-regression.config.ts --reporter=list

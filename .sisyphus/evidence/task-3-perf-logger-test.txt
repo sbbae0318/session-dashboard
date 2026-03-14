@@ -1,0 +1,6 @@
+=== perf-logger test ===
+{"phase":"test.phase","startNs":48736708,"endNs":100864875,"durationMs":52.128167,"step":1,"metadata":{"step":1,"foo":"bar"}}
+
+=== jq validation ===
+"test.phase"
+52.128167

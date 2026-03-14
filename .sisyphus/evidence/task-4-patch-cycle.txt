@@ -1,0 +1,48 @@
+=== Task 4 Patch Cycle Test ===
+Date: #오후
+
+--- Apply ---
+Apply exit: 0
+
+--- Instrumentation lines ---
+      44
+
+--- Unique phases ---
+phase: "clone.msgs"
+phase: "createUserMessage"
+phase: "llm.providers.resolve"
+phase: "llm.stream"
+phase: "llm.streamText"
+phase: "mcp.listTools.parallel"
+phase: "mcp.listTools.perServer"
+phase: "mcp.tools.function"
+phase: "mcp.tools.total"
+phase: "messages.stream"
+phase: "processor.process"
+phase: "provider.getModel"
+phase: "registry.tools.init"
+phase: "registry.tools"
+phase: "resolveTools.total"
+phase: "session.get"
+phase: "stream.firstEvent"
+phase: "system.prompt"
+
+--- Phase count ---
+      18
+
+--- Patch stats ---
+     484 /Users/sbbae/project/investigate/patches/instrument.patch
+
+--- Files modified ---
+diff --git a/packages/opencode/src/mcp/index.ts b/packages/opencode/src/mcp/index.ts
+diff --git a/packages/opencode/src/session/llm.ts b/packages/opencode/src/session/llm.ts
+diff --git a/packages/opencode/src/session/processor.ts b/packages/opencode/src/session/processor.ts
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+diff --git a/packages/opencode/src/tool/registry.ts b/packages/opencode/src/tool/registry.ts
+diff --git a/packages/opencode/src/util/perf-logger.ts b/packages/opencode/src/util/perf-logger.ts
+
+--- Reverse apply ---
+Reverse exit: 0
+
+--- Clean state check ---
+(empty = clean)

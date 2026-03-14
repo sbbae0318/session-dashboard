@@ -1,0 +1,4 @@
+    baseURL: 'http://127.0.0.1:3099',
+  testMatch: '**/opencode-regression.spec.ts',
+  globalSetup: './e2e/global-setup.opencode.ts',
+  globalTeardown: './e2e/global-teardown.opencode.ts',

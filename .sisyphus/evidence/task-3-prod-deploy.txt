@@ -1,0 +1,135 @@
+github.com:sbbae0318/session-dashboard URL에서
+ * branch            main       -> FETCH_HEAD
+   ffcf5f6..1527761  main       -> origin/main
+업데이트 중 ffcf5f6..1527761
+Fast-forward
+ server/frontend/src/App.svelte                     | 37 ++++++++++++++--------
+ server/frontend/src/app.css                        | 30 ++++++------------
+ .../frontend/src/components/MachineSelector.svelte | 20 +++++-------
+ 3 files changed, 42 insertions(+), 45 deletions(-)
+#1 [internal] load local bake definitions
+#1 reading from stdin 423B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.51kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 ...
+
+#4 [auth] library/node:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 DONE 1.3s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 130B done
+#5 DONE 0.0s
+
+#6 [frontend-builder 1/6] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 18.91kB done
+#7 DONE 0.0s
+
+#8 [frontend-builder 3/6] COPY frontend/package*.json ./
+#8 CACHED
+
+#9 [frontend-builder 2/6] WORKDIR /app/frontend
+#9 CACHED
+
+#10 [frontend-builder 4/6] RUN npm ci
+#10 CACHED
+
+#11 [frontend-builder 5/6] COPY frontend/ ./
+#11 DONE 0.0s
+
+#12 [frontend-builder 6/6] RUN npm run build
+#12 0.253 
+#12 0.253 > @session-dashboard/session-dashboard-frontend@1.0.0 build
+#12 0.253 > vite build
+#12 0.253 
+#12 0.678 8:58:26 AM [vite-plugin-svelte] You are using Svelte 5.53.6 with vite-plugin-svelte@3. Active Svelte 5 support has moved to vite-plugin-svelte@4.
+#12 0.678 	To receive bug fixes and new features update your devDependencies to "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6" and install.
+#12 0.678 	For framework integrations that depend on it, you might have to add an override:
+#12 0.678 	"overrides": {"@sveltejs/vite-plugin-svelte": "^4.0.0-next.6"}
+#12 0.692 vite v5.4.21 building for production...
+#12 0.743 transforming...
+#12 1.223 8:58:27 AM [vite-plugin-svelte] src/components/PromptDetailModal.svelte:37:0 Elements with the 'dialog' interactive role must have a tabindex value
+#12 1.223 https://svelte.dev/e/a11y_interactive_supports_focus
+#12 1.223 35: 
+#12 1.223 36: <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+#12 1.223 37: <div class="modal-backdrop" onclick={handleBackdropClick} role="dialog" aria-modal="true">
+#12 1.223           ^
+#12 1.223 38:   <div class="modal-panel">
+#12 1.223 39:     <div class="modal-header">
+#12 1.223 8:58:27 AM [vite-plugin-svelte] src/components/PromptDetailModal.svelte:37:0 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+#12 1.223 https://svelte.dev/e/a11y_click_events_have_key_events
+#12 1.223 35: 
+#12 1.223 36: <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+#12 1.223 37: <div class="modal-backdrop" onclick={handleBackdropClick} role="dialog" aria-modal="true">
+#12 1.223           ^
+#12 1.223 38:   <div class="modal-panel">
+#12 1.223 39:     <div class="modal-header">
+#12 1.567 ✓ 127 modules transformed.
+#12 1.648 rendering chunks...
+#12 1.653 computing gzip size...
+#12 1.656 ../dist/public/index.html                  0.40 kB │ gzip:  0.27 kB
+#12 1.656 ../dist/public/assets/index-B7rEu_Y4.css  27.33 kB │ gzip:  4.81 kB
+#12 1.656 ../dist/public/assets/index-DPj7acjv.js   65.66 kB │ gzip: 23.78 kB
+#12 1.656 ✓ built in 941ms
+#12 DONE 1.7s
+
+#13 [backend-builder 2/8] WORKDIR /app
+#13 CACHED
+
+#14 [backend-builder 4/8] RUN npm ci
+#14 CACHED
+
+#15 [backend-builder 6/8] COPY src/ ./src/
+#15 CACHED
+
+#16 [stage-2 4/7] COPY --from=backend-builder /app/dist/ ./dist/
+#16 CACHED
+
+#17 [backend-builder 7/8] RUN npm test
+#17 CACHED
+
+#18 [backend-builder 3/8] COPY package*.json ./
+#18 CACHED
+
+#19 [backend-builder 5/8] COPY tsconfig.json ./
+#19 CACHED
+
+#20 [backend-builder 8/8] RUN npm run build
+#20 CACHED
+
+#21 [stage-2 3/7] COPY --from=backend-builder /app/package*.json ./
+#21 CACHED
+
+#22 [stage-2 5/7] RUN npm ci --only=production && npm cache clean --force
+#22 CACHED
+
+#23 [stage-2 6/7] COPY --from=frontend-builder /app/dist/public/ ./dist/public/
+#23 DONE 0.0s
+
+#24 [stage-2 7/7] RUN addgroup -g 1001 -S nodejs &&     adduser -S nodejs -u 1001
+#24 DONE 0.2s
+
+#25 exporting to image
+#25 exporting layers 0.0s done
+#25 writing image sha256:448a5dec2c340b74d0bdb914c5b616b810a85074e4ca7bf5edb400be3580373f done
+#25 naming to docker.io/library/server-session-dashboard done
+#25 DONE 0.0s
+
+#26 resolving provenance for metadata file
+#26 DONE 0.0s
+ session-dashboard  Built
+ Container session-dashboard  Recreate
+ Container session-dashboard  Recreated
+ Container session-dashboard  Starting
+ Container session-dashboard  Started
+Prod server: 200

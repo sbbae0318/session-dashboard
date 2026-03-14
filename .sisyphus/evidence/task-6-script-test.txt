@@ -1,0 +1,32 @@
+=== Task 6 Script Test ===
+OpenCode Latency Measurement Script
+
+Usage: scripts/run-measurement.sh [OPTIONS]
+
+Options:
+  --help          Show this help message
+  --analyze-only  Re-run analysis on existing collected data
+  --scenario N    Run scenario N only (1, 2, or 3)
+
+Scenarios:
+  1: Short session (< 10 messages)
+  2: Long session (50+ messages)
+  3: Fresh/empty session
+
+Environment:
+  OPENCODE_PERF_LOG  Auto-set during measurement
+
+See scripts/test-scenarios.md for detailed scenario descriptions.
+---
+analyze-only with no data:
+[0;31mERROR: No JSONL data files found in /Users/sbbae/project/investigate/results/raw[0m
+Run without --analyze-only first to collect data.
+---
+total 72
+drwxr-xr-x  7 sbbae  staff   224  3 10 19:29 .
+drwxr-xr-x  8 sbbae  staff   256  3 10 18:45 ..
+-rw-r--r--  1 sbbae  staff  9910  3 10 19:25 analyze.ts
+-rw-r--r--  1 sbbae  staff  1476  3 10 19:00 config.ts
+-rw-r--r--  1 sbbae  staff  5146  3 10 19:00 perf-logger.ts
+-rwxr-xr-x  1 sbbae  staff  6978  3 10 19:28 run-measurement.sh
+-rw-r--r--  1 sbbae  staff  1556  3 10 19:29 test-scenarios.md

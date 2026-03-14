@@ -7,7 +7,7 @@
     isProjectsLoading,
     type ProjectSummary,
   } from '../../lib/stores/enrichment.svelte';
-  import { getSelectedMachineId } from '../../lib/stores/machine.svelte';
+  import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
   import { relativeTime } from '../../lib/utils';
@@ -30,19 +30,9 @@
     })
   );
 
-  let prevMachineId: string | null = null;
-
   onMount(() => {
-    prevMachineId = getSelectedMachineId();
     fetchProjectsData();
-  });
-
-  $effect(() => {
-    const mid = getSelectedMachineId();
-    if (prevMachineId !== null && mid !== prevMachineId) {
-      prevMachineId = mid;
-      setTimeout(() => fetchProjectsData(), 0);
-    }
+    return onMachineChange(() => fetchProjectsData());
   });
 
   function toggleProject(id: string) {
