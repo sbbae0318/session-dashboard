@@ -12,11 +12,13 @@
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
 
-  let es = $derived(getEnrichmentState());
+  let recoveryLoading = $derived(getEnrichmentState().recoveryLoading);
+  let recoveryAvailable = $derived(getEnrichmentState().recoveryAvailable);
+  let recoveryData = $derived(getEnrichmentState().recoveryData);
 
   let sortedSessions = $derived(
-    es.recoveryData
-      ? [...es.recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+    recoveryData
+      ? [...recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
       : []
   );
 
@@ -55,9 +57,9 @@
     <p class="page-subtitle">Idle 세션을 재개하려면 Resume 버튼을 클릭하세요</p>
   </div>
 
-  {#if es.recoveryLoading}
+  {#if recoveryLoading}
     <div class="loading-state">불러오는 중...</div>
-  {:else if !es.recoveryAvailable}
+  {:else if !recoveryAvailable}
     <div class="unavailable-state">
       Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.
     </div>

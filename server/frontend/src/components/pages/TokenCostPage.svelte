@@ -4,7 +4,9 @@
   import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
 
-  let es = $derived(getEnrichmentState());
+  let tokenLoading = $derived(getEnrichmentState().tokenLoading);
+  let tokenAvailable = $derived(getEnrichmentState().tokenAvailable);
+  let tokenData = $derived(getEnrichmentState().tokenData);
 
   onMount(() => {
     fetchTokenStats();
@@ -37,9 +39,9 @@
   }
 
   let projectRows = $derived((): ProjectRow[] => {
-    if (!es.tokenData) return [];
+    if (!tokenData) return [];
     const map = new Map<string, ProjectRow>();
-    for (const s of es.tokenData.sessions) {
+    for (const s of tokenData.sessions) {
       const key = s.directory || s.projectId;
       const existing = map.get(key);
       if (existing) {
@@ -65,55 +67,55 @@
   });
 
   let sessionRows = $derived((): SessionTokenStats[] => {
-    if (!es.tokenData) return [];
-    return [...es.tokenData.sessions].sort((a, b) => b.totalCost - a.totalCost);
+    if (!tokenData) return [];
+    return [...tokenData.sessions].sort((a, b) => b.totalCost - a.totalCost);
   });
 </script>
 
 <div class="page-container" data-testid="page-token-cost">
   <h2 class="page-title">Token &amp; Cost Analytics</h2>
 
-  {#if es.tokenLoading}
+  {#if tokenLoading}
     <div class="loading-state">
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
     </div>
-  {:else if !es.tokenAvailable || !es.tokenData}
+  {:else if !tokenAvailable || !tokenData}
     <div class="empty-state" data-testid="empty-state">
       <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
       </svg>
       <p class="empty-title">데이터 없음</p>
       <p class="empty-desc">
-        {!es.tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
+        {!tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
       </p>
     </div>
   {:else}
     <div class="summary-grid" data-testid="token-summary">
       <div class="summary-card">
         <div class="card-label">Input Tokens</div>
-        <div class="card-value accent">{formatTokens(es.tokenData.grandTotal.input)}</div>
+        <div class="card-value accent">{formatTokens(tokenData.grandTotal.input)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Output Tokens</div>
-        <div class="card-value">{formatTokens(es.tokenData.grandTotal.output)}</div>
+        <div class="card-value">{formatTokens(tokenData.grandTotal.output)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Reasoning</div>
-        <div class="card-value">{formatTokens(es.tokenData.grandTotal.reasoning)}</div>
+        <div class="card-value">{formatTokens(tokenData.grandTotal.reasoning)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Total Cost</div>
-        <div class="card-value success">{formatCost(es.tokenData.grandTotal.cost)}</div>
+        <div class="card-value success">{formatCost(tokenData.grandTotal.cost)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Read</div>
-        <div class="card-value muted">{formatTokens(es.tokenData.grandTotal.cacheRead)}</div>
+        <div class="card-value muted">{formatTokens(tokenData.grandTotal.cacheRead)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Write</div>
-        <div class="card-value muted">{formatTokens(es.tokenData.grandTotal.cacheWrite)}</div>
+        <div class="card-value muted">{formatTokens(tokenData.grandTotal.cacheWrite)}</div>
       </div>
     </div>
 
