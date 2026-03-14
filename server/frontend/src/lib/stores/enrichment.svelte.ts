@@ -144,14 +144,18 @@ export function getTimelineData(): TimelineEntry[] | null { return timelineData;
 export function isTimelineAvailable(): boolean { return timelineAvailable; }
 export function isTimelineLoading(): boolean { return timelineLoading; }
 
-export async function fetchTimelineData(): Promise<void> {
+export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
   const machineId = getSelectedMachineId();
   if (!machineId) return;
   timelineLoading = true;
   try {
-    const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(
-      `/api/enrichment/${machineId}/timeline`
-    );
+    const params = new URLSearchParams();
+    if (from) params.set('from', from.toString());
+    if (to) params.set('to', to.toString());
+    if (projectId) params.set('projectId', projectId);
+    const qs = params.toString();
+    const url = `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`;
+    const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(url);
     timelineData = res.data;
     timelineAvailable = res.available;
   } catch (e) {
