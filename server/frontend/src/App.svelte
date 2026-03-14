@@ -10,8 +10,14 @@
   import { fetchMachines, setMachines } from './lib/stores/machine.svelte';
   import { createSSEClient } from "./lib/sse-client";
   import { reviveSessions } from "./lib/stores/dismissed.svelte";
-  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView } from "./lib/stores/navigation.svelte";
+  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
+  import TopNav from './components/TopNav.svelte';
+  import TokenCostPage from './components/pages/TokenCostPage.svelte';
+  import CodeImpactPage from './components/pages/CodeImpactPage.svelte';
+  import TimelinePage from './components/pages/TimelinePage.svelte';
+  import ProjectsPage from './components/pages/ProjectsPage.svelte';
+  import ContextRecoveryPage from './components/pages/ContextRecoveryPage.svelte';
 
   let connected = $state(false);
   let loading = $state(true);
@@ -20,6 +26,7 @@
   let isDetail = $derived(isDetailView());
   let detailId = $derived(getDetailSessionId());
   let sourceFilter = $derived(getSourceFilter());
+  let currentView = $derived(getCurrentView());
   let showBackground = $state(false);
   let backgroundCount = $state(0);
 
@@ -30,7 +37,6 @@
     }
   });
 
-  // Auto-pop to overview when detail session disappears from active sessions
   $effect(() => {
     const sessions = getSessions();
     if (isDetail && detailId) {
@@ -73,33 +79,28 @@
   });
 
   function handleGlobalKeydown(e: KeyboardEvent) {
-    // Cmd+K / Ctrl+K: toggle palette
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       paletteOpen = !paletteOpen;
       return;
     }
 
-    // Don't handle other shortcuts when palette is open or input is focused
     if (paletteOpen) return;
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // ESC: close detail view
     if (e.key === 'Escape' && isDetail) {
       e.preventDefault();
       popToOverview();
       return;
     }
 
-    // J/K: navigate prompts
     if (e.key === 'j' || e.key === 'k') {
       const list = document.querySelector('.prompts-list');
       if (!list) return;
       const items = list.querySelectorAll('.prompt-item');
       if (items.length === 0) return;
 
-      // Find currently focused/visible item
       const focused = list.querySelector('.prompt-item:focus') as HTMLElement;
       let idx = focused ? Array.from(items).indexOf(focused) : -1;
 
@@ -147,8 +148,19 @@
     >Claude</button>
   </div>
 </header>
+<TopNav />
   {#if loading}
     <div class="loading">Loading...</div>
+  {:else if currentView === 'token-cost'}
+    <TokenCostPage />
+  {:else if currentView === 'code-impact'}
+    <CodeImpactPage />
+  {:else if currentView === 'timeline'}
+    <TimelinePage />
+  {:else if currentView === 'projects'}
+    <ProjectsPage />
+  {:else if currentView === 'context-recovery'}
+    <ContextRecoveryPage />
   {:else}
     {#if isDetail}
       <div class="detail-header view-transition">
