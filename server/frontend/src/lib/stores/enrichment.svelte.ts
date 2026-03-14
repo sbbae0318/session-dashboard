@@ -122,23 +122,23 @@ export function isImpactLoading(): boolean { return impactLoading; }
 
 export async function fetchImpactData(): Promise<void> {
   const machineId = getSelectedMachineId();
-  console.log('[enrichment] fetchImpactData called, machineId=', machineId);
+  (window as unknown as Record<string, unknown>).__enrichDebug = { step: 'start', machineId, impactLoading };
   if (!machineId) return;
   impactLoading = true;
+  (window as unknown as Record<string, unknown>).__enrichDebug = { step: 'loading-set', machineId };
   try {
-    console.log('[enrichment] fetching impact data...');
     const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
       `/api/enrichment/${machineId}/impact`
     );
-    console.log('[enrichment] impact response:', res.available, res.data?.length);
+    (window as unknown as Record<string, unknown>).__enrichDebug = { step: 'fetched', available: res.available, dataLen: res.data?.length ?? 0 };
     impactData = res.data;
     impactAvailable = res.available;
   } catch (e) {
-    console.error('[enrichment] Failed to fetch impact data:', e);
+    (window as unknown as Record<string, unknown>).__enrichDebug = { step: 'error', msg: String(e) };
     impactAvailable = false;
   } finally {
-    console.log('[enrichment] fetchImpactData finally, loading=false');
     impactLoading = false;
+    (window as unknown as Record<string, unknown>).__enrichDebug = { step: 'finally', impactLoading };
   }
 }
 
