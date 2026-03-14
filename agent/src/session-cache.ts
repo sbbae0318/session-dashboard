@@ -418,7 +418,6 @@ export class SessionCache {
     const sessionID = props['sessionID'] as string | undefined;
     if (!sessionID) return;
 
-    const isNew = !this.store.get(sessionID);
     const existing = this.store.get(sessionID) ?? defaultSessionDetail(directory);
     this.store.upsert(sessionID, {
       ...existing,
@@ -431,7 +430,7 @@ export class SessionCache {
     });
 
     void this.fetchLatestUserPrompt(sessionID, directory);
-    if (isNew) this.scheduleMetadataFetch(sessionID);
+    this.scheduleMetadataFetch(sessionID);
   }
 
   private handleMessageUpdated(props: Record<string, unknown>, directory: string | null): void {

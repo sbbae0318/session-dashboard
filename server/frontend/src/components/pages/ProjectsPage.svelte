@@ -98,7 +98,7 @@
     <div class="unavailable-state" data-testid="empty-state">
       <div class="unavailable-icon">⚠</div>
       <p>프로젝트 데이터를 불러올 수 없습니다.</p>
-      <p class="unavailable-hint">enrichment 데이터베이스가 필요합니다.</p>
+      <p class="unavailable-hint">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</p>
     </div>
   {:else if !projectsData || sortedProjects.length === 0}
     <div class="empty-state-container" data-testid="empty-state">
