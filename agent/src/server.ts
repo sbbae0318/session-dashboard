@@ -423,7 +423,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 - 최대 8줄
 - 문제가 있었다면 어떤 문제인지 명시
 
-세션: ${exists.title ?? sessionId}
+세션: ${exists.sessionTitle ?? sessionId}
 프로젝트: ${exists.directory ?? 'unknown'}
 
 메시지 기록:
