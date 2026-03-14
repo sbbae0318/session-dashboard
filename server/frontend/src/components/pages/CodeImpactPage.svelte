@@ -1,29 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    fetchImpactData,
-    getImpactData,
-    isImpactAvailable,
-    isImpactLoading,
-  } from '../../lib/stores/enrichment.svelte';
+  import { enrichment } from '../../lib/stores/enrichment.svelte';
   import type { SessionCodeImpact } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
 
-  let impactData = $derived(getImpactData());
-  let impactAvailable = $derived(isImpactAvailable());
-  let impactLoading = $derived(isImpactLoading());
-
   let selectedProject = $state<string>('all');
 
   let projects = $derived(
-    [...new Set((impactData ?? []).map((i) => i.projectId))]
+    [...new Set((enrichment.impactData ?? []).map((i) => i.projectId))]
   );
 
   let filteredImpact = $derived(
     selectedProject === 'all'
-      ? (impactData ?? [])
-      : (impactData ?? []).filter((i) => i.projectId === selectedProject)
+      ? (enrichment.impactData ?? [])
+      : (enrichment.impactData ?? []).filter((i) => i.projectId === selectedProject)
   );
 
   const maxChange = $derived(
@@ -50,8 +41,8 @@
   }
 
   onMount(() => {
-    fetchImpactData();
-    return onMachineChange(() => fetchImpactData());
+    enrichment.fetchImpactData();
+    return onMachineChange(() => enrichment.fetchImpactData());
   });
 </script>
 
@@ -74,13 +65,13 @@
     </div>
   </div>
 
-  {#if impactLoading}
+  {#if enrichment.impactLoading}
     <div class="loading-state">
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
     </div>
-  {:else if !impactAvailable}
+  {:else if !enrichment.impactAvailable}
     <div class="empty-state" data-testid="empty-state">
       <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
@@ -169,8 +160,6 @@
     letter-spacing: 0.05em;
   }
 
-  /* ── Filters ── */
-
   .filters {
     display: flex;
     align-items: center;
@@ -201,8 +190,6 @@
     border-color: var(--accent);
   }
 
-  /* ── Loading ── */
-
   .loading-state {
     display: flex;
     align-items: center;
@@ -227,8 +214,6 @@
     0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
     40% { opacity: 1; transform: scale(1); }
   }
-
-  /* ── Empty State ── */
 
   .empty-state {
     display: flex;
@@ -261,8 +246,6 @@
     opacity: 0.6;
   }
 
-  /* ── Impact List ── */
-
   .impact-list {
     display: flex;
     flex-direction: column;
@@ -288,8 +271,6 @@
   .impact-item.no-changes {
     opacity: 0.6;
   }
-
-  /* ── Impact Item Layout ── */
 
   .impact-header {
     display: flex;
@@ -327,8 +308,6 @@
     white-space: nowrap;
   }
 
-  /* ── Change Stats ── */
-
   .change-stats {
     display: flex;
     align-items: center;
@@ -359,8 +338,6 @@
     font-family: inherit;
     font-weight: 400;
   }
-
-  /* ── GitHub-style Impact Bar ── */
 
   .impact-bar {
     display: flex;

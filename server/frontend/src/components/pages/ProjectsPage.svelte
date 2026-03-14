@@ -1,10 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    fetchProjectsData,
-    getProjectsData,
-    isProjectsAvailable,
-    isProjectsLoading,
+    enrichment,
     type ProjectSummary,
   } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
@@ -13,17 +10,13 @@
   import { relativeTime } from '../../lib/utils';
   import type { DashboardSession } from '../../types';
 
-  let projectsData = $derived(getProjectsData());
-  let available = $derived(isProjectsAvailable());
-  let loading = $derived(isProjectsLoading());
-
   type SortOption = 'recent' | 'sessions' | 'tokens';
   let sortBy = $state<SortOption>('recent');
 
   let expandedProjects = $state<Set<string>>(new Set());
 
   let sortedProjects = $derived(
-    [...(projectsData ?? [])].sort((a, b) => {
+    [...(enrichment.projectsData ?? [])].sort((a, b) => {
       if (sortBy === 'recent') return b.lastActivityAt - a.lastActivityAt;
       if (sortBy === 'sessions') return b.sessionCount - a.sessionCount;
       return b.totalTokens - a.totalTokens;
@@ -31,8 +24,8 @@
   );
 
   onMount(() => {
-    fetchProjectsData();
-    return onMachineChange(() => fetchProjectsData());
+    enrichment.fetchProjectsData();
+    return onMachineChange(() => enrichment.fetchProjectsData());
   });
 
   function toggleProject(id: string) {
@@ -94,15 +87,15 @@
     </div>
   </div>
 
-  {#if loading}
+  {#if enrichment.projectsLoading}
     <div class="loading-state">데이터 로딩 중…</div>
-  {:else if !available}
+  {:else if !enrichment.projectsAvailable}
     <div class="unavailable-state" data-testid="empty-state">
       <div class="unavailable-icon">⚠</div>
       <p>프로젝트 데이터를 불러올 수 없습니다.</p>
       <p class="unavailable-hint">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</p>
     </div>
-  {:else if !projectsData || sortedProjects.length === 0}
+  {:else if !enrichment.projectsData || sortedProjects.length === 0}
     <div class="empty-state-container" data-testid="empty-state">
       <div class="empty-icon">📁</div>
       <p class="empty-title">등록된 프로젝트 없음</p>
@@ -196,7 +189,6 @@
     min-height: 0;
   }
 
-  /* ── Header ── */
   .page-header {
     display: flex;
     align-items: center;
@@ -241,7 +233,6 @@
     border-color: var(--accent);
   }
 
-  /* ── States ── */
   .loading-state,
   .unavailable-state,
   .empty-state-container {
@@ -274,14 +265,12 @@
     color: var(--text-secondary);
   }
 
-  /* ── Grid ── */
   .projects-grid {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
 
-  /* ── Project Card ── */
   .project-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -320,7 +309,6 @@
     gap: 0.35rem;
   }
 
-  /* ── Name row ── */
   .project-name-row {
     display: flex;
     align-items: center;
@@ -355,7 +343,6 @@
     transform: rotate(180deg);
   }
 
-  /* ── Meta row ── */
   .project-meta-row {
     display: flex;
     align-items: center;
@@ -382,7 +369,6 @@
     color: var(--text-secondary);
   }
 
-  /* ── Stats row ── */
   .project-stats-row {
     display: flex;
     align-items: center;
@@ -412,7 +398,6 @@
     font-size: 0.72rem;
   }
 
-  /* ── Session accordion ── */
   .project-sessions {
     border-top: 1px solid var(--border);
     background: var(--bg-primary);

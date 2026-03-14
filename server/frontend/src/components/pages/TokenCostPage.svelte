@@ -1,21 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    fetchTokenStats,
-    getTokenData,
-    isTokenAvailable,
-    isTokenLoading,
-  } from '../../lib/stores/enrichment.svelte';
+  import { enrichment } from '../../lib/stores/enrichment.svelte';
   import type { SessionTokenStats } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
 
-  let data = $derived(getTokenData());
-  let available = $derived(isTokenAvailable());
-  let loading = $derived(isTokenLoading());
-
   onMount(() => {
-    fetchTokenStats();
-    return onMachineChange(() => fetchTokenStats());
+    enrichment.fetchTokenStats();
+    return onMachineChange(() => enrichment.fetchTokenStats());
   });
 
   function formatTokens(n: number): string {
@@ -44,9 +35,9 @@
   }
 
   let projectRows = $derived((): ProjectRow[] => {
-    if (!data) return [];
+    if (!enrichment.tokenData) return [];
     const map = new Map<string, ProjectRow>();
-    for (const s of data.sessions) {
+    for (const s of enrichment.tokenData.sessions) {
       const key = s.directory || s.projectId;
       const existing = map.get(key);
       if (existing) {
@@ -72,55 +63,55 @@
   });
 
   let sessionRows = $derived((): SessionTokenStats[] => {
-    if (!data) return [];
-    return [...data.sessions].sort((a, b) => b.totalCost - a.totalCost);
+    if (!enrichment.tokenData) return [];
+    return [...enrichment.tokenData.sessions].sort((a, b) => b.totalCost - a.totalCost);
   });
 </script>
 
 <div class="page-container" data-testid="page-token-cost">
   <h2 class="page-title">Token &amp; Cost Analytics</h2>
 
-  {#if loading}
+  {#if enrichment.tokenLoading}
     <div class="loading-state">
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
       <span class="loading-dot"></span>
     </div>
-  {:else if !available || !data}
+  {:else if !enrichment.tokenAvailable || !enrichment.tokenData}
     <div class="empty-state" data-testid="empty-state">
       <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
       </svg>
       <p class="empty-title">데이터 없음</p>
       <p class="empty-desc">
-        {!available ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
+        {!enrichment.tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
       </p>
     </div>
   {:else}
     <div class="summary-grid" data-testid="token-summary">
       <div class="summary-card">
         <div class="card-label">Input Tokens</div>
-        <div class="card-value accent">{formatTokens(data.grandTotal.input)}</div>
+        <div class="card-value accent">{formatTokens(enrichment.tokenData.grandTotal.input)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Output Tokens</div>
-        <div class="card-value">{formatTokens(data.grandTotal.output)}</div>
+        <div class="card-value">{formatTokens(enrichment.tokenData.grandTotal.output)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Reasoning</div>
-        <div class="card-value">{formatTokens(data.grandTotal.reasoning)}</div>
+        <div class="card-value">{formatTokens(enrichment.tokenData.grandTotal.reasoning)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Total Cost</div>
-        <div class="card-value success">{formatCost(data.grandTotal.cost)}</div>
+        <div class="card-value success">{formatCost(enrichment.tokenData.grandTotal.cost)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Read</div>
-        <div class="card-value muted">{formatTokens(data.grandTotal.cacheRead)}</div>
+        <div class="card-value muted">{formatTokens(enrichment.tokenData.grandTotal.cacheRead)}</div>
       </div>
       <div class="summary-card">
         <div class="card-label">Cache Write</div>
-        <div class="card-value muted">{formatTokens(data.grandTotal.cacheWrite)}</div>
+        <div class="card-value muted">{formatTokens(enrichment.tokenData.grandTotal.cacheWrite)}</div>
       </div>
     </div>
 

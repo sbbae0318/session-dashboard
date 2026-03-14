@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getTimelineData, isTimelineAvailable, isTimelineLoading, fetchTimelineData } from '../../lib/stores/enrichment.svelte';
+  import { enrichment } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
 
@@ -13,17 +13,13 @@
   let selectedProject = $state<string>('all');
   let timeRange = $derived(getTimeRange(selectedPreset));
 
-  let timelineData = $derived(getTimelineData());
-  let available = $derived(isTimelineAvailable());
-  let loading = $derived(isTimelineLoading());
-
   let filteredSessions = $derived(
-    (timelineData ?? []).filter(s =>
+    (enrichment.timelineData ?? []).filter(s =>
       selectedProject === 'all' || s.projectId === selectedProject
     )
   );
 
-  let projects = $derived([...new Set((timelineData ?? []).map(s => s.projectId))]);
+  let projects = $derived([...new Set((enrichment.timelineData ?? []).map(s => s.projectId))]);
 
   let svgHeight = $derived(AXIS_HEIGHT + PADDING_TOP + filteredSessions.length * LANE_HEIGHT + 10);
 
@@ -37,21 +33,21 @@
   }
 
   onMount(() => {
-    fetchTimelineData(timeRange.from, timeRange.to);
-    return onMachineChange(() => fetchTimelineData(timeRange.from, timeRange.to));
+    enrichment.fetchTimelineData(timeRange.from, timeRange.to);
+    return onMachineChange(() => enrichment.fetchTimelineData(timeRange.from, timeRange.to));
   });
 
   async function handlePresetChange(preset: TimeRangePreset) {
     selectedPreset = preset;
     const range = getTimeRange(preset);
-    await fetchTimelineData(range.from, range.to, selectedProject === 'all' ? undefined : selectedProject);
+    await enrichment.fetchTimelineData(range.from, range.to, selectedProject === 'all' ? undefined : selectedProject);
   }
 
   async function handleProjectChange(event: Event) {
     const target = event.target as HTMLSelectElement;
     selectedProject = target.value;
     const range = getTimeRange(selectedPreset);
-    await fetchTimelineData(range.from, range.to, selectedProject === 'all' ? undefined : selectedProject);
+    await enrichment.fetchTimelineData(range.from, range.to, selectedProject === 'all' ? undefined : selectedProject);
   }
 </script>
 
@@ -75,9 +71,9 @@
     </select>
   </div>
 
-  {#if loading}
+  {#if enrichment.timelineLoading}
     <div class="loading">타임라인 로딩 중...</div>
-  {:else if !available}
+  {:else if !enrichment.timelineAvailable}
     <div class="empty-state" data-testid="empty-state">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</div>
   {:else if filteredSessions.length === 0}
     <div class="empty-state" data-testid="empty-state">타임라인 데이터 없음</div>

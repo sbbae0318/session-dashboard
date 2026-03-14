@@ -1,27 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getRecoveryData,
-    isRecoveryAvailable,
-    isRecoveryLoading,
-    fetchRecoveryData,
-    getSummary,
-    isSummaryLoading,
-    fetchSummary,
+    enrichment,
     type RecoveryContext,
   } from '../../lib/stores/enrichment.svelte';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { relativeTime, truncate, copyToClipboard } from '../../lib/utils';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
 
-  let recoveryData = $derived(getRecoveryData());
-  let recoveryAvailable = $derived(isRecoveryAvailable());
-  let recoveryLoading = $derived(isRecoveryLoading());
-
-  // Sort by lastActivityAt desc (newest first)
   let sortedSessions = $derived(
-    recoveryData
-      ? [...recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+    enrichment.recoveryData
+      ? [...enrichment.recoveryData].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
       : []
   );
 
@@ -49,8 +38,8 @@
   }
 
   onMount(() => {
-    fetchRecoveryData();
-    return onMachineChange(() => fetchRecoveryData());
+    enrichment.fetchRecoveryData();
+    return onMachineChange(() => enrichment.fetchRecoveryData());
   });
 </script>
 
@@ -60,9 +49,9 @@
     <p class="page-subtitle">Idle 세션을 재개하려면 Resume 버튼을 클릭하세요</p>
   </div>
 
-  {#if recoveryLoading}
+  {#if enrichment.recoveryLoading}
     <div class="loading-state">불러오는 중...</div>
-  {:else if !recoveryAvailable}
+  {:else if !enrichment.recoveryAvailable}
     <div class="unavailable-state">
       Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.
     </div>
@@ -93,10 +82,10 @@
                 <button
                   class="summary-btn"
                   data-testid="summary-btn"
-                  onclick={() => fetchSummary(ctx.sessionId)}
-                  disabled={isSummaryLoading(ctx.sessionId)}
+                  onclick={() => enrichment.fetchSummary(ctx.sessionId)}
+                  disabled={enrichment.isSummaryLoading(ctx.sessionId)}
                 >
-                  {isSummaryLoading(ctx.sessionId) ? '생성 중...' : '요약'}
+                  {enrichment.isSummaryLoading(ctx.sessionId) ? '생성 중...' : '요약'}
                 </button>
                 <button
                   class="view-btn"
@@ -153,10 +142,10 @@
             </div>
           {/if}
 
-          {#if getSummary(ctx.sessionId)}
+          {#if enrichment.getSummary(ctx.sessionId)}
             <div class="card-section summary-section" data-testid="recovery-summary">
               <div class="section-label">세션 요약:</div>
-              <pre class="summary-text">{getSummary(ctx.sessionId)}</pre>
+              <pre class="summary-text">{enrichment.getSummary(ctx.sessionId)}</pre>
             </div>
           {/if}
         </div>
@@ -193,8 +182,6 @@
     color: var(--text-secondary);
   }
 
-  /* ── States ── */
-
   .loading-state,
   .unavailable-state {
     color: var(--text-secondary);
@@ -223,8 +210,6 @@
     font-style: italic;
   }
 
-  /* ── Card List ── */
-
   .recovery-list {
     display: flex;
     flex-direction: column;
@@ -245,8 +230,6 @@
   .recovery-card:hover {
     border-color: var(--accent);
   }
-
-  /* ── Card Header ── */
 
   .card-header {
     display: flex;
@@ -342,8 +325,6 @@
     flex-shrink: 0;
   }
 
-  /* ── Card Sections ── */
-
   .card-section {
     padding-left: 1.4rem;
     font-size: 0.78rem;
@@ -354,8 +335,6 @@
     font-size: 0.72rem;
     margin-bottom: 0.25rem;
   }
-
-  /* Prompts */
 
   .prompts-list {
     list-style: none;
@@ -379,8 +358,6 @@
     flex-shrink: 0;
   }
 
-  /* Tools */
-
   .recovery-tools {
     display: flex;
     align-items: center;
@@ -393,8 +370,6 @@
     font-size: 0.75rem;
     font-family: "SF Mono", "Fira Code", monospace;
   }
-
-  /* Impact */
 
   .recovery-impact {
     display: flex;
@@ -419,8 +394,6 @@
     font-size: 0.75rem;
   }
 
-  /* Todos */
-
   .todos-list {
     display: flex;
     flex-direction: column;
@@ -443,8 +416,6 @@
     text-decoration: line-through;
     opacity: 0.7;
   }
-
-  /* Summary */
 
   .summary-text {
     font-size: 0.78rem;
@@ -483,8 +454,6 @@
     cursor: wait;
   }
 
-  /* ── Toast ── */
-
   .copy-toast {
     position: fixed;
     bottom: 1.5rem;
@@ -509,8 +478,6 @@
     75%  { opacity: 1; }
     100% { opacity: 0; }
   }
-
-  /* ── Mobile ── */
 
   @media (max-width: 599px) {
     .page-container {
