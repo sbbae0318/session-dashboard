@@ -59,7 +59,7 @@
     <div class="loading-state">불러오는 중...</div>
   {:else if !$recoveryAvailable}
     <div class="unavailable-state">
-      Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.
+      Enrichment 데이터를 가져올 수 없습니다. Agent 연결 상태를 확인하세요.
     </div>
   {:else if sortedSessions.length === 0}
     <div class="empty-state" data-testid="empty-state">

@@ -79,7 +79,7 @@
   {#if $timelineLoading}
     <div class="loading">타임라인 로딩 중...</div>
   {:else if !$timelineAvailable}
-    <div class="empty-state" data-testid="empty-state">Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.</div>
+    <div class="empty-state" data-testid="empty-state">Enrichment 데이터를 가져올 수 없습니다. Agent 연결 상태를 확인하세요.</div>
   {:else if filteredSessions.length === 0}
     <div class="empty-state" data-testid="empty-state">타임라인 데이터 없음</div>
   {:else}

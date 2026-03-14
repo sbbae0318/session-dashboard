@@ -1,6 +1,13 @@
 import { writable } from 'svelte/store';
 import { fetchJSON } from '../api';
-import { getSelectedMachineId } from './machine.svelte';
+import { getSelectedMachineId, getMachines } from './machine.svelte';
+
+function resolveEnrichmentMachineId(): string | null {
+  const selected = getSelectedMachineId();
+  if (selected) return selected;
+  const machines = getMachines();
+  return machines[0]?.id ?? null;
+}
 
 interface EnrichmentResponse<T> {
   data: T | null;
@@ -111,7 +118,7 @@ export const summaryCache = writable<Record<string, { summary: string; generated
 export const summaryLoadingIds = writable<string[]>([]);
 
 export async function fetchTokenStats(): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   tokenLoading.set(true);
   try {
@@ -129,7 +136,7 @@ export async function fetchTokenStats(): Promise<void> {
 }
 
 export async function fetchImpactData(): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   impactLoading.set(true);
   try {
@@ -147,7 +154,7 @@ export async function fetchImpactData(): Promise<void> {
 }
 
 export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   timelineLoading.set(true);
   try {
@@ -169,7 +176,7 @@ export async function fetchTimelineData(from?: number, to?: number, projectId?: 
 }
 
 export async function fetchProjectsData(): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   projectsLoading.set(true);
   try {
@@ -187,7 +194,7 @@ export async function fetchProjectsData(): Promise<void> {
 }
 
 export async function fetchRecoveryData(): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   recoveryLoading.set(true);
   try {
@@ -205,7 +212,7 @@ export async function fetchRecoveryData(): Promise<void> {
 }
 
 export async function fetchSummary(sessionId: string): Promise<void> {
-  const machineId = getSelectedMachineId();
+  const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
   summaryLoadingIds.update(ids => [...ids, sessionId]);
   try {

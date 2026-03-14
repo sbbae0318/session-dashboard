@@ -87,7 +87,7 @@
       </svg>
       <p class="empty-title">데이터 없음</p>
       <p class="empty-desc">
-        {!$tokenAvailable ? 'Agent에 OPENCODE_DB_PATH가 설정되지 않았거나 Agent가 연결되지 않았습니다.' : '토큰 통계 데이터가 없습니다.'}
+        {!$tokenAvailable ? 'Enrichment 데이터를 가져올 수 없습니다. Agent 연결 상태를 확인하세요.' : '토큰 통계 데이터가 없습니다.'}
       </p>
     </div>
   {:else}
