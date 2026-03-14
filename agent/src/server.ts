@@ -31,6 +31,7 @@ import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
+import { OpenCodeDBReader, type EnrichmentResponse } from './opencode-db-reader.js';
 import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -297,6 +298,86 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     });
   }
 
+  // Enrichment routes (opencode.db readonly access)
+  let ocDbReader: OpenCodeDBReader | null = null;
+  try {
+    ocDbReader = new OpenCodeDBReader(config.openCodeDbPath);
+  } catch {
+    console.log('[enrichment] opencode.db not available — enrichment endpoints will return { available: false }');
+  }
+
+  function enrichResponse<T>(fn: () => T): EnrichmentResponse<T> {
+    if (!ocDbReader || !ocDbReader.isAvailable()) {
+      return { data: null, available: false, error: 'DB not available', cachedAt: Date.now() };
+    }
+    try {
+      return { data: fn(), available: true, cachedAt: Date.now() };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { data: null, available: false, error: msg, cachedAt: Date.now() };
+    }
+  }
+
+  app.get('/api/enrichment', async () => {
+    return enrichResponse(() => ({
+      projects: ocDbReader!.getAllProjects(),
+      tokenStats: ocDbReader!.getAllProjectsTokenStats(),
+    }));
+  });
+
+  app.get<{ Querystring: { sessionId?: string; projectId?: string } }>(
+    '/api/enrichment/tokens',
+    async (request) => {
+      const { sessionId, projectId } = request.query;
+      if (sessionId) {
+        return enrichResponse(() => ocDbReader!.getSessionTokenStats(sessionId));
+      }
+      if (projectId) {
+        const allStats = enrichResponse(() => ocDbReader!.getAllProjectsTokenStats());
+        if (allStats.data) {
+          const match = allStats.data.find(s => s.projectId === projectId) ?? null;
+          return { ...allStats, data: match };
+        }
+        return allStats;
+      }
+      return enrichResponse(() => ocDbReader!.getAllProjectsTokenStats());
+    },
+  );
+
+  app.get<{ Querystring: { limit?: string; projectId?: string } }>(
+    '/api/enrichment/impact',
+    async (request) => {
+      const limit = parseLimit(request.query.limit);
+      const { projectId } = request.query;
+      return enrichResponse(() => ocDbReader!.getAllSessionsCodeImpact({ limit, projectId }));
+    },
+  );
+
+  app.get<{ Querystring: { from?: string; to?: string; projectId?: string } }>(
+    '/api/enrichment/timeline',
+    async (request) => {
+      const from = parseInt(request.query.from ?? '0', 10);
+      const to = parseInt(request.query.to ?? String(Math.floor(Date.now() / 1000)), 10);
+      const { projectId } = request.query;
+      return enrichResponse(() => ocDbReader!.getSessionTimeline({ from, to, projectId }));
+    },
+  );
+
+  app.get('/api/enrichment/projects', async () => {
+    return enrichResponse(() => ocDbReader!.getAllProjects());
+  });
+
+  app.get<{ Querystring: { sessionId?: string } }>(
+    '/api/enrichment/recovery',
+    async (request) => {
+      const { sessionId } = request.query;
+      if (!sessionId) {
+        return { data: null, available: ocDbReader?.isAvailable() ?? false, error: 'sessionId required', cachedAt: Date.now() };
+      }
+      return enrichResponse(() => ocDbReader!.getSessionRecoveryContext(sessionId));
+    },
+  );
+
   // Graceful shutdown
   app.addHook('onClose', async () => {
     if (bgCollectionInterval) clearInterval(bgCollectionInterval);
@@ -304,6 +385,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     if (sessionCache) sessionCache.stop();
     if (claudeHeartbeat) claudeHeartbeat.stop();
     if (claudeSource) claudeSource.stop();
+    if (ocDbReader) ocDbReader.close();
   });
 
   return { app, sessionCache, promptStore };
