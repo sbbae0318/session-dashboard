@@ -1,0 +1,109 @@
+export interface EnrichmentResponse<T> {
+  data: T | null;
+  available: boolean;
+  error?: string;
+  cachedAt: number;
+}
+
+// --- Projects ---
+export interface ProjectSummary {
+  id: string;
+  worktree: string;
+  sessionCount: number;
+  activeSessionCount: number;
+  lastActivityAt: number;
+  totalTokens: number;
+  totalCost: number;
+  totalAdditions: number;
+  totalDeletions: number;
+}
+
+// --- Tokens ---
+export interface SessionTokenStats {
+  sessionId: string;
+  sessionTitle: string;
+  projectId: string;
+  directory: string;
+  totalInput: number;
+  totalOutput: number;
+  totalReasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalCost: number;
+  models: string[];
+  agents: string[];
+  msgCount: number;
+  timeUpdated: number;
+}
+
+export interface TokensData {
+  sessions: SessionTokenStats[];
+  grandTotal: {
+    input: number;
+    output: number;
+    reasoning: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cost: number;
+  };
+}
+
+// --- Code Impact ---
+export interface SessionCodeImpact {
+  sessionId: string;
+  sessionTitle: string;
+  projectId: string;
+  directory: string;
+  additions: number;
+  deletions: number;
+  files: number;
+  timeUpdated: number;
+}
+
+// --- Timeline ---
+export interface TimelineEntry {
+  sessionId: string;
+  sessionTitle: string;
+  projectId: string;
+  directory: string;
+  startTime: number;
+  endTime: number | null;
+  status: 'busy' | 'idle' | 'completed';
+  parentId: string | null;
+}
+
+// --- Recovery ---
+export interface RecoveryContext {
+  sessionId: string;
+  sessionTitle: string;
+  directory: string;
+  lastActivityAt: number;
+  lastPrompts: string[];
+  lastTools: string[];
+  additions: number;
+  deletions: number;
+  files: number;
+  todos: Array<{ content: string; status: string; priority: string }>;
+}
+
+export type EnrichmentFeature = 'tokens' | 'impact' | 'timeline' | 'projects' | 'recovery';
+
+export interface EnrichmentCache {
+  tokens: EnrichmentResponse<TokensData> | null;
+  impact: EnrichmentResponse<SessionCodeImpact[]> | null;
+  timeline: EnrichmentResponse<TimelineEntry[]> | null;
+  projects: EnrichmentResponse<ProjectSummary[]> | null;
+  recovery: EnrichmentResponse<RecoveryContext[]> | null;
+  lastUpdated: number;
+}
+
+export function createEmptyCache(): EnrichmentCache {
+  return {
+    tokens: null,
+    impact: null,
+    timeline: null,
+    projects: null,
+    recovery: null,
+    lastUpdated: 0,
+  };
+}

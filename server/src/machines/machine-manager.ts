@@ -241,6 +241,13 @@ export class MachineManager {
     return { sessions: allSessions, statuses: allStatuses, cachedDetails: allCachedDetails };
   }
 
+  async fetchFromMachine<T = unknown>(machine: MachineConfig, path: string): Promise<T> {
+    const url = `http://${machine.host}:${machine.port}${path}`;
+    const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
+    const raw = await this.httpGet(url, headers, machine.timeout);
+    return JSON.parse(raw) as T;
+  }
+
   private async pollMachineCached(machine: MachineConfig): Promise<{
     sessions: Array<Record<string, unknown>>;
     statuses: Record<string, { type: string }>;

@@ -4,6 +4,7 @@
 import { resolve } from 'node:path';
 import { ActiveSessionsModule } from './modules/active-sessions/index.js';
 import { RecentPromptsModule } from './modules/recent-prompts/index.js';
+import { EnrichmentModule } from './modules/enrichment/index.js';
 import type { BackendModule } from './modules/types.js';
 import { SSEManager } from './sse/event-stream.js';
 import { createServer, startServer, stopServer } from './server.js';
@@ -33,13 +34,12 @@ async function main(): Promise<void> {
       const machinesConfig = loadMachinesConfig(machinesConfigPath);
       const machineManager = new MachineManager(machinesConfig);
 
-      // Create modules
+      // Create SSE manager + modules
+      const sseManager = new SSEManager();
       const activeSessions = new ActiveSessionsModule(machineManager);
       const recentPrompts = new RecentPromptsModule(machineManager);
-      const modules: BackendModule[] = [activeSessions, recentPrompts];
-
-      // Create SSE manager
-      const sseManager = new SSEManager();
+      const enrichment = new EnrichmentModule(machineManager, sseManager);
+      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment];
 
       // Wire module events → SSE broadcasts
       activeSessions.setUpdateCallback((sessions) => {
