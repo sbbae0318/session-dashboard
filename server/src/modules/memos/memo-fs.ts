@@ -2,12 +2,6 @@ import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 
-/**
- * Obsidian-compatible MD file operations.
- *
- * File layout: {memoDir}/{project-slug}/YYYY-MM-DD.md
- * Frontmatter: id, project, date, title, created, updated (YAML)
- */
 export class MemoFS {
   constructor(private readonly memoDir: string) {}
 
@@ -18,6 +12,7 @@ export class MemoFS {
     date: string;
     title: string;
     content: string;
+    machineId: string;
     createdAt: number;
     updatedAt: number;
   }): Promise<void> {
@@ -29,6 +24,7 @@ export class MemoFS {
       `id: ${opts.id}`,
       `project: ${opts.projectSlug}`,
       `date: ${opts.date}`,
+      ...(opts.machineId ? [`machine: ${opts.machineId}`] : []),
       ...(opts.title ? [`title: "${opts.title.replace(/"/g, '\\"')}"`] : []),
       `created: ${new Date(opts.createdAt).toISOString()}`,
       `updated: ${new Date(opts.updatedAt).toISOString()}`,
@@ -55,8 +51,10 @@ export class MemoFS {
     return true;
   }
 
-  resolveFilePath(projectSlug: string, date: string): string {
-    const base = `${projectSlug}/${date}`;
+  resolveFilePath(machineId: string, projectSlug: string, date: string): string {
+    const base = machineId
+      ? `${machineId}/${projectSlug}/${date}`
+      : `${projectSlug}/${date}`;
     if (!existsSync(join(this.memoDir, `${base}.md`))) {
       return `${base}.md`;
     }

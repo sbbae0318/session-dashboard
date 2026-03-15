@@ -58,7 +58,8 @@ export class MemoModule implements BackendModule {
       const now = Date.now();
       const date = body.date ?? toDateString(now);
       const projectSlug = slugFromPath(body.projectId);
-      const filePath = this.memoFS.resolveFilePath(projectSlug, date);
+      const machineId = body.machineId ?? '';
+      const filePath = this.memoFS.resolveFilePath(machineId, projectSlug, date);
       const id = randomUUID();
       const title = body.title ?? '';
 
@@ -66,6 +67,7 @@ export class MemoModule implements BackendModule {
         id,
         projectId: body.projectId,
         projectSlug,
+        machineId,
         title,
         date,
         filePath,
@@ -80,6 +82,7 @@ export class MemoModule implements BackendModule {
         date,
         title,
         content: body.content,
+        machineId,
         createdAt: now,
         updatedAt: now,
       });
@@ -109,6 +112,7 @@ export class MemoModule implements BackendModule {
           date: existing.date,
           title: updatedTitle,
           content: body.content,
+          machineId: existing.machineId,
           createdAt: existing.createdAt,
           updatedAt: now,
         });
