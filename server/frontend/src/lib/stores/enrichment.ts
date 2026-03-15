@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { fetchJSON } from '../api';
 import { getSelectedMachineId } from './machine.svelte';
 
@@ -100,6 +100,8 @@ export const impactLoading = writable<boolean>(false);
 export const timelineData = writable<TimelineEntry[] | null>(null);
 export const timelineAvailable = writable<boolean>(false);
 export const timelineLoading = writable<boolean>(false);
+// 현재 timeline이 사용 중인 시간 범위를 저장 (SSE refetch 시 사용)
+export const timelineTimeRange = writable<{ from: number; to: number } | null>(null);
 
 export const projectsData = writable<ProjectSummary[] | null>(null);
 export const projectsAvailable = writable<boolean>(false);
@@ -195,6 +197,9 @@ export async function fetchImpactData(): Promise<void> {
 }
 
 export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
+  if (from !== undefined && to !== undefined) {
+    timelineTimeRange.set({ from, to });
+  }
   const machineId = resolveEnrichmentMachineId();
   timelineLoading.set(true);
   try {
@@ -256,7 +261,13 @@ export async function fetchRecoveryData(): Promise<void> {
 // SSE 이벤트: enrichment.updated → { machineId, feature, cachedAt }
 export function handleEnrichmentSSEUpdate(feature: string): void {
   switch (feature) {
-    case 'timeline': void fetchTimelineData(); break;
+    case 'timeline': {
+      const range = get(timelineTimeRange);
+      if (range) {
+        void fetchTimelineData(range.from, range.to);
+      }
+      break;
+    }
     case 'tokens': void fetchTokenStats(); break;
     case 'impact': void fetchImpactData(); break;
     case 'projects': void fetchProjectsData(); break;
