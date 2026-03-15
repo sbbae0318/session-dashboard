@@ -136,6 +136,15 @@ interface MergedEnrichmentResponse<T> {
   cachedAt: number;
 }
 
+interface MergedTokensData {
+  machines: Array<{
+    machineId: string;
+    machineAlias: string;
+    data: TokensData;
+  }>;
+  grandTotal: TokensData['grandTotal'];
+}
+
 export const summaryCache = writable<Record<string, { summary: string; generatedAt: number }>>({});
 export const summaryLoadingIds = writable<string[]>([]);
 
@@ -143,12 +152,22 @@ export async function fetchTokenStats(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
   tokenLoading.set(true);
   try {
-    const url = machineId
-      ? `/api/enrichment/${machineId}/tokens`
-      : `/api/enrichment/merged/tokens`;
-    const res = await fetchJSON<EnrichmentResponse<TokensData> | MergedEnrichmentResponse<TokensData>>(url);
-    tokenData.set(res.data);
-    tokenAvailable.set(res.available);
+    if (machineId) {
+      const url = `/api/enrichment/${machineId}/tokens`;
+      const res = await fetchJSON<EnrichmentResponse<TokensData>>(url);
+      tokenData.set(res.data);
+      tokenAvailable.set(res.available);
+    } else {
+      const url = `/api/enrichment/merged/tokens`;
+      const res = await fetchJSON<MergedEnrichmentResponse<MergedTokensData>>(url);
+      tokenAvailable.set(res.available);
+      if (res.data) {
+        const allSessions = res.data.machines.flatMap((m) => m.data.sessions);
+        tokenData.set({ sessions: allSessions, grandTotal: res.data.grandTotal });
+      } else {
+        tokenData.set(null);
+      }
+    }
   } catch (e) {
     console.error('Failed to fetch token stats:', e);
     tokenAvailable.set(false);
