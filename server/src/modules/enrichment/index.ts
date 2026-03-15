@@ -78,9 +78,9 @@ export class EnrichmentModule implements BackendModule {
 
         const { from: fromStr, to: toStr } = req.query;
 
-        if (feature === 'timeline' && (fromStr || toStr)) {
-          const from = parseInt(fromStr || '0', 10);
-          const to = parseInt(toStr || String(Date.now()), 10);
+        if (feature === 'timeline') {
+          const from = fromStr ? parseInt(fromStr, 10) : 0;
+          const to = toStr ? parseInt(toStr, 10) : Date.now();
           const entries = this.db.getAllTimelineEntries(from, to);
           return {
             data: entries,
@@ -293,6 +293,10 @@ export class EnrichmentModule implements BackendModule {
 
   getCache(): ReadonlyMap<string, EnrichmentCache> {
     return this.cache;
+  }
+
+  getDb(): EnrichmentCacheDB {
+    return this.db;
   }
 
   private mergeTokensData(machines: readonly MachineConfig[]): MergedEnrichmentResponse<unknown> {

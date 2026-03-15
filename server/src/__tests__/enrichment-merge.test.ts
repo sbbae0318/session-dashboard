@@ -370,7 +370,7 @@ describe('EnrichmentModule — merged route', () => {
     const entries: TimelineEntry[] = [
       { sessionId: 's1', sessionTitle: 'T1', projectId: 'p1', directory: '/d', startTime: 1000, endTime: 2000, status: 'completed', parentId: null },
     ];
-    seedCache(module, 'mac-a', 'timeline', { data: entries, available: true, cachedAt: 5000 });
+    module.getDb().saveTimelineEntries('mac-a', 'MacBook A', entries);
 
     const app = Fastify();
     module.registerRoutes(app);
