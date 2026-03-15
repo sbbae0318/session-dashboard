@@ -170,6 +170,16 @@ export class EnrichmentModule implements BackendModule {
       console.warn('[EnrichmentModule] Failed to load cache from DB:', err);
     }
 
+    // 기존 백그라운드 엔트리 정리 (stale data defense)
+    try {
+      const deleted = this.db.deleteBackgroundEntries();
+      if (deleted > 0) {
+        console.log(`[EnrichmentModule] Cleaned up ${deleted} background timeline entries`);
+      }
+    } catch (err) {
+      console.warn('[EnrichmentModule] Failed to clean up background entries:', err);
+    }
+
     for (const feature of FEATURES) {
       this.timers.push(
         setInterval(() => {

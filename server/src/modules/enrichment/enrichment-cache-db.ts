@@ -183,7 +183,11 @@ export class EnrichmentCacheDB {
     to: number,
   ): TimelineEntry[] {
     const rows = this.db.prepare(
-      'SELECT data FROM timeline_entries WHERE machine_id = ? AND start_time >= ? AND start_time <= ?',
+      `SELECT data FROM timeline_entries
+       WHERE machine_id = ? AND start_time >= ? AND start_time <= ?
+         AND json_extract(data, '$.sessionTitle') NOT LIKE 'Background:%'
+         AND json_extract(data, '$.sessionTitle') NOT LIKE 'Task:%'
+         AND json_extract(data, '$.sessionTitle') NOT LIKE '%@%'`,
     ).all(machineId, from, to) as Array<{ data: string }>;
 
     return rows.map((row) => JSON.parse(row.data) as TimelineEntry);
@@ -194,12 +198,11 @@ export class EnrichmentCacheDB {
       `SELECT machine_id, machine_alias, data
        FROM timeline_entries
        WHERE start_time >= ? AND start_time <= ?
+         AND json_extract(data, '$.sessionTitle') NOT LIKE 'Background:%'
+         AND json_extract(data, '$.sessionTitle') NOT LIKE 'Task:%'
+         AND json_extract(data, '$.sessionTitle') NOT LIKE '%@%'
        ORDER BY start_time ASC`,
-    ).all(from, to) as Array<{
-      machine_id: string;
-      machine_alias: string;
-      data: string;
-    }>;
+    ).all(from, to) as Array<{ machine_id: string; machine_alias: string; data: string }>;
 
     return rows.map((row) => ({
       ...(JSON.parse(row.data) as TimelineEntry),
@@ -247,6 +250,17 @@ export class EnrichmentCacheDB {
       machineCount: row.machine_count,
       updatedAt: row.updated_at,
     };
+  }
+
+  deleteBackgroundEntries(): number {
+    const stmt = this.db.prepare(`
+      DELETE FROM timeline_entries WHERE
+        json_extract(data, '$.sessionTitle') LIKE 'Background:%'
+        OR json_extract(data, '$.sessionTitle') LIKE 'Task:%'
+        OR json_extract(data, '$.sessionTitle') LIKE '%@%'
+    `);
+    const result = stmt.run();
+    return result.changes;
   }
 
   deleteOldEntries(cutoffTimestamp: number, batchSize: number = 1000): number {
