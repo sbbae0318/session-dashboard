@@ -1,0 +1,45 @@
+
+> @session-dashboard/session-dashboard@1.0.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/sbbae/project/session-dashboard-enrichment-pipeline/server[39m
+
+ [32m✓[39m src/__tests__/machine-manager-active-dirs.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/recent-prompts-source.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/__tests__/active-sessions-claude.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould parse valid YAML and return MachineConfig[]
+[22m[39m[Config] Loaded 2 machine(s): Mac Studio, Mac Mini
+
+ [32m✓[39m src/__tests__/enrichment-cache-db.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m src/__tests__/machine-manager.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould parse optional timeout field
+[22m[39m[Config] Loaded 1 machine(s): Workstation
+
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould default timeout to undefined when not specified
+[22m[39m[Config] Loaded 1 machine(s): Test
+
+[90mstdout[2m | src/__tests__/machines-config.test.ts[2m > [22m[2mloadMachinesConfig()[2m > [22m[2mshould ignore invalid timeout values (too low, too high, NaN)
+[22m[39m[Config] Loaded 3 machine(s): Low, High, NaN
+
+ [32m✓[39m src/__tests__/machines-config.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 70[2mms[22m[39m
+[90mstdout[2m | src/__tests__/enrichment-module.test.ts[2m > [22m[2mEnrichmentModule — lifecycle[2m > [22m[2mstart sets up polling timers and stop clears them
+[22m[39m[EnrichmentModule] Loaded cache for 0 machine(s) from DB
+
+ [32m✓[39m src/__tests__/enrichment-module.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/__tests__/active-sessions.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/enrichment-merge.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 87[2mms[22m[39m
+ [32m✓[39m src/__tests__/aggregation.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/__tests__/event-stream.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/machine-manager-source.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/__tests__/queries-reader.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m frontend/src/lib/__tests__/utils.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/server.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/__tests__/jsonl-reader.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 830[2mms[22m[39m
+       [33m[2m✓[22m[39m should detect new lines appended to the file [33m 806[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m16 passed[39m[22m[90m (16)[39m
+[2m      Tests [22m [1m[32m204 passed[39m[22m[90m (204)[39m
+[2m   Start at [22m 16:04:20
+[2m   Duration [22m 1.08s[2m (transform 933ms, setup 0ms, import 1.64s, tests 1.28s, environment 1ms)[22m
+

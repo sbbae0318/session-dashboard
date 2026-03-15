@@ -265,6 +265,93 @@ describe('EnrichmentModule — getMergedData', () => {
   });
 });
 
+describe('EnrichmentModule — merged timeline with time window', () => {
+  let module: EnrichmentModule;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  it('GET /api/enrichment/merged/timeline?from=&to= filters by time window from DB', async () => {
+    module = new EnrichmentModule(
+      createMockMachineManager([MACHINE_A, MACHINE_B]),
+      createMockSseManager(),
+      ':memory:',
+    );
+
+    const entriesA: TimelineEntry[] = [
+      { sessionId: 'a1', sessionTitle: 'A1', projectId: 'p1', directory: '/a', startTime: 1000, endTime: 2000, status: 'completed', parentId: null },
+      { sessionId: 'a2', sessionTitle: 'A2', projectId: 'p1', directory: '/a', startTime: 5000, endTime: 6000, status: 'completed', parentId: null },
+    ];
+    const entriesB: TimelineEntry[] = [
+      { sessionId: 'b1', sessionTitle: 'B1', projectId: 'p2', directory: '/b', startTime: 3000, endTime: 4000, status: 'idle', parentId: null },
+    ];
+
+    seedCache(module, 'mac-a', 'timeline', { data: entriesA, available: true, cachedAt: 5000 });
+    seedCache(module, 'mac-b', 'timeline', { data: entriesB, available: true, cachedAt: 6000 });
+
+    const fetchMock = vi.fn().mockImplementation(async (machine: MachineConfig) => {
+      if (machine.id === 'mac-a') return { data: entriesA, available: true, cachedAt: 5000 };
+      return { data: entriesB, available: true, cachedAt: 6000 };
+    });
+    const mm = createMockMachineManager([MACHINE_A, MACHINE_B]);
+    (mm.fetchFromMachine as ReturnType<typeof vi.fn>).mockImplementation(fetchMock);
+    (mm.getMachines as ReturnType<typeof vi.fn>).mockReturnValue([MACHINE_A, MACHINE_B]);
+
+    await module.stop();
+    module = new EnrichmentModule(mm, createMockSseManager(), ':memory:');
+
+    await module.pollFeature('timeline');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline?from=2000&to=5000',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.data.length).toBeGreaterThanOrEqual(1);
+    for (const entry of body.data) {
+      expect(entry.startTime).toBeGreaterThanOrEqual(2000);
+      expect(entry.startTime).toBeLessThanOrEqual(5000);
+    }
+    await app.close();
+  });
+
+  it('GET /api/enrichment/merged/timeline without from/to returns precomputed merged data', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      data: [
+        { sessionId: 's1', sessionTitle: 'S1', projectId: 'p1', directory: '/d', startTime: 1000, endTime: 2000, status: 'completed', parentId: null },
+      ],
+      available: true,
+      cachedAt: 5000,
+    });
+    const mm = createMockMachineManager([MACHINE_A]);
+    (mm.fetchFromMachine as ReturnType<typeof vi.fn>).mockImplementation(fetchMock);
+
+    module = new EnrichmentModule(mm, createMockSseManager(), ':memory:');
+    await module.pollFeature('timeline');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.available).toBe(true);
+    expect(body.data).toHaveLength(1);
+    await app.close();
+  });
+});
+
 describe('EnrichmentModule — merged route', () => {
   let module: EnrichmentModule;
 
