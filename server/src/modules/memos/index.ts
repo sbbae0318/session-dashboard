@@ -15,26 +15,39 @@ export class MemoModule implements BackendModule {
   private readonly memoDB: MemoDB;
   private readonly memoFS: MemoFS;
 
-  constructor(db: Database.Database, memoDir: string) {
+  constructor(db: Database.Database, memoDir: string, defaultMachineId = '') {
     this.memoDB = new MemoDB(db);
     this.memoFS = new MemoFS(memoDir);
+    if (defaultMachineId) {
+      this.memoDB.migrateExistingMemos(defaultMachineId);
+    }
   }
 
   registerRoutes(app: FastifyInstance): void {
     app.get('/api/memos', async (request) => {
       const query = request.query as {
         projectId?: string;
+        machineId?: string;
         date?: string;
         limit?: string;
         offset?: string;
       };
       const memos = this.memoDB.list({
         projectId: query.projectId,
+        machineId: query.machineId,
         date: query.date,
         limit: query.limit ? parseInt(query.limit, 10) : undefined,
         offset: query.offset ? parseInt(query.offset, 10) : undefined,
       });
-      return { memos };
+
+      const memosWithSnippets = await Promise.all(
+        memos.map(async (memo) => ({
+          ...memo,
+          snippet: await this.memoFS.readSnippet(memo.filePath),
+        })),
+      );
+
+      return { memos: memosWithSnippets };
     });
 
     app.get('/api/memos/:id', async (request, reply) => {
@@ -54,11 +67,14 @@ export class MemoModule implements BackendModule {
       if (!body?.projectId || !body?.content) {
         return reply.code(400).send({ error: 'projectId and content are required' });
       }
+      if (!body.machineId) {
+        return reply.code(400).send({ error: 'machineId is required' });
+      }
 
       const now = Date.now();
       const date = body.date ?? toDateString(now);
       const projectSlug = slugFromPath(body.projectId);
-      const machineId = body.machineId ?? '';
+      const machineId = body.machineId;
       const filePath = this.memoFS.resolveFilePath(machineId, projectSlug, date);
       const id = randomUUID();
       const title = body.title ?? '';

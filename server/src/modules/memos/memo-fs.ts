@@ -43,6 +43,16 @@ export class MemoFS {
     return extractBody(raw);
   }
 
+  async readSnippet(filePath: string, maxChars = 100): Promise<string> {
+    const fullPath = join(this.memoDir, filePath);
+    if (!existsSync(fullPath)) return '';
+
+    const raw = await readFile(fullPath, 'utf-8');
+    const body = extractBody(raw);
+    if (body.length <= maxChars) return body;
+    return body.slice(0, maxChars) + '…';
+  }
+
   async delete(filePath: string): Promise<boolean> {
     const fullPath = join(this.memoDir, filePath);
     if (!existsSync(fullPath)) return false;
