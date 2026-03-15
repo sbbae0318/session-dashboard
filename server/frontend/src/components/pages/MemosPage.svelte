@@ -3,6 +3,7 @@
   import {
     projectsData,
     fetchProjectsData,
+    type MergedProjectSummary,
   } from '../../lib/stores/enrichment';
   import {
     getMemos,
@@ -21,11 +22,14 @@
     isSaving,
     fetchFeed,
     getFeedMemos,
+    fetchMemoProjects,
+    getMemoProjects,
   } from '../../lib/stores/memos.svelte';
   import {
     getSelectedMachineId,
     onMachineChange,
     getMachines,
+    shouldShowMachineFilter,
   } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
   import type { Memo, MemoWithSnippet } from '../../types';
@@ -36,6 +40,45 @@
   let newMemoTitle = $state('');
   let newMemoContent = $state('');
   let isFeedLoading = $state(false);
+
+  interface DropdownProject {
+    projectId: string;
+    slug: string;
+    machineId: string | undefined;
+    memoCount: number;
+  }
+
+  let mergedProjects = $derived.by((): DropdownProject[] => {
+    const map = new Map<string, DropdownProject>();
+
+    // 메모 프로젝트 추가
+    for (const mp of getMemoProjects()) {
+      map.set(mp.projectId, {
+        projectId: mp.projectId,
+        slug: formatProjectSlug(mp.projectSlug),
+        machineId: mp.machineId,
+        memoCount: mp.memoCount,
+      });
+    }
+
+    // enrichment 프로젝트 병합 (없는 것만 추가)
+    for (const ep of ($projectsData ?? [])) {
+      if (!map.has(ep.id)) {
+        map.set(ep.id, {
+          projectId: ep.id,
+          slug: shortPath(ep.worktree),
+          machineId: 'machineId' in ep ? (ep as MergedProjectSummary).machineId : undefined,
+          memoCount: 0,
+        });
+      }
+    }
+
+    // 정렬: 메모 개수 내림차순 → 이름순
+    return [...map.values()].sort((a, b) => {
+      if (b.memoCount !== a.memoCount) return b.memoCount - a.memoCount;
+      return a.slug.localeCompare(b.slug);
+    });
+  });
 
   let memosByDate = $derived.by(() => {
     const list = getMemos();
@@ -61,6 +104,14 @@
     return machine?.alias ?? machineId;
   }
 
+  function projectLabel(p: DropdownProject): string {
+    const countStr = `메모 ${p.memoCount}개`;
+    if (shouldShowMachineFilter() && p.machineId) {
+      return `[${getMachineAlias(p.machineId)}] ${p.slug} (${countStr})`;
+    }
+    return `${p.slug} (${countStr})`;
+  }
+
   function formatProjectSlug(slug: string): string {
     const parts = slug.replace(/\\/g, '/').split('/').filter(Boolean);
     return parts[parts.length - 1] ?? slug;
@@ -77,8 +128,13 @@
 
   onMount(() => {
     fetchProjectsData();
+    void fetchMemoProjects(getSelectedMachineId() ?? undefined);
     void loadFeed();
-    const unsubscribe = onMachineChange(() => { void loadFeed(); });
+    const unsubscribe = onMachineChange(() => {
+      void fetchMemoProjects(getSelectedMachineId() ?? undefined);
+      fetchProjectsData();
+      void loadFeed();
+    });
     return unsubscribe;
   });
 
@@ -189,8 +245,8 @@
           onchange={handleProjectChange}
         >
           <option value="">프로젝트 선택</option>
-          {#each ($projectsData ?? []) as project (project.id)}
-            <option value={project.id}>{shortPath(project.worktree)}</option>
+          {#each mergedProjects as project (project.projectId)}
+            <option value={project.projectId}>{projectLabel(project)}</option>
           {/each}
         </select>
 
