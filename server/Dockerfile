@@ -17,7 +17,10 @@ RUN npm run build
 FROM node:20-alpine AS backend-builder
 WORKDIR /app
 
-# Install backend dependencies
+# Install build tools for native addons (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
+# Install backend dependencies (including native build)
 COPY package*.json ./
 RUN npm ci
 
@@ -29,21 +32,26 @@ RUN npm test
 # Build TypeScript
 RUN npm run build
 
+# Prune dev dependencies — production node_modules ready
+RUN npm prune --omit=dev
+
 # ── Stage 3: Production ──
 FROM node:20-alpine
 WORKDIR /app
 
-# Copy backend build artifacts and install production deps
+# Copy backend build artifacts and pre-built production node_modules
 COPY --from=backend-builder /app/package*.json ./
 COPY --from=backend-builder /app/dist/ ./dist/
-RUN npm ci --only=production && npm cache clean --force
+COPY --from=backend-builder /app/node_modules/ ./node_modules/
 
 # Copy frontend build into dist/public/ (where Fastify static serves from)
 COPY --from=frontend-builder /app/dist/public/ ./dist/public/
 
 # Non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+    adduser -S nodejs -u 1001 && \
+    mkdir -p /app/data && \
+    chown nodejs:nodejs /app/data
 USER nodejs
 
 # Use /tmp for lock file in Docker (prevents PID 1 restart loop)

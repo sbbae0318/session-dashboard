@@ -9,6 +9,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./machines.yml:/app/machines.yml:ro
+      - ./data:/app/data
     env_file:
       - .env
     environment:
