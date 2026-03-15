@@ -42,7 +42,7 @@
   function getProjectRows(sessions: SessionTokenStats[]): ProjectRow[] {
     const map = new Map<string, ProjectRow>();
     for (const s of sessions) {
-      const key = s.directory || s.projectId;
+      const key = projectLabel(s.directory || s.projectId);
       const existing = map.get(key);
       if (existing) {
         existing.sessionCount += 1;
