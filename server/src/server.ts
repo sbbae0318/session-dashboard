@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import type { BackendModule } from "./modules/types.js";
 import type { SSEManager } from "./sse/event-stream.js";
 import type { MachineManager } from './machines/machine-manager.js';
+import type { EnrichmentModule } from './modules/enrichment/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -79,7 +80,25 @@ export async function createServer(
   // ── SSE endpoint ──
   // Do NOT await/return — SSEManager takes over the raw response
   app.get("/api/events", (request, reply) => {
-    sseManager.addClient(reply);
+    const clientId = sseManager.addClient(reply);
+
+    const enrichmentModule = modules.find(m => m.id === 'enrichment') as EnrichmentModule | undefined;
+    if (enrichmentModule) {
+      const cache = enrichmentModule.getCache();
+      for (const [machineId, machineCache] of cache) {
+        const features = ['tokens', 'impact', 'timeline', 'projects', 'recovery'] as const;
+        for (const feature of features) {
+          const featureData = machineCache[feature];
+          if (featureData) {
+            sseManager.sendToClient(clientId, 'enrichment.cache', {
+              machineId,
+              feature,
+              cachedAt: featureData.cachedAt,
+            });
+          }
+        }
+      }
+    }
   });
 
   // ── SPA fallback ──

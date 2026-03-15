@@ -94,6 +94,20 @@ export class SSEManager {
   }
 
   /**
+   * Send an event to a specific client (for hydration on connect)
+   */
+  sendToClient(clientId: string, eventType: string, data: unknown): void {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+    try {
+      const message = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+      client.reply.raw.write(message);
+    } catch {
+      this.clients.delete(clientId);
+    }
+  }
+
+  /**
    * Get number of connected clients
    */
   getClientCount(): number {
