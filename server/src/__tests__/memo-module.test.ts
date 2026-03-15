@@ -393,6 +393,103 @@ describe('MemoModule', () => {
     });
   });
 
+  describe('GET /api/memos/projects', () => {
+    it('returns empty projects list on fresh DB', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/memos/projects' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().projects).toEqual([]);
+    });
+
+    it('returns projects with memoCount and latestDate', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-a', content: 'memo 1', machineId: 'mac', date: '2026-03-10' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-a', content: 'memo 2', machineId: 'mac', date: '2026-03-15' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-b', content: 'memo 3', machineId: 'mac', date: '2026-03-12' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/projects' });
+      expect(res.statusCode).toBe(200);
+      const { projects } = res.json();
+      expect(projects).toHaveLength(2);
+
+      const projA = projects.find((p: { projectId: string }) => p.projectId === '/proj-a');
+      expect(projA).toBeDefined();
+      expect(projA.memoCount).toBe(2);
+      expect(projA.latestDate).toBe('2026-03-15');
+      expect(projA.projectSlug).toBe('proj-a');
+
+      const projB = projects.find((p: { projectId: string }) => p.projectId === '/proj-b');
+      expect(projB).toBeDefined();
+      expect(projB.memoCount).toBe(1);
+      expect(projB.latestDate).toBe('2026-03-12');
+    });
+
+    it('orders projects by latestDate DESC', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/old-proj', content: 'old', machineId: 'mac', date: '2026-01-01' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/new-proj', content: 'new', machineId: 'mac', date: '2026-03-15' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/projects' });
+      const { projects } = res.json();
+      expect(projects[0].projectId).toBe('/new-proj');
+      expect(projects[1].projectId).toBe('/old-proj');
+    });
+
+    it('filters by machineId when provided', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-mac1', content: 'from mac1', machineId: 'mac1' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-mac2', content: 'from mac2', machineId: 'mac2' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/projects?machineId=mac1' });
+      expect(res.statusCode).toBe(200);
+      const { projects } = res.json();
+      expect(projects).toHaveLength(1);
+      expect(projects[0].projectId).toBe('/proj-mac1');
+    });
+
+    it('returns all projects when machineId is not provided', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-mac1', content: 'from mac1', machineId: 'mac1' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-mac2', content: 'from mac2', machineId: 'mac2' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/projects' });
+      expect(res.statusCode).toBe(200);
+      const { projects } = res.json();
+      expect(projects).toHaveLength(2);
+    });
+  });
+
   describe('DELETE /api/memos/:id', () => {
     it('deletes memo and removes MD file', async () => {
       const createRes = await app.inject({

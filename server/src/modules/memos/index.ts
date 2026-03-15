@@ -65,6 +65,12 @@ export class MemoModule implements BackendModule {
       return { memos: memosWithSnippets };
     });
 
+    app.get('/api/memos/projects', async (request) => {
+      const query = request.query as { machineId?: string };
+      const projects = this.memoDB.listProjects(query.machineId);
+      return { projects };
+    });
+
     app.get('/api/memos/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       const memo = this.memoDB.getById(id);
