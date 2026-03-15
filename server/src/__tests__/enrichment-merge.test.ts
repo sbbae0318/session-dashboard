@@ -80,6 +80,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A, MACHINE_B]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const result = module.getMergedData('timeline');
@@ -94,6 +95,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const entries: TimelineEntry[] = [
@@ -117,6 +119,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A, MACHINE_B]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const entriesA: TimelineEntry[] = [
@@ -148,6 +151,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A, MACHINE_B]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const entriesA: TimelineEntry[] = [
@@ -168,6 +172,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A, MACHINE_B]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const tokensA: TokensData = {
@@ -200,6 +205,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A, MACHINE_B]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const impactA: SessionCodeImpact[] = [
@@ -222,6 +228,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const projects: ProjectSummary[] = [
@@ -241,6 +248,7 @@ describe('EnrichmentModule — getMergedData', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const recovery: RecoveryContext[] = [
@@ -269,6 +277,7 @@ describe('EnrichmentModule — merged route', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const entries: TimelineEntry[] = [
@@ -294,6 +303,7 @@ describe('EnrichmentModule — merged route', () => {
     module = new EnrichmentModule(
       createMockMachineManager([MACHINE_A]),
       createMockSseManager(),
+      ':memory:',
     );
 
     const app = Fastify();
@@ -312,7 +322,7 @@ describe('EnrichmentModule — merged route', () => {
     const fetchMock = vi.fn().mockResolvedValue({ data: [], available: true, cachedAt: 1000 });
     const mm = createMockMachineManager([MACHINE_A]);
     (mm.fetchFromMachine as ReturnType<typeof vi.fn>).mockImplementation(fetchMock);
-    module = new EnrichmentModule(mm, createMockSseManager());
+    module = new EnrichmentModule(mm, createMockSseManager(), ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);

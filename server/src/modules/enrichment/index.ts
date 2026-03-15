@@ -15,6 +15,7 @@ import type {
   MergedEnrichmentResponse,
 } from './types.js';
 import { createEmptyCache } from './types.js';
+import { EnrichmentCacheDB } from './enrichment-cache-db.js';
 
 type FeatureDataMap = {
   tokens: TokensData;
@@ -38,12 +39,14 @@ export class EnrichmentModule implements BackendModule {
   readonly id = 'enrichment';
   private readonly machineManager: MachineManager;
   private readonly sseManager: SSEManager;
+  private readonly db: EnrichmentCacheDB;
   private readonly cache = new Map<string, EnrichmentCache>();
   private readonly timers: NodeJS.Timeout[] = [];
 
-  constructor(machineManager: MachineManager, sseManager: SSEManager) {
+  constructor(machineManager: MachineManager, sseManager: SSEManager, dbPath: string) {
     this.machineManager = machineManager;
     this.sseManager = sseManager;
+    this.db = new EnrichmentCacheDB(dbPath);
   }
 
   registerRoutes(app: FastifyInstance): void {
@@ -99,6 +102,16 @@ export class EnrichmentModule implements BackendModule {
   }
 
   async start(): Promise<void> {
+    try {
+      const loaded = this.db.loadAllCache();
+      for (const [machineId, cache] of loaded) {
+        this.cache.set(machineId, cache);
+      }
+      console.log(`[EnrichmentModule] Loaded cache for ${loaded.size} machine(s) from DB`);
+    } catch (err) {
+      console.warn('[EnrichmentModule] Failed to load cache from DB:', err);
+    }
+
     for (const feature of FEATURES) {
       this.timers.push(
         setInterval(() => {
@@ -117,6 +130,11 @@ export class EnrichmentModule implements BackendModule {
       clearInterval(timer);
     }
     this.timers.length = 0;
+    try {
+      this.db.close();
+    } catch (err) {
+      console.warn('[EnrichmentModule] Failed to close DB:', err);
+    }
   }
 
   private async pollAll(): Promise<void> {
@@ -140,6 +158,21 @@ export class EnrichmentModule implements BackendModule {
           [feature]: data,
           lastUpdated: Date.now(),
         });
+
+        try {
+          this.db.saveFeatureData(machine.id, feature, data.data, data.available);
+
+          if (feature === 'timeline' && data.available && Array.isArray(data.data)) {
+            this.db.saveTimelineEntries(
+              machine.id,
+              machine.alias,
+              data.data as TimelineEntry[],
+            );
+          }
+        } catch (dbErr) {
+          console.warn(`[EnrichmentModule] DB write failed for ${machine.id}/${feature}:`, dbErr);
+        }
+
         this.sseManager.broadcast('enrichment.update', {
           machineId: machine.id,
           feature,

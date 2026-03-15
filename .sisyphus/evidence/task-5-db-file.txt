@@ -1,0 +1,30 @@
+Task 5: EnrichmentModule SQLite Refactor — Evidence
+
+## Changes Made
+
+### server/src/modules/enrichment/index.ts
+- Added `EnrichmentCacheDB` import
+- Constructor now accepts `dbPath: string` and creates `EnrichmentCacheDB` instance
+- `start()`: Loads cache from SQLite before setting up poll timers (warm start)
+- `stop()`: Closes DB connection after clearing timers
+- `pollFeature()`: After in-memory cache update, saves to SQLite via `db.saveFeatureData()`
+  - For timeline feature: also calls `db.saveTimelineEntries()` for time-window queries
+
+### server/src/cli.ts
+- Added `dirname`, `mkdirSync` imports
+- Creates `./data/` directory if not exists
+- Passes `dbPath` (env `ENRICHMENT_DB_PATH` or `./data/enrichment-cache.db`) to EnrichmentModule
+
+### Tests Updated
+- enrichment-module.test.ts: All 11 instances → `:memory:` as 3rd arg
+- enrichment-merge.test.ts: All 12 instances → `:memory:` as 3rd arg
+
+## Build & Test Results
+- `npm run build` → SUCCESS (tsc, no errors)
+- `npm test` → 15 test files, 188 tests passed
+
+## Verification
+- Warm start log confirmed in test output:
+  `[EnrichmentModule] Loaded cache for 0 machine(s) from DB`
+- In-memory Map cache preserved for runtime performance
+- SQLite persistence is additive (graceful fallback on DB errors)

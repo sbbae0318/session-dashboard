@@ -66,7 +66,7 @@ describe('EnrichmentModule — pollFeature', () => {
       fetchFromMachine: vi.fn().mockResolvedValue(tokensResponse),
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     await module.pollFeature('tokens');
 
@@ -82,7 +82,7 @@ describe('EnrichmentModule — pollFeature', () => {
       fetchFromMachine: vi.fn().mockResolvedValue({ data: null, available: false, cachedAt: 0 }),
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     await module.pollFeature('projects');
 
@@ -107,7 +107,7 @@ describe('EnrichmentModule — pollFeature', () => {
       fetchFromMachine: fetchMock,
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     await module.pollFeature('projects');
     const cacheAfterFirst = module.getCache().get('mac-test');
@@ -134,7 +134,7 @@ describe('EnrichmentModule — pollFeature', () => {
       fetchFromMachine: fetchMock,
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     await module.pollFeature('timeline');
 
@@ -163,7 +163,7 @@ describe('EnrichmentModule — registerRoutes', () => {
       }),
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);
@@ -182,7 +182,7 @@ describe('EnrichmentModule — registerRoutes', () => {
   it('GET /api/enrichment/:machineId returns empty cache for unknown machine', async () => {
     mockMachineManager = createMockMachineManager();
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);
@@ -205,7 +205,7 @@ describe('EnrichmentModule — registerRoutes', () => {
       fetchFromMachine: vi.fn().mockResolvedValue({ data: null, available: false, cachedAt: 0 }),
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);
@@ -225,7 +225,7 @@ describe('EnrichmentModule — registerRoutes', () => {
       fetchFromMachine: vi.fn().mockResolvedValue({ data: [], available: true, cachedAt: 2000 }),
     });
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);
@@ -243,7 +243,7 @@ describe('EnrichmentModule — registerRoutes', () => {
   it('GET /api/enrichment/:machineId/:feature returns null for unknown machine', async () => {
     mockMachineManager = createMockMachineManager();
     mockSseManager = createMockSseManager();
-    module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     const app = Fastify();
     module.registerRoutes(app);
@@ -263,7 +263,7 @@ describe('EnrichmentModule — lifecycle', () => {
       getMachines: () => [],
     });
     const mockSseManager = createMockSseManager();
-    const module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    const module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     await module.start();
 
@@ -277,7 +277,7 @@ describe('EnrichmentModule — lifecycle', () => {
   it('module id is "enrichment"', () => {
     const mockMachineManager = createMockMachineManager();
     const mockSseManager = createMockSseManager();
-    const module = new EnrichmentModule(mockMachineManager, mockSseManager);
+    const module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
 
     expect(module.id).toBe('enrichment');
   });

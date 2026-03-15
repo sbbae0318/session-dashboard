@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // session-dashboard CLI entrypoint
 
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { ActiveSessionsModule } from './modules/active-sessions/index.js';
 import { RecentPromptsModule } from './modules/recent-prompts/index.js';
 import { EnrichmentModule } from './modules/enrichment/index.js';
@@ -38,7 +39,9 @@ async function main(): Promise<void> {
       const sseManager = new SSEManager();
       const activeSessions = new ActiveSessionsModule(machineManager);
       const recentPrompts = new RecentPromptsModule(machineManager);
-      const enrichment = new EnrichmentModule(machineManager, sseManager);
+      const dbPath = process.env.ENRICHMENT_DB_PATH ?? './data/enrichment-cache.db';
+      mkdirSync(dirname(dbPath), { recursive: true });
+      const enrichment = new EnrichmentModule(machineManager, sseManager, dbPath);
       const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment];
 
       // Wire module events → SSE broadcasts
