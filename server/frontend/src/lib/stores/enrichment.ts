@@ -1,12 +1,9 @@
 import { writable } from 'svelte/store';
 import { fetchJSON } from '../api';
-import { getSelectedMachineId, getMachines } from './machine.svelte';
+import { getSelectedMachineId } from './machine.svelte';
 
 function resolveEnrichmentMachineId(): string | null {
-  const selected = getSelectedMachineId();
-  if (selected) return selected;
-  const machines = getMachines();
-  return machines[0]?.id ?? null;
+  return getSelectedMachineId();
 }
 
 interface EnrichmentResponse<T> {
@@ -71,12 +68,10 @@ export interface ProjectSummary {
   id: string;
   worktree: string;
   sessionCount: number;
-  activeSessionCount: number;
-  lastActivityAt: number;
-  totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalCost: number;
-  totalAdditions: number;
-  totalDeletions: number;
+  lastActivity: number;
 }
 
 export interface RecoveryContext {

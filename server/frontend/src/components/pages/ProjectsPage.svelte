@@ -20,9 +20,9 @@
 
   let sortedProjects = $derived(
     [...($projectsData ?? [])].sort((a, b) => {
-      if (sortBy === 'recent') return b.lastActivityAt - a.lastActivityAt;
+      if (sortBy === 'recent') return b.lastActivity - a.lastActivity;
       if (sortBy === 'sessions') return b.sessionCount - a.sessionCount;
-      return b.totalTokens - a.totalTokens;
+      return b.totalInputTokens - a.totalInputTokens;
     })
   );
 
@@ -132,22 +132,14 @@
               <div class="project-meta-row">
                 <span class="meta-sessions">
                   {project.sessionCount}개 세션
-                  {#if project.activeSessionCount > 0}
-                    <span class="active-badge">({project.activeSessionCount} 활성)</span>
-                  {/if}
                 </span>
                 <span class="meta-sep">·</span>
-                <span class="meta-time">{relativeTime(project.lastActivityAt)}</span>
+                <span class="meta-time">{relativeTime(project.lastActivity)}</span>
               </div>
 
               <div class="project-stats-row">
-                <span class="stat-tokens">{formatTokens(project.totalTokens)} 토큰</span>
+                <span class="stat-tokens">{formatTokens(project.totalInputTokens)} 토큰</span>
                 <span class="stat-cost">{formatCost(project.totalCost)}</span>
-                {#if project.totalAdditions > 0 || project.totalDeletions > 0}
-                  <span class="meta-sep">·</span>
-                  <span class="stat-additions">+{project.totalAdditions}</span>
-                  <span class="stat-deletions">-{project.totalDeletions}</span>
-                {/if}
               </div>
             </div>
           </button>
