@@ -51,7 +51,8 @@ async function main(): Promise<void> {
       memoDb.pragma('journal_mode = WAL');
       const memoDir = process.env.MEMO_DIR ?? resolve(homedir(), '.session-dashboard', 'memos');
       mkdirSync(memoDir, { recursive: true });
-      const memos = new MemoModule(memoDb, memoDir);
+      const defaultMachineId = machinesConfig[0]?.id ?? 'default';
+      const memos = new MemoModule(memoDb, memoDir, defaultMachineId);
 
       const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos];
 

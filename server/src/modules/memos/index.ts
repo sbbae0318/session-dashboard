@@ -50,6 +50,21 @@ export class MemoModule implements BackendModule {
       return { memos: memosWithSnippets };
     });
 
+    app.get('/api/memos/feed', async (request) => {
+      const query = request.query as { limit?: string; machineId?: string };
+      const limit = Math.min(query.limit ? parseInt(query.limit, 10) : 20, 50);
+      const feedMemos = this.memoDB.listFeed(limit, query.machineId);
+
+      const memosWithSnippets = await Promise.all(
+        feedMemos.map(async (memo) => ({
+          ...memo,
+          snippet: await this.memoFS.readSnippet(memo.filePath),
+        })),
+      );
+
+      return { memos: memosWithSnippets };
+    });
+
     app.get('/api/memos/:id', async (request, reply) => {
       const { id } = request.params as { id: string };
       const memo = this.memoDB.getById(id);

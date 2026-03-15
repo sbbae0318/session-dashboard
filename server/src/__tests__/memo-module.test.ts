@@ -303,6 +303,96 @@ describe('MemoModule', () => {
     });
   });
 
+  describe('GET /api/memos/feed', () => {
+    it('returns empty feed on fresh DB', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().memos).toEqual([]);
+    });
+
+    it('returns memos across all projects ordered by updated_at DESC', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-a', content: 'first', machineId: 'mac', date: '2026-03-10' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/proj-b', content: 'second', machineId: 'mac', date: '2026-03-15' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed' });
+      const memos = res.json().memos;
+      expect(memos).toHaveLength(2);
+      expect(memos[0].projectId).toBe('/proj-b');
+      expect(memos[1].projectId).toBe('/proj-a');
+    });
+
+    it('defaults limit to 20', async () => {
+      for (let i = 0; i < 25; i++) {
+        await app.inject({
+          method: 'POST',
+          url: '/api/memos',
+          payload: { projectId: `/proj-${i}`, content: `memo ${i}`, machineId: 'mac', date: `2026-03-${String(i + 1).padStart(2, '0')}` },
+        });
+      }
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed' });
+      expect(res.json().memos).toHaveLength(20);
+    });
+
+    it('respects custom limit up to 50', async () => {
+      for (let i = 0; i < 5; i++) {
+        await app.inject({
+          method: 'POST',
+          url: '/api/memos',
+          payload: { projectId: `/proj-${i}`, content: `memo ${i}`, machineId: 'mac' },
+        });
+      }
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed?limit=3' });
+      expect(res.json().memos).toHaveLength(3);
+    });
+
+    it('clamps limit to max 50', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed?limit=999' });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('filters by machineId when provided', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/test', content: 'from mac1', machineId: 'mac1' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/test', content: 'from mac2', machineId: 'mac2' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed?machineId=mac1' });
+      const memos = res.json().memos;
+      expect(memos).toHaveLength(1);
+      expect(memos[0].machineId).toBe('mac1');
+    });
+
+    it('includes snippet for each memo', async () => {
+      await app.inject({
+        method: 'POST',
+        url: '/api/memos',
+        payload: { projectId: '/test', content: 'Feed snippet content', machineId: 'mac' },
+      });
+
+      const res = await app.inject({ method: 'GET', url: '/api/memos/feed' });
+      const memos = res.json().memos;
+      expect(memos).toHaveLength(1);
+      expect(memos[0].snippet).toBeDefined();
+      expect(memos[0].snippet).toBe('Feed snippet content');
+    });
+  });
+
   describe('DELETE /api/memos/:id', () => {
     it('deletes memo and removes MD file', async () => {
       const createRes = await app.inject({
