@@ -1,0 +1,28 @@
+=== Task 6: Time-Window Filtering Evidence ===
+Date: 2026-03-15
+
+1. Per-machine timeline with from/to (lines 107-130):
+   - /api/enrichment/:machineId/timeline?from=X&to=Y
+   - Uses db.getTimelineEntries(machineId, from, to)
+   - Fallback to in-memory cache when no params
+
+2. Merged timeline with from/to (lines 66-103):
+   - /api/enrichment/merged/:feature?from=X&to=Y
+   - Uses db.getAllTimelineEntries(from, to) for timeline
+   - Uses db.getMergedData(feature) for precomputed merged (no params)
+   - Falls back to in-memory getMergedData() if no precomputed data
+
+3. pollFeature() saves merged data (lines 269-274):
+   - After polling, calls getMergedData(feature) + db.saveMergedData()
+
+4. NON_TIMELINE_FEATURES loop (line 134-135):
+   - FEATURES.filter(f => f !== 'timeline') — existing per-machine routes preserved
+
+Key grep results:
+  L68:  Querystring: { from?: string; to?: string }     (merged route)
+  L83:  this.db.getAllTimelineEntries(from, to)           (merged timeline query)
+  L92:  this.db.getMergedData(feature)                    (precomputed merged)
+  L109: Querystring: { from?: string; to?: string }      (per-machine route)
+  L119: this.db.getTimelineEntries(machineId, from, to)  (per-machine timeline query)
+  L134: NON_TIMELINE_FEATURES = FEATURES.filter(...)     (timeline excluded from loop)
+  L271: this.db.saveMergedData(feature, ...)              (save merged after poll)
