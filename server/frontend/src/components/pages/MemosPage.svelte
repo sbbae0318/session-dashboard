@@ -285,10 +285,15 @@
                   data-testid="memo-item"
                   onclick={() => handleSelectMemo(memo)}
                 >
-                  <span class="memo-title-text">
-                    {memo.title || '(제목 없음)'}
-                  </span>
-                  <span class="memo-time">{relativeTime(memo.updatedAt)}</span>
+                  <div class="memo-item-top">
+                    <span class="memo-title-text">
+                      {memo.title || '(제목 없음)'}
+                    </span>
+                    <span class="memo-time">{relativeTime(memo.updatedAt)}</span>
+                  </div>
+                  {#if (memo as MemoWithSnippet).snippet}
+                    <div class="memo-snippet">{(memo as MemoWithSnippet).snippet}</div>
+                  {/if}
                 </button>
               {/each}
             </div>
@@ -589,9 +594,8 @@
 
   .memo-item {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.2rem;
     width: 100%;
     background: none;
     border: none;
@@ -602,6 +606,13 @@
     font-family: inherit;
     color: inherit;
     transition: background 0.15s ease;
+  }
+
+  .memo-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
   }
 
   .memo-item:hover {
@@ -633,6 +644,16 @@
     font-size: 0.72rem;
     color: var(--text-secondary);
     white-space: nowrap;
+  }
+
+  .memo-snippet {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    opacity: 0.8;
   }
 
   .memos-main {
