@@ -139,6 +139,53 @@ describe('EnrichmentCacheDB', () => {
     });
   });
 
+  describe('background session filtering', () => {
+    const makeEntry = (sessionId: string, title: string, startTime: number) => ({
+      sessionId,
+      sessionTitle: title,
+      projectId: 'p1',
+      directory: '/test',
+      startTime,
+      endTime: null,
+      status: 'idle' as const,
+      parentId: null,
+    });
+
+    beforeEach(() => {
+      db.saveTimelineEntries('mac-1', 'Mac', [
+        makeEntry('user_1', 'Fix auth bug', 1700000000000),
+        makeEntry('user_2', 'Add feature', 1700010000000),
+      ]);
+      db.saveTimelineEntries('mac-1', 'Mac', [
+        makeEntry('bg_1', 'Background: explore codebase', 1700001000000),
+        makeEntry('bg_2', 'Task: run tests', 1700002000000),
+        makeEntry('bg_3', 'Implement @subagent feature', 1700003000000),
+      ]);
+    });
+
+    it('getTimelineEntries excludes background sessions', () => {
+      const entries = db.getTimelineEntries('mac-1', 0, 9999999999999);
+      expect(entries.length).toBe(2);
+      expect(entries.every(e => !e.sessionTitle.startsWith('Background:'))).toBe(true);
+      expect(entries.every(e => !e.sessionTitle.startsWith('Task:'))).toBe(true);
+      expect(entries.every(e => !e.sessionTitle.includes('@'))).toBe(true);
+    });
+
+    it('getAllTimelineEntries excludes background sessions', () => {
+      const entries = db.getAllTimelineEntries(0, 9999999999999);
+      expect(entries.length).toBe(2);
+      expect(entries.map(e => e.sessionId)).toContain('user_1');
+      expect(entries.map(e => e.sessionId)).toContain('user_2');
+    });
+
+    it('deleteBackgroundEntries removes stored background sessions', () => {
+      const deleted = db.deleteBackgroundEntries();
+      expect(deleted).toBe(3);
+      const remaining = db.getTimelineEntries('mac-1', 0, 9999999999999);
+      expect(remaining.length).toBe(2);
+    });
+  });
+
   describe('deleteOldEntries', () => {
     const makeEntry = (sessionId: string, startTime: number) => ({
       sessionId,
