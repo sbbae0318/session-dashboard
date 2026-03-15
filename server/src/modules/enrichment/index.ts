@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { BackendModule } from '../types.js';
 import type { MachineManager } from '../../machines/machine-manager.js';
+import type { MachineConfig } from '../../config/machines.js';
 import type { SSEManager } from '../../sse/event-stream.js';
 import type {
   EnrichmentCache,
@@ -284,43 +285,47 @@ export class EnrichmentModule implements BackendModule {
     return this.cache;
   }
 
-  getMergedData(feature: EnrichmentFeature): MergedEnrichmentResponse<unknown> {
-    const machines = this.machineManager.getMachines();
+  private mergeTokensData(machines: readonly MachineConfig[]): MergedEnrichmentResponse<unknown> {
     let anyAvailable = false;
     let machineCount = 0;
     let cachedAt = 0;
+    const machineResults: MergedTokensData['machines'] = [];
+    const grandTotal: MergedTokensData['grandTotal'] = {
+      input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0,
+    };
 
-    if (feature === 'tokens') {
-      const machineResults: MergedTokensData['machines'] = [];
-      const grandTotal: MergedTokensData['grandTotal'] = {
-        input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0,
-      };
-
-      for (const machine of machines) {
-        const cached = this.cache.get(machine.id);
-        const tokenData = cached?.tokens;
-        if (tokenData?.available && tokenData.data) {
-          anyAvailable = true;
-          machineCount++;
-          cachedAt = Math.max(cachedAt, cached!.lastUpdated);
-          machineResults.push({
-            machineId: machine.id,
-            machineAlias: machine.alias,
-            data: tokenData.data,
-          });
-          grandTotal.input += tokenData.data.grandTotal.input;
-          grandTotal.output += tokenData.data.grandTotal.output;
-          grandTotal.reasoning += tokenData.data.grandTotal.reasoning;
-          grandTotal.cacheRead += tokenData.data.grandTotal.cacheRead;
-          grandTotal.cacheWrite += tokenData.data.grandTotal.cacheWrite;
-          grandTotal.cost += tokenData.data.grandTotal.cost;
-        }
+    for (const machine of machines) {
+      const cached = this.cache.get(machine.id);
+      const tokenData = cached?.tokens;
+      if (tokenData?.available && tokenData.data) {
+        anyAvailable = true;
+        machineCount++;
+        cachedAt = Math.max(cachedAt, cached!.lastUpdated);
+        machineResults.push({
+          machineId: machine.id,
+          machineAlias: machine.alias,
+          data: tokenData.data,
+        });
+        grandTotal.input += tokenData.data.grandTotal.input;
+        grandTotal.output += tokenData.data.grandTotal.output;
+        grandTotal.reasoning += tokenData.data.grandTotal.reasoning;
+        grandTotal.cacheRead += tokenData.data.grandTotal.cacheRead;
+        grandTotal.cacheWrite += tokenData.data.grandTotal.cacheWrite;
+        grandTotal.cost += tokenData.data.grandTotal.cost;
       }
-
-      const merged: MergedTokensData = { machines: machineResults, grandTotal };
-      return { data: merged, available: anyAvailable, machineCount, cachedAt };
     }
 
+    const merged: MergedTokensData = { machines: machineResults, grandTotal };
+    return { data: merged, available: anyAvailable, machineCount, cachedAt };
+  }
+
+  private mergeArrayFeature(
+    feature: Exclude<EnrichmentFeature, 'tokens'>,
+    machines: readonly MachineConfig[],
+  ): MergedEnrichmentResponse<unknown> {
+    let anyAvailable = false;
+    let machineCount = 0;
+    let cachedAt = 0;
     const allEntries: Array<Record<string, unknown> & { machineId: string; machineAlias: string }> = [];
 
     for (const machine of machines) {
@@ -356,5 +361,13 @@ export class EnrichmentModule implements BackendModule {
     }
 
     return { data: allEntries, available: anyAvailable, machineCount, cachedAt };
+  }
+
+  getMergedData(feature: EnrichmentFeature): MergedEnrichmentResponse<unknown> {
+    const machines = this.machineManager.getMachines();
+    if (feature === 'tokens') {
+      return this.mergeTokensData(machines);
+    }
+    return this.mergeArrayFeature(feature, machines);
   }
 }
