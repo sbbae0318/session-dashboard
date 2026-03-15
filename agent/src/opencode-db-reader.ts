@@ -401,22 +401,41 @@ export class OpenCodeDBReader {
     }));
   }
 
-  getSessionTimeline(options: { from: number; to: number; projectId?: string }): TimelineEntry[] {
-    const { from, to, projectId } = options;
+  getSessionTimeline(options: { from: number; to: number; projectId?: string; since?: number }): TimelineEntry[] {
+    const { from, to, projectId, since } = options;
 
-    const rows = projectId
-      ? this.stmtTimelineByProject.all(from, to, projectId) as Array<{
-          id: string; project_id: string; title: string | null;
-          time_created: number; time_updated: number;
-          summary_additions: number | null; summary_deletions: number | null;
-          summary_files: number | null;
-        }>
-      : this.stmtTimeline.all(from, to) as Array<{
-          id: string; project_id: string; title: string | null;
-          time_created: number; time_updated: number;
-          summary_additions: number | null; summary_deletions: number | null;
-          summary_files: number | null;
-        }>;
+    type TimelineRow = {
+      id: string; project_id: string; title: string | null;
+      time_created: number; time_updated: number;
+      summary_additions: number | null; summary_deletions: number | null;
+      summary_files: number | null;
+    };
+
+    let rows: TimelineRow[];
+
+    if (since !== undefined) {
+      if (projectId) {
+        rows = this.db!.prepare(`
+          SELECT id, project_id, title, time_created, time_updated,
+            summary_additions, summary_deletions, summary_files
+          FROM session
+          WHERE time_created >= ? AND time_created <= ? AND project_id = ? AND time_updated >= ?
+          ORDER BY time_created ASC
+        `).all(from, to, projectId, since) as TimelineRow[];
+      } else {
+        rows = this.db!.prepare(`
+          SELECT id, project_id, title, time_created, time_updated,
+            summary_additions, summary_deletions, summary_files
+          FROM session
+          WHERE time_created >= ? AND time_created <= ? AND time_updated >= ?
+          ORDER BY time_created ASC
+        `).all(from, to, since) as TimelineRow[];
+      }
+    } else {
+      rows = projectId
+        ? this.stmtTimelineByProject.all(from, to, projectId) as TimelineRow[]
+        : this.stmtTimeline.all(from, to) as TimelineRow[];
+    }
 
     const now = Date.now();
     return rows.map(r => {

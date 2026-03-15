@@ -354,13 +354,14 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     },
   );
 
-  app.get<{ Querystring: { from?: string; to?: string; projectId?: string } }>(
+  app.get<{ Querystring: { from?: string; to?: string; projectId?: string; since?: string } }>(
     '/api/enrichment/timeline',
     async (request) => {
       const from = parseInt(request.query.from || '0', 10);
       const to = parseInt(request.query.to || String(Date.now()), 10);
+      const since = request.query.since ? parseInt(request.query.since, 10) : undefined;
       const { projectId } = request.query;
-      return enrichResponse(() => ocDbReader!.getSessionTimeline({ from, to, projectId }));
+      return enrichResponse(() => ocDbReader!.getSessionTimeline({ from, to, projectId, since }));
     },
   );
 
