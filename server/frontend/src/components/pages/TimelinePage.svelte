@@ -5,8 +5,9 @@
     timelineAvailable,
     timelineLoading,
     fetchTimelineData,
+    type MergedTimelineEntry,
   } from '../../lib/stores/enrichment';
-  import { onMachineChange } from '../../lib/stores/machine.svelte';
+  import { onMachineChange, getSelectedMachineId } from '../../lib/stores/machine.svelte';
   import { timeToX, formatTimeAxis, getTimeRange, type TimeRangePreset } from '../../lib/timeline-utils';
 
   const SVG_WIDTH = 900;
@@ -31,6 +32,8 @@
   let ticks = $derived(formatTimeAxis(timeRange.from, timeRange.to, 6));
 
   let nowX = $derived(timeToX(Date.now(), timeRange.from, timeRange.to, SVG_WIDTH));
+
+  let isAllMode = $derived(getSelectedMachineId() === null);
 
   function shortPath(dir: string): string {
     const parts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
@@ -87,8 +90,12 @@
       <div class="lane-labels">
         <div class="axis-spacer" style="height: {AXIS_HEIGHT}px"></div>
         {#each filteredSessions as session}
+          {@const merged = session as MergedTimelineEntry}
+          {@const label = isAllMode && merged.machineAlias
+            ? `${merged.machineAlias}: ${session.sessionTitle.slice(0, 15)}`
+            : session.sessionTitle.slice(0, 20)}
           <div class="lane-label" style="height: {LANE_HEIGHT}px" title={session.sessionTitle}>
-            {session.sessionTitle.slice(0, 20)}{session.sessionTitle.length > 20 ? '…' : ''}
+            {label}{label.length >= 20 ? '…' : ''}
           </div>
         {/each}
       </div>
