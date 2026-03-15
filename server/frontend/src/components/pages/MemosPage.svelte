@@ -228,7 +228,30 @@
     await deleteMemo(id);
     deleteConfirmId = null;
   }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (!(e.metaKey || e.ctrlKey)) return;
+
+    if (e.key === 'n') {
+      if (!selectedProjectId) return;
+      e.preventDefault();
+      handleNewMemo();
+      return;
+    }
+
+    if (e.key === 's') {
+      e.preventDefault();
+      if (isSaving()) return;
+      if (isCreating) {
+        void handleSaveNew();
+      } else if (getCurrentMemo()) {
+        void handleSaveEdit();
+      }
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="page-container" data-testid="page-memos">
   <div class="page-header">
