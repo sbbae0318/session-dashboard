@@ -10,6 +10,7 @@
   import { fetchMachines, setMachines } from './lib/stores/machine.svelte';
   import { createSSEClient } from "./lib/sse-client";
   import { reviveSessions } from "./lib/stores/dismissed.svelte";
+  import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
   import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
   import TopNav from './components/TopNav.svelte';
@@ -58,6 +59,17 @@
       .on("query.new", (data) => { addQuery(data as QueryEntry); })
       .on("session.update", (data) => { const s = data as DashboardSession[]; setSessions(s); reviveSessions(s); })
       .on("machine.status", (data) => { setMachines(data as MachineInfo[]); })
+      .on("enrichment.updated", (data) => {
+        const d = data as { machineId: string; feature: string; cachedAt: number };
+        handleEnrichmentSSEUpdate(d.feature);
+      })
+      .on("enrichment.merged.updated", (data) => {
+        const d = data as { feature: string; machineCount: number; cachedAt: number };
+        handleMergedEnrichmentSSEUpdate(d.feature);
+      })
+      .on("enrichment.cache", (_data) => {
+        // hydration: 초기 연결 시 현재 캐시 상태 수신 — 각 페이지 onMount에서 초기 fetch
+      })
       .start();
 
     refetchTimer = setInterval(async () => {

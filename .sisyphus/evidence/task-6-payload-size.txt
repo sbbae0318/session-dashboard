@@ -1,0 +1,15 @@
+=== Task 6: tsc --noEmit Result ===
+Date: 2026-03-15
+
+$ cd server && npx tsc --noEmit
+(exit code 0 — no errors)
+
+$ npm run build
+> @session-dashboard/session-dashboard@1.0.0 build
+> tsc
+(exit code 0 — no errors)
+
+$ npm test
+ Test Files  15 passed (15)
+      Tests  188 passed (188)
+   Duration  1.12s

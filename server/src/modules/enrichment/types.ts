@@ -157,3 +157,17 @@ export interface MergedEnrichmentResponse<T> {
   machineCount: number;
   cachedAt: number;
 }
+
+export interface TimeWindowQuery {
+  from?: number;   // epoch ms
+  to?: number;     // epoch ms
+  limit?: number;  // max entries
+}
+
+export interface EnrichmentCacheRow {
+  machine_id: string;
+  feature: EnrichmentFeature;
+  data: string;        // JSON serialized
+  available: number;   // 0 or 1
+  updated_at: number;
+}

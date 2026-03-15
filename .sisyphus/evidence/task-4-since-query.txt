@@ -1,0 +1,32 @@
+Task 4: since parameter for incremental enrichment queries
+==========================================================
+
+Test Results (npm test):
+  Test Files: 14 passed (14)
+  Tests: 290 passed (290)
+  Duration: 2.76s
+
+Changes Made:
+1. agent/src/server.ts (line 357-365):
+   - Added `since?: string` to Querystring type
+   - Parses `since` query param: `parseInt(request.query.since, 10)` or undefined
+   - Passes `since` to `getSessionTimeline({ from, to, projectId, since })`
+
+2. agent/src/opencode-db-reader.ts (getSessionTimeline method):
+   - Added `since?: number` to options type
+   - When since is defined: runs incremental SQL with `AND time_updated >= ?`
+   - When since is undefined: uses existing prepared statements (backward compat)
+
+SQL for since query (no projectId):
+  SELECT id, project_id, title, time_created, time_updated,
+    summary_additions, summary_deletions, summary_files
+  FROM session
+  WHERE time_created >= ? AND time_created <= ? AND time_updated >= ?
+  ORDER BY time_created ASC
+
+SQL for since query (with projectId):
+  SELECT id, project_id, title, time_created, time_updated,
+    summary_additions, summary_deletions, summary_files
+  FROM session
+  WHERE time_created >= ? AND time_created <= ? AND project_id = ? AND time_updated >= ?
+  ORDER BY time_created ASC

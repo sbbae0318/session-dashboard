@@ -234,6 +234,25 @@ export async function fetchRecoveryData(): Promise<void> {
   }
 }
 
+// SSE 이벤트: enrichment.updated → { machineId, feature, cachedAt }
+export function handleEnrichmentSSEUpdate(feature: string): void {
+  switch (feature) {
+    case 'timeline': void fetchTimelineData(); break;
+    case 'tokens': void fetchTokenStats(); break;
+    case 'impact': void fetchImpactData(); break;
+    case 'projects': void fetchProjectsData(); break;
+    case 'recovery': void fetchRecoveryData(); break;
+  }
+}
+
+// SSE 이벤트: enrichment.merged.updated → { feature, machineCount, cachedAt }
+export function handleMergedEnrichmentSSEUpdate(feature: string): void {
+  // merged 모드(machineId=null)일 때만 re-fetch
+  const machineId = resolveEnrichmentMachineId();
+  if (machineId !== null) return;
+  handleEnrichmentSSEUpdate(feature);
+}
+
 export async function fetchSummary(sessionId: string): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;

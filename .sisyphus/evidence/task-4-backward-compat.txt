@@ -1,0 +1,21 @@
+Task 4: Backward Compatibility Verification
+============================================
+
+The since parameter is OPTIONAL (since?: number).
+
+When since is NOT provided:
+- server.ts: `since = undefined` (request.query.since is falsy)
+- opencode-db-reader.ts: falls into `else` branch, uses existing prepared statements
+  - stmtTimeline.all(from, to) — same as before
+  - stmtTimelineByProject.all(from, to, projectId) — same as before
+
+When since IS provided:
+- server.ts: `since = parseInt(request.query.since, 10)`
+- opencode-db-reader.ts: runs dynamic query with `AND time_updated >= ?`
+
+All 290 tests pass, including existing timeline tests that call without since:
+  Test Files: 14 passed (14)
+  Tests: 290 passed (290)
+
+The opencode-db-reader.test.ts (39 tests) covers getSessionTimeline and all pass,
+confirming backward compatibility is maintained.

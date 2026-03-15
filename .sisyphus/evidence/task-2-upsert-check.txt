@@ -1,0 +1,12 @@
+=== INSERT OR REPLACE check (should be 0) ===
+0
+
+=== ON CONFLICT count ===
+3
+
+=== ON CONFLICT lines ===
+78:      ON CONFLICT (machine_id, feature) DO UPDATE SET
+154:      ON CONFLICT (session_id, machine_id) DO UPDATE SET
+219:      ON CONFLICT (feature) DO UPDATE SET
+
+RESULT: No INSERT OR REPLACE found. All 3 upserts use ON CONFLICT DO UPDATE.
