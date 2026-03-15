@@ -1,0 +1,34 @@
+DB Path: /var/folders/s5/htfd6nsn7f1bykqx7s6ctqr40000gn/T/enrichment-test-1773556327760.db
+
+=== Test 1: saveFeatureData → loadAllCache roundtrip ===
+Machine count: 2
+machine-a tokens available: true
+machine-a tokens data matches: true
+machine-a impact available: true
+machine-b tokens available: false
+
+=== Test 2: Upsert (ON CONFLICT DO UPDATE) ===
+After upsert, machine-a tokens input: 9999
+
+=== Test 3: saveTimelineEntries → getTimelineEntries roundtrip ===
+Timeline entries loaded: 2
+Entry 1 sessionId: s1
+Entry 2 status: busy
+
+=== Test 4: getAllTimelineEntries (merged) ===
+Merged entries: 3
+Has machineId: true
+Has machineAlias: true
+
+=== Test 5: saveMergedData → getMergedData ===
+Merged data exists: true
+Merged machineCount: 2
+
+=== Test 6: deleteOldEntries ===
+Deleted count: 1
+Remaining entries: 2
+
+=== Test 7: Empty entries skip ===
+Empty entries handled (no crash)
+
+=== ALL TESTS PASSED ===
