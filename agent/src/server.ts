@@ -357,8 +357,8 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   app.get<{ Querystring: { from?: string; to?: string; projectId?: string } }>(
     '/api/enrichment/timeline',
     async (request) => {
-      const from = parseInt(request.query.from ?? '0', 10);
-      const to = parseInt(request.query.to ?? String(Date.now()), 10);
+      const from = parseInt(request.query.from || '0', 10);
+      const to = parseInt(request.query.to || String(Date.now()), 10);
       const { projectId } = request.query;
       return enrichResponse(() => ocDbReader!.getSessionTimeline({ from, to, projectId }));
     },
@@ -375,7 +375,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       if (sessionId) {
         return enrichResponse(() => ocDbReader!.getSessionRecoveryContext(sessionId));
       }
-      const limitNum = parseInt(limit ?? '20', 10);
+      const limitNum = parseInt(limit || '20', 10);
       return enrichResponse(() => ocDbReader!.getAllRecoveryContexts({ limit: limitNum }));
     },
   );
