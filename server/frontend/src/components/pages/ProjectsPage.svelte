@@ -6,6 +6,7 @@
     projectsLoading,
     fetchProjectsData,
     type ProjectSummary,
+    type MergedProjectSummary,
   } from '../../lib/stores/enrichment';
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
@@ -106,7 +107,7 @@
     </div>
   {:else}
     <div class="projects-grid">
-      {#each sortedProjects as project (project.id)}
+      {#each sortedProjects as project (`${project.id}-${(project as MergedProjectSummary).machineId ?? 'single'}`)}
         {@const isExpanded = expandedProjects.has(project.id)}
         {@const projectSessions = getProjectSessions(project)}
 
