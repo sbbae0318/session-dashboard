@@ -19,15 +19,23 @@
     updateMemo,
     deleteMemo,
     isSaving,
+    fetchFeed,
+    getFeedMemos,
   } from '../../lib/stores/memos.svelte';
+  import {
+    getSelectedMachineId,
+    onMachineChange,
+    getMachines,
+  } from '../../lib/stores/machine.svelte';
   import { relativeTime } from '../../lib/utils';
-  import type { Memo } from '../../types';
+  import type { Memo, MemoWithSnippet } from '../../types';
 
   let selectedProjectId = $state<string | null>(null);
   let isCreating = $state(false);
   let deleteConfirmId = $state<string | null>(null);
   let newMemoTitle = $state('');
   let newMemoContent = $state('');
+  let isFeedLoading = $state(false);
 
   let memosByDate = $derived.by(() => {
     const list = getMemos();
@@ -39,8 +47,39 @@
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   });
 
+  async function loadFeed(): Promise<void> {
+    isFeedLoading = true;
+    try {
+      await fetchFeed(20, getSelectedMachineId() ?? undefined);
+    } finally {
+      isFeedLoading = false;
+    }
+  }
+
+  function getMachineAlias(machineId: string): string {
+    const machine = getMachines().find(m => m.id === machineId);
+    return machine?.alias ?? machineId;
+  }
+
+  function formatProjectSlug(slug: string): string {
+    const parts = slug.replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts[parts.length - 1] ?? slug;
+  }
+
+  async function handleFeedItemClick(memo: MemoWithSnippet): Promise<void> {
+    selectedProjectId = memo.projectId;
+    clearCurrentMemo();
+    isCreating = false;
+    deleteConfirmId = null;
+    // $effect가 fetchMemos(selectedProjectId) 자동 호출
+    await fetchMemo(memo.id);
+  }
+
   onMount(() => {
     fetchProjectsData();
+    void loadFeed();
+    const unsubscribe = onMachineChange(() => { void loadFeed(); });
+    return unsubscribe;
   });
 
   $effect(() => {
@@ -167,9 +206,7 @@
       </div>
 
       {#if !selectedProjectId}
-        <div class="sidebar-empty" data-testid="no-project-hint">
-          <p>프로젝트를 선택하세요</p>
-        </div>
+        <div class="sidebar-empty" data-testid="no-project-hint"></div>
       {:else if isLoading()}
         <div class="sidebar-loading" data-testid="memos-loading">
           로딩 중…
@@ -206,12 +243,38 @@
 
     <main class="memos-main" data-testid="memos-main">
       {#if !selectedProjectId}
-        <div class="main-empty" data-testid="select-project-hint">
-          <p class="empty-primary">프로젝트를 선택하세요</p>
-          <p class="empty-sub">
-            왼쪽 드롭다운에서 프로젝트를 선택하면 메모 목록이 표시됩니다
-          </p>
-        </div>
+        {#if isFeedLoading}
+          <div class="main-empty" data-testid="feed-loading">
+            <p class="empty-sub">로딩 중…</p>
+          </div>
+        {:else if getFeedMemos().length === 0}
+          <div class="main-empty" data-testid="feed-empty">
+            <p class="empty-primary">아직 작성된 메모가 없습니다.</p>
+            <p class="empty-sub">프로젝트를 선택하고 새 메모를 작성하세요.</p>
+          </div>
+        {:else}
+          <div class="feed-container" data-testid="memo-feed">
+            {#each getFeedMemos() as memo (memo.id)}
+              <button
+                class="feed-item"
+                data-testid="feed-item"
+                onclick={() => handleFeedItemClick(memo)}
+              >
+                <div class="feed-meta">
+                  <span class="feed-project">{formatProjectSlug(memo.projectSlug)}</span>
+                  <span class="feed-dot">·</span>
+                  <span class="feed-machine">{getMachineAlias(memo.machineId)}</span>
+                  <span class="feed-dot">·</span>
+                  <span class="feed-date">{relativeTime(memo.updatedAt)}</span>
+                </div>
+                <div class="feed-title">{memo.title || '(제목 없음)'}</div>
+                {#if memo.snippet}
+                  <div class="feed-snippet">{memo.snippet}</div>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
       {:else if isCreating}
         <div class="editor-panel" data-testid="new-memo-editor">
           <div class="editor-header">
@@ -696,6 +759,94 @@
 
   .content-textarea::placeholder {
     color: var(--text-secondary);
+  }
+
+  /* ── Feed ── */
+  .feed-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .feed-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.875rem;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .feed-item:hover {
+    border-color: var(--accent);
+    background: rgba(88, 166, 255, 0.05);
+  }
+
+  .feed-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .feed-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+
+  .feed-project {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .feed-machine {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .feed-date {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .feed-dot {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  .feed-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feed-snippet {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   @media (max-width: 599px) {
