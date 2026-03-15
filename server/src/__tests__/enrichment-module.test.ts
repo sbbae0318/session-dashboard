@@ -86,9 +86,10 @@ describe('EnrichmentModule — pollFeature', () => {
 
     await module.pollFeature('projects');
 
-    expect(mockSseManager.broadcast).toHaveBeenCalledWith('enrichment.update', {
+    expect(mockSseManager.broadcast).toHaveBeenCalledWith('enrichment.updated', {
       machineId: 'mac-test',
       feature: 'projects',
+      cachedAt: expect.any(Number),
     });
   });
 

@@ -252,9 +252,10 @@ export class EnrichmentModule implements BackendModule {
           console.warn(`[EnrichmentModule] DB write failed for ${machine.id}/${feature}:`, dbErr);
         }
 
-        this.sseManager.broadcast('enrichment.update', {
+        this.sseManager.broadcast('enrichment.updated', {
           machineId: machine.id,
           feature,
+          cachedAt: Date.now(),
         });
       }),
     );
@@ -269,6 +270,11 @@ export class EnrichmentModule implements BackendModule {
     try {
       const merged = this.getMergedData(feature);
       this.db.saveMergedData(feature, merged.data, merged.machineCount);
+      this.sseManager.broadcast('enrichment.merged.updated', {
+        feature,
+        machineCount: merged.machineCount,
+        cachedAt: Date.now(),
+      });
     } catch (err) {
       console.warn(`[EnrichmentModule] Failed to save merged data for ${feature}:`, err);
     }
