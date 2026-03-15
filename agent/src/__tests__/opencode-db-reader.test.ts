@@ -492,3 +492,99 @@ describe('OpenCodeDBReader', () => {
     expect(() => OpenCodeDBReader.fromDatabase(badDb)).toThrow(/missing required tables/i);
   });
 });
+
+describe('getSessionTimeline — background filtering', () => {
+  let bgReader: OpenCodeDBReader;
+  let bgDb: Database.Database;
+
+  beforeEach(() => {
+    bgDb = createTestDb();
+    // seed: background + user sessions
+    bgDb.exec(`
+      INSERT INTO project VALUES ('proj_bg', '/home/user/proj', 1700000000, 1700100000, NULL, NULL);
+      -- 정상 유저 세션들
+      INSERT INTO session VALUES ('user_1', 'proj_bg', NULL, '/home/user/proj', 'Fix auth bug', 'v1', 'fix', 10, 5, 2, 1700000000, 1700010000);
+      INSERT INTO session VALUES ('user_2', 'proj_bg', NULL, '/home/user/proj', 'Add feature', 'v1', 'feat', 20, 10, 3, 1700020000, 1700030000);
+      -- 백그라운드 세션들 (필터되어야 함)
+      INSERT INTO session VALUES ('bg_1', 'proj_bg', NULL, '/home/user/proj', 'Background: explore codebase', 'v1', 'bg', 0, 0, 0, 1700001000, 1700002000);
+      INSERT INTO session VALUES ('bg_2', 'proj_bg', NULL, '/home/user/proj', 'Task: run tests', 'v1', 'task', 0, 0, 0, 1700003000, 1700004000);
+      INSERT INTO session VALUES ('bg_3', 'proj_bg', NULL, '/home/user/proj', 'Implement @subagent feature', 'v1', 'sub', 0, 0, 0, 1700005000, 1700006000);
+      INSERT INTO session VALUES ('sub_4', 'proj_bg', 'user_1', '/home/user/proj', 'Child session', 'v1', 'child', 0, 0, 0, 1700007000, 1700008000);
+    `);
+    bgReader = OpenCodeDBReader.fromDatabase(bgDb);
+  });
+
+  afterEach(() => {
+    try { bgReader.close(); } catch { /* already closed */ }
+  });
+
+  const FULL_RANGE = { from: 0, to: 9999999999999 };
+
+  it('should exclude sessions with parent_id (subagent)', () => {
+    const entries = bgReader.getSessionTimeline(FULL_RANGE);
+    const ids = entries.map(e => e.sessionId);
+    expect(ids).not.toContain('sub_4');
+  });
+
+  it('should exclude sessions with "Background:" title', () => {
+    const entries = bgReader.getSessionTimeline(FULL_RANGE);
+    const titles = entries.map(e => e.sessionTitle);
+    expect(titles.some(t => t.startsWith('Background:'))).toBe(false);
+  });
+
+  it('should exclude sessions with "Task:" title', () => {
+    const entries = bgReader.getSessionTimeline(FULL_RANGE);
+    const titles = entries.map(e => e.sessionTitle);
+    expect(titles.some(t => t.startsWith('Task:'))).toBe(false);
+  });
+
+  it('should exclude sessions with "@" in title', () => {
+    const entries = bgReader.getSessionTimeline(FULL_RANGE);
+    const titles = entries.map(e => e.sessionTitle);
+    expect(titles.some(t => t.includes('@'))).toBe(false);
+  });
+
+  it('should include normal user sessions', () => {
+    const entries = bgReader.getSessionTimeline(FULL_RANGE);
+    const ids = entries.map(e => e.sessionId);
+    expect(ids).toContain('user_1');
+    expect(ids).toContain('user_2');
+  });
+
+  it('should return empty array when all sessions are background', () => {
+    const allBgDb = createTestDb();
+    allBgDb.exec(`
+      INSERT INTO project VALUES ('proj_x', '/home/user/x', 1700000000, 1700100000, NULL, NULL);
+      INSERT INTO session VALUES ('bg_only', 'proj_x', NULL, '/home/user/x', 'Background: all bg', 'v1', 's', 0, 0, 0, 1700000000, 1700010000);
+    `);
+    const allBgReader = OpenCodeDBReader.fromDatabase(allBgDb);
+    const entries = allBgReader.getSessionTimeline(FULL_RANGE);
+    expect(entries).toHaveLength(0);
+    allBgReader.close();
+  });
+
+  it('should filter correctly with since parameter (since + no projectId)', () => {
+    const entries = bgReader.getSessionTimeline({ ...FULL_RANGE, since: 1700000000 });
+    const ids = entries.map(e => e.sessionId);
+    expect(ids).toContain('user_1');
+    expect(ids).toContain('user_2');
+    expect(ids).not.toContain('sub_4');
+    expect(ids.some(id => id.startsWith('bg_'))).toBe(false);
+  });
+
+  it('should filter correctly with projectId parameter (projectId only)', () => {
+    const entries = bgReader.getSessionTimeline({ ...FULL_RANGE, projectId: 'proj_bg' });
+    const ids = entries.map(e => e.sessionId);
+    expect(ids).toContain('user_1');
+    expect(ids).toContain('user_2');
+    expect(ids).not.toContain('sub_4');
+  });
+
+  it('should filter correctly with since + projectId parameters', () => {
+    const entries = bgReader.getSessionTimeline({ ...FULL_RANGE, since: 1700000000, projectId: 'proj_bg' });
+    const ids = entries.map(e => e.sessionId);
+    expect(ids).toContain('user_1');
+    expect(ids).not.toContain('sub_4');
+    expect(ids.some(id => id.startsWith('bg_'))).toBe(false);
+  });
+});

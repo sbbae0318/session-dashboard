@@ -405,7 +405,7 @@ export class OpenCodeDBReader {
     const { from, to, projectId, since } = options;
 
     type TimelineRow = {
-      id: string; project_id: string; title: string | null;
+      id: string; project_id: string; parent_id: string | null; title: string | null;
       time_created: number; time_updated: number;
       summary_additions: number | null; summary_deletions: number | null;
       summary_files: number | null;
@@ -416,18 +416,26 @@ export class OpenCodeDBReader {
     if (since !== undefined) {
       if (projectId) {
         rows = this.db!.prepare(`
-          SELECT id, project_id, title, time_created, time_updated,
+          SELECT id, project_id, parent_id, title, time_created, time_updated,
             summary_additions, summary_deletions, summary_files
           FROM session
           WHERE time_created >= ? AND time_created <= ? AND project_id = ? AND time_updated >= ?
+            AND parent_id IS NULL
+            AND title NOT LIKE 'Background:%'
+            AND title NOT LIKE 'Task:%'
+            AND title NOT LIKE '%@%'
           ORDER BY time_created ASC
         `).all(from, to, projectId, since) as TimelineRow[];
       } else {
         rows = this.db!.prepare(`
-          SELECT id, project_id, title, time_created, time_updated,
+          SELECT id, project_id, parent_id, title, time_created, time_updated,
             summary_additions, summary_deletions, summary_files
           FROM session
           WHERE time_created >= ? AND time_created <= ? AND time_updated >= ?
+            AND parent_id IS NULL
+            AND title NOT LIKE 'Background:%'
+            AND title NOT LIKE 'Task:%'
+            AND title NOT LIKE '%@%'
           ORDER BY time_created ASC
         `).all(from, to, since) as TimelineRow[];
       }
@@ -452,7 +460,7 @@ export class OpenCodeDBReader {
         startTime: r.time_created,
         endTime,
         status,
-        parentId: null,
+        parentId: r.parent_id ?? null,
       };
     });
   }
@@ -704,20 +712,28 @@ export class OpenCodeDBReader {
 
   private prepareTimelineStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, time_created, time_updated,
+      SELECT id, project_id, parent_id, title, time_created, time_updated,
         summary_additions, summary_deletions, summary_files
       FROM session
       WHERE time_created >= ? AND time_created <= ?
+        AND parent_id IS NULL
+        AND title NOT LIKE 'Background:%'
+        AND title NOT LIKE 'Task:%'
+        AND title NOT LIKE '%@%'
       ORDER BY time_created ASC
     `);
   }
 
   private prepareTimelineByProjectStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, time_created, time_updated,
+      SELECT id, project_id, parent_id, title, time_created, time_updated,
         summary_additions, summary_deletions, summary_files
       FROM session
       WHERE time_created >= ? AND time_created <= ? AND project_id = ?
+        AND parent_id IS NULL
+        AND title NOT LIKE 'Background:%'
+        AND title NOT LIKE 'Task:%'
+        AND title NOT LIKE '%@%'
       ORDER BY time_created ASC
     `);
   }
