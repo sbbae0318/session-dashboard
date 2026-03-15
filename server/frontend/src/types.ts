@@ -52,6 +52,7 @@ export interface Memo {
   id: string;
   projectId: string;
   projectSlug: string;
+  machineId: string;
   title: string;
   date: string;
   filePath: string;
@@ -61,4 +62,16 @@ export interface Memo {
 
 export interface MemoWithContent extends Memo {
   content: string;
+}
+
+export interface MemoWithSnippet extends Memo {
+  snippet: string;
+}
+
+export interface MemoProject {
+  projectId: string;
+  projectSlug: string;
+  machineId: string;
+  memoCount: number;
+  latestDate: string;
 }
