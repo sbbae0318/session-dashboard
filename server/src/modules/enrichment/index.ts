@@ -42,6 +42,7 @@ export class EnrichmentModule implements BackendModule {
   private readonly db: EnrichmentCacheDB;
   private readonly cache = new Map<string, EnrichmentCache>();
   private readonly timers: NodeJS.Timeout[] = [];
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(machineManager: MachineManager, sseManager: SSEManager, dbPath: string) {
     this.machineManager = machineManager;
@@ -62,8 +63,10 @@ export class EnrichmentModule implements BackendModule {
       },
     );
 
-    // Merged: all machines combined for a given feature
-    app.get<{ Params: { feature: string } }>(
+    app.get<{
+      Params: { feature: string };
+      Querystring: { from?: string; to?: string };
+    }>(
       '/api/enrichment/merged/:feature',
       async (req) => {
         const { feature } = req.params;
@@ -71,11 +74,65 @@ export class EnrichmentModule implements BackendModule {
         if (!validFeatures.includes(feature as EnrichmentFeature)) {
           return { error: 'Invalid feature', available: false, data: null, machineCount: 0, cachedAt: 0 };
         }
+
+        const { from: fromStr, to: toStr } = req.query;
+
+        if (feature === 'timeline' && (fromStr || toStr)) {
+          const from = parseInt(fromStr || '0', 10);
+          const to = parseInt(toStr || String(Date.now()), 10);
+          const entries = this.db.getAllTimelineEntries(from, to);
+          return {
+            data: entries,
+            available: entries.length > 0,
+            machineCount: new Set(entries.map(e => e.machineId)).size,
+            cachedAt: Date.now(),
+          };
+        }
+
+        const precomputed = this.db.getMergedData(feature as EnrichmentFeature);
+        if (precomputed) {
+          return {
+            data: precomputed.data,
+            available: true,
+            machineCount: precomputed.machineCount,
+            cachedAt: precomputed.updatedAt,
+          };
+        }
+
         return this.getMergedData(feature as EnrichmentFeature);
       },
     );
 
-    for (const feature of FEATURES) {
+    // Timeline: 시간 윈도우 필터링 지원 (per-machine)
+    app.get<{
+      Params: { machineId: string };
+      Querystring: { from?: string; to?: string };
+    }>(
+      '/api/enrichment/:machineId/timeline',
+      async (req) => {
+        const { machineId } = req.params;
+        const { from: fromStr, to: toStr } = req.query;
+
+        if (fromStr || toStr) {
+          const from = parseInt(fromStr || '0', 10);
+          const to = parseInt(toStr || String(Date.now()), 10);
+          const entries = this.db.getTimelineEntries(machineId, from, to);
+          return {
+            data: entries,
+            available: entries.length > 0,
+            cachedAt: Date.now(),
+          };
+        }
+
+        // 파라미터 없으면 인메모리 캐시 반환 (기존 동작)
+        const cached = this.cache.get(machineId);
+        return cached?.timeline ?? null;
+      },
+    );
+
+    // 나머지 feature들은 기존 루프 사용 (timeline 제외)
+    const NON_TIMELINE_FEATURES = FEATURES.filter(f => f !== 'timeline');
+    for (const feature of NON_TIMELINE_FEATURES) {
       app.get<{ Params: { machineId: string } }>(
         `/api/enrichment/:machineId/${feature}`,
         async (req) => {
@@ -123,6 +180,24 @@ export class EnrichmentModule implements BackendModule {
     }
 
     void this.pollAll();
+
+    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+    const runCleanup = () => {
+      const cutoff = Date.now() - NINETY_DAYS_MS;
+      try {
+        const deleted = this.db.deleteOldEntries(cutoff, 1000);
+        if (deleted > 0) {
+          console.log(`[EnrichmentModule] Cleanup: deleted ${deleted} old timeline entries`);
+        }
+      } catch (err) {
+        console.warn('[EnrichmentModule] Cleanup failed:', err);
+      }
+    };
+
+    runCleanup();
+    this.cleanupTimer = setInterval(runCleanup, SIX_HOURS_MS);
   }
 
   async stop(): Promise<void> {
@@ -130,6 +205,10 @@ export class EnrichmentModule implements BackendModule {
       clearInterval(timer);
     }
     this.timers.length = 0;
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
     try {
       this.db.close();
     } catch (err) {
@@ -185,6 +264,13 @@ export class EnrichmentModule implements BackendModule {
         const machine = machines[index];
         console.warn(`[EnrichmentModule] Failed to poll ${feature} from ${machine.id}`);
       }
+    }
+
+    try {
+      const merged = this.getMergedData(feature);
+      this.db.saveMergedData(feature, merged.data, merged.machineCount);
+    } catch (err) {
+      console.warn(`[EnrichmentModule] Failed to save merged data for ${feature}:`, err);
     }
   }
 
