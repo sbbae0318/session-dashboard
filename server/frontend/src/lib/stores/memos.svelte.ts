@@ -1,6 +1,6 @@
 import type { Memo, MemoWithContent, MemoWithSnippet, MemoProject } from '../../types';
 import { fetchJSON } from '../api';
-import { getSelectedMachineId } from './machine.svelte';
+import { getSelectedMachineId, getMachines } from './machine.svelte';
 
 let memos = $state<Memo[]>([]);
 let loading = $state(false);
@@ -61,7 +61,7 @@ export async function fetchMemo(id: string): Promise<void> {
 export async function createMemo(projectId: string, content: string, title?: string, date?: string, machineId?: string): Promise<Memo | null> {
   saving = true;
   try {
-    const resolvedMachineId = machineId ?? getSelectedMachineId() ?? '';
+    const resolvedMachineId = machineId ?? getSelectedMachineId() ?? getMachines()[0]?.id ?? '';
     const body: Record<string, string> = { projectId, content, machineId: resolvedMachineId };
     if (title) body.title = title;
     if (date) body.date = date;
