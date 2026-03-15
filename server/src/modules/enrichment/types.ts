@@ -109,3 +109,51 @@ export function createEmptyCache(): EnrichmentCache {
     lastUpdated: 0,
   };
 }
+
+// ==============================
+// Server-side Merged Types
+// (machineId injected at server level, agent types unchanged)
+// ==============================
+
+export interface MergedTimelineEntry extends TimelineEntry {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedSessionCodeImpact extends SessionCodeImpact {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedRecoveryContext extends RecoveryContext {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedProjectSummary extends ProjectSummary {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedTokensData {
+  machines: Array<{
+    machineId: string;
+    machineAlias: string;
+    data: TokensData;
+  }>;
+  grandTotal: {
+    input: number;
+    output: number;
+    reasoning: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cost: number;
+  };
+}
+
+export interface MergedEnrichmentResponse<T> {
+  data: T;
+  available: boolean;
+  machineCount: number;
+  cachedAt: number;
+}

@@ -11,6 +11,8 @@ import type {
   TimelineEntry,
   ProjectSummary,
   RecoveryContext,
+  MergedTokensData,
+  MergedEnrichmentResponse,
 } from './types.js';
 import { createEmptyCache } from './types.js';
 
@@ -54,6 +56,19 @@ export class EnrichmentModule implements BackendModule {
       async (req) => {
         const { machineId } = req.params;
         return this.cache.get(machineId) ?? createEmptyCache();
+      },
+    );
+
+    // Merged: all machines combined for a given feature
+    app.get<{ Params: { feature: string } }>(
+      '/api/enrichment/merged/:feature',
+      async (req) => {
+        const { feature } = req.params;
+        const validFeatures: EnrichmentFeature[] = ['timeline', 'impact', 'projects', 'recovery', 'tokens'];
+        if (!validFeatures.includes(feature as EnrichmentFeature)) {
+          return { error: 'Invalid feature', available: false, data: null, machineCount: 0, cachedAt: 0 };
+        }
+        return this.getMergedData(feature as EnrichmentFeature);
       },
     );
 
@@ -142,5 +157,79 @@ export class EnrichmentModule implements BackendModule {
 
   getCache(): ReadonlyMap<string, EnrichmentCache> {
     return this.cache;
+  }
+
+  getMergedData(feature: EnrichmentFeature): MergedEnrichmentResponse<unknown> {
+    const machines = this.machineManager.getMachines();
+    let anyAvailable = false;
+    let machineCount = 0;
+    let cachedAt = 0;
+
+    if (feature === 'tokens') {
+      const machineResults: MergedTokensData['machines'] = [];
+      const grandTotal: MergedTokensData['grandTotal'] = {
+        input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0,
+      };
+
+      for (const machine of machines) {
+        const cached = this.cache.get(machine.id);
+        const tokenData = cached?.tokens;
+        if (tokenData?.available && tokenData.data) {
+          anyAvailable = true;
+          machineCount++;
+          cachedAt = Math.max(cachedAt, cached!.lastUpdated);
+          machineResults.push({
+            machineId: machine.id,
+            machineAlias: machine.alias,
+            data: tokenData.data,
+          });
+          grandTotal.input += tokenData.data.grandTotal.input;
+          grandTotal.output += tokenData.data.grandTotal.output;
+          grandTotal.reasoning += tokenData.data.grandTotal.reasoning;
+          grandTotal.cacheRead += tokenData.data.grandTotal.cacheRead;
+          grandTotal.cacheWrite += tokenData.data.grandTotal.cacheWrite;
+          grandTotal.cost += tokenData.data.grandTotal.cost;
+        }
+      }
+
+      const merged: MergedTokensData = { machines: machineResults, grandTotal };
+      return { data: merged, available: anyAvailable, machineCount, cachedAt };
+    }
+
+    const allEntries: Array<Record<string, unknown> & { machineId: string; machineAlias: string }> = [];
+
+    for (const machine of machines) {
+      const cached = this.cache.get(machine.id);
+      const featureData = cached?.[feature];
+      if (featureData?.available && Array.isArray(featureData.data)) {
+        anyAvailable = true;
+        machineCount++;
+        cachedAt = Math.max(cachedAt, cached!.lastUpdated);
+        for (const entry of featureData.data) {
+          allEntries.push({
+            ...(entry as unknown as Record<string, unknown>),
+            machineId: machine.id,
+            machineAlias: machine.alias,
+          });
+        }
+      }
+    }
+
+    switch (feature) {
+      case 'timeline':
+        allEntries.sort((a, b) => ((a.startTime as number) ?? 0) - ((b.startTime as number) ?? 0));
+        break;
+      case 'impact':
+        allEntries.sort((a, b) => ((b.timeUpdated as number) ?? 0) - ((a.timeUpdated as number) ?? 0));
+        break;
+      case 'projects':
+        allEntries.sort((a, b) => ((b.sessionCount as number) ?? 0) - ((a.sessionCount as number) ?? 0));
+        break;
+      case 'recovery':
+        allEntries.sort((a, b) => ((b.lastActivityAt as number) ?? 0) - ((a.lastActivityAt as number) ?? 0));
+        break;
+    }
+
+    return { data: allEntries, available: anyAvailable, machineCount, cachedAt };
   }
 }

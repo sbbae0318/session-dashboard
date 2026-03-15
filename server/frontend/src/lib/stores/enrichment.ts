@@ -114,17 +114,44 @@ export const recoveryData = writable<RecoveryContext[] | null>(null);
 export const recoveryAvailable = writable<boolean>(false);
 export const recoveryLoading = writable<boolean>(false);
 
+export interface MergedTimelineEntry extends TimelineEntry {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedSessionCodeImpact extends SessionCodeImpact {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedRecoveryContext extends RecoveryContext {
+  machineId: string;
+  machineAlias: string;
+}
+
+export interface MergedProjectSummary extends ProjectSummary {
+  machineId: string;
+  machineAlias: string;
+}
+
+interface MergedEnrichmentResponse<T> {
+  data: T | null;
+  available: boolean;
+  machineCount: number;
+  cachedAt: number;
+}
+
 export const summaryCache = writable<Record<string, { summary: string; generatedAt: number }>>({});
 export const summaryLoadingIds = writable<string[]>([]);
 
 export async function fetchTokenStats(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
-  if (!machineId) return;
   tokenLoading.set(true);
   try {
-    const res = await fetchJSON<EnrichmentResponse<TokensData>>(
-      `/api/enrichment/${machineId}/tokens`
-    );
+    const url = machineId
+      ? `/api/enrichment/${machineId}/tokens`
+      : `/api/enrichment/merged/tokens`;
+    const res = await fetchJSON<EnrichmentResponse<TokensData> | MergedEnrichmentResponse<TokensData>>(url);
     tokenData.set(res.data);
     tokenAvailable.set(res.available);
   } catch (e) {
@@ -137,12 +164,12 @@ export async function fetchTokenStats(): Promise<void> {
 
 export async function fetchImpactData(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
-  if (!machineId) return;
   impactLoading.set(true);
   try {
-    const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]>>(
-      `/api/enrichment/${machineId}/impact`
-    );
+    const url = machineId
+      ? `/api/enrichment/${machineId}/impact`
+      : `/api/enrichment/merged/impact`;
+    const res = await fetchJSON<EnrichmentResponse<SessionCodeImpact[]> | MergedEnrichmentResponse<MergedSessionCodeImpact[]>>(url);
     impactData.set(res.data);
     impactAvailable.set(res.available);
   } catch (e) {
@@ -155,7 +182,6 @@ export async function fetchImpactData(): Promise<void> {
 
 export async function fetchTimelineData(from?: number, to?: number, projectId?: string): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
-  if (!machineId) return;
   timelineLoading.set(true);
   try {
     const params = new URLSearchParams();
@@ -163,8 +189,10 @@ export async function fetchTimelineData(from?: number, to?: number, projectId?: 
     if (to) params.set('to', to.toString());
     if (projectId) params.set('projectId', projectId);
     const qs = params.toString();
-    const url = `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`;
-    const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]>>(url);
+    const url = machineId
+      ? `/api/enrichment/${machineId}/timeline${qs ? '?' + qs : ''}`
+      : `/api/enrichment/merged/timeline${qs ? '?' + qs : ''}`;
+    const res = await fetchJSON<EnrichmentResponse<TimelineEntry[]> | MergedEnrichmentResponse<MergedTimelineEntry[]>>(url);
     timelineData.set(res.data);
     timelineAvailable.set(res.available);
   } catch (e) {
@@ -177,12 +205,12 @@ export async function fetchTimelineData(from?: number, to?: number, projectId?: 
 
 export async function fetchProjectsData(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
-  if (!machineId) return;
   projectsLoading.set(true);
   try {
-    const res = await fetchJSON<EnrichmentResponse<ProjectSummary[]>>(
-      `/api/enrichment/${machineId}/projects`
-    );
+    const url = machineId
+      ? `/api/enrichment/${machineId}/projects`
+      : `/api/enrichment/merged/projects`;
+    const res = await fetchJSON<EnrichmentResponse<ProjectSummary[]> | MergedEnrichmentResponse<MergedProjectSummary[]>>(url);
     projectsData.set(res.data);
     projectsAvailable.set(res.available);
   } catch (e) {
@@ -195,12 +223,12 @@ export async function fetchProjectsData(): Promise<void> {
 
 export async function fetchRecoveryData(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
-  if (!machineId) return;
   recoveryLoading.set(true);
   try {
-    const res = await fetchJSON<EnrichmentResponse<RecoveryContext[]>>(
-      `/api/enrichment/${machineId}/recovery`
-    );
+    const url = machineId
+      ? `/api/enrichment/${machineId}/recovery`
+      : `/api/enrichment/merged/recovery`;
+    const res = await fetchJSON<EnrichmentResponse<RecoveryContext[]> | MergedEnrichmentResponse<MergedRecoveryContext[]>>(url);
     recoveryData.set(res.data);
     recoveryAvailable.set(res.available);
   } catch (e) {
