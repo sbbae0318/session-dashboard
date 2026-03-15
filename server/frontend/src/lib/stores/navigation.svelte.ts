@@ -6,7 +6,8 @@ type ViewType =
   | 'code-impact'
   | 'timeline'
   | 'projects'
-  | 'context-recovery';
+  | 'context-recovery'
+  | 'memos';
 
 const VALID_VIEWS: ViewType[] = [
   'overview',
@@ -16,6 +17,7 @@ const VALID_VIEWS: ViewType[] = [
   'timeline',
   'projects',
   'context-recovery',
+  'memos',
 ];
 
 const ENRICHMENT_VIEWS: ViewType[] = [

@@ -19,6 +19,7 @@
   import TimelinePage from './components/pages/TimelinePage.svelte';
   import ProjectsPage from './components/pages/ProjectsPage.svelte';
   import ContextRecoveryPage from './components/pages/ContextRecoveryPage.svelte';
+  import MemosPage from './components/pages/MemosPage.svelte';
 
   let connected = $state(false);
   let loading = $state(true);
@@ -173,6 +174,8 @@
     <ProjectsPage />
   {:else if currentView === 'context-recovery'}
     <ContextRecoveryPage />
+  {:else if currentView === 'memos'}
+    <MemosPage />
   {:else}
     {#if isDetail}
       <div class="detail-header view-transition">

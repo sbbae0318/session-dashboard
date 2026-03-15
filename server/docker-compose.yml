@@ -10,10 +10,12 @@ services:
     volumes:
       - ./machines.yml:/app/machines.yml:ro
       - ./data:/app/data
+      - ${MEMO_DIR:-./data/memos}:/app/memos
     env_file:
       - .env
     environment:
       - DASHBOARD_PORT=${DASHBOARD_PORT:-3097}
+      - MEMO_DIR=/app/memos
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3097/health"]
       interval: 30s

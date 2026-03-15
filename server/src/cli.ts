@@ -2,10 +2,13 @@
 // session-dashboard CLI entrypoint
 
 import { resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
+import Database from 'better-sqlite3';
 import { ActiveSessionsModule } from './modules/active-sessions/index.js';
 import { RecentPromptsModule } from './modules/recent-prompts/index.js';
 import { EnrichmentModule } from './modules/enrichment/index.js';
+import { MemoModule } from './modules/memos/index.js';
 import type { BackendModule } from './modules/types.js';
 import { SSEManager } from './sse/event-stream.js';
 import { createServer, startServer, stopServer } from './server.js';
@@ -42,7 +45,15 @@ async function main(): Promise<void> {
       const dbPath = process.env.ENRICHMENT_DB_PATH ?? './data/enrichment-cache.db';
       mkdirSync(dirname(dbPath), { recursive: true });
       const enrichment = new EnrichmentModule(machineManager, sseManager, dbPath);
-      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment];
+
+      const memoDbPath = process.env.MEMO_DB_PATH ?? dbPath;
+      const memoDb = new Database(memoDbPath);
+      memoDb.pragma('journal_mode = WAL');
+      const memoDir = process.env.MEMO_DIR ?? resolve(homedir(), '.session-dashboard', 'memos');
+      mkdirSync(memoDir, { recursive: true });
+      const memos = new MemoModule(memoDb, memoDir);
+
+      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos];
 
       // Wire module events → SSE broadcasts
       activeSessions.setUpdateCallback((sessions) => {

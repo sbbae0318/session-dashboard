@@ -47,3 +47,18 @@ export interface MachineInfo {
   error: string | null;
   source?: "opencode" | "claude-code" | "both";
 }
+
+export interface Memo {
+  id: string;
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  date: string;
+  filePath: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MemoWithContent extends Memo {
+  content: string;
+}
