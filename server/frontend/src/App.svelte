@@ -24,6 +24,7 @@
   let connected = $state(false);
   let loading = $state(true);
   let paletteOpen = $state(false);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   let selectedSessionId = $derived(getSelectedSessionId());
   let isDetail = $derived(isDetailView());
   let detailId = $derived(getDetailSessionId());
@@ -218,6 +219,18 @@
       </section>
     </div>
   {/if}
+  {#if !paletteOpen}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="palette-hint" onclick={() => { paletteOpen = true; }} role="button" tabindex="-1" aria-label="커맨드 팔레트 열기">
+      {#if isMac}
+        <kbd>⌘</kbd><kbd>K</kbd>
+      {:else}
+        <kbd>Ctrl</kbd><kbd>K</kbd>
+      {/if}
+      <span>검색</span>
+    </div>
+  {/if}
 </main>
 
 <CommandPalette
@@ -295,5 +308,42 @@
     .view-transition {
       transition: none;
     }
+  }
+
+  .palette-hint {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    opacity: 0.4;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+    z-index: 10;
+    user-select: none;
+  }
+
+  .palette-hint:hover {
+    opacity: 0.8;
+  }
+
+  .palette-hint kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 3px);
+    padding: 0.05rem 0.25rem;
+    font-size: 0.6rem;
+    font-family: "SF Mono", "Fira Code", monospace;
+    color: var(--text-secondary);
+  }
+
+  .palette-hint span {
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    margin-left: 0.15rem;
   }
 </style>

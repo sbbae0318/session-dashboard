@@ -1,17 +1,7 @@
 <script lang="ts">
   import type { DashboardSession, QueryEntry } from "../types";
-  import type { SearchResult, TimeRange } from "../lib/search-client";
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { getQueries } from "../lib/stores/queries.svelte";
-  import {
-    getServerResults,
-    getIsSearching,
-    getSearchError,
-    performSearch,
-    clearSearch,
-    getTimeRange,
-    setTimeRange,
-  } from "../lib/stores/search.svelte";
   import { relativeTime, truncate, isBackgroundQuery } from "../lib/utils";
 
   let {
@@ -28,14 +18,13 @@
   let selectedIndex = $state(0);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
 
-  const TIME_RANGES: TimeRange[] = ["1h", "24h", "7d", "30d", "90d"];
-  const TIME_RANGE_LABELS: Record<TimeRange, string> = {
-    "1h": "1시간",
-    "24h": "24시간",
-    "7d": "7일",
-    "30d": "30일",
-    "90d": "90일",
-  };
+  // ── Background session detection ──────────────────────────────────────
+  function isBackgroundSession(s: DashboardSession): boolean {
+    if (s.parentSessionId) return true;
+    const t = s.title;
+    if (t && (t.startsWith("Background:") || t.startsWith("Task:") || t.includes("@"))) return true;
+    return false;
+  }
 
   // ── Fuzzy search (case-insensitive substring match) ──────────────────
   function fuzzyMatch(text: string, searchQuery: string): boolean {
@@ -77,15 +66,12 @@
   // ── Derived filtered results ──────────────────────────────────────────
   let allSessions = $derived(getSessions());
   let allQueries = $derived(getQueries());
-  let currentTimeRange = $derived(getTimeRange());
-  let serverResults = $derived(getServerResults());
-  let isSearching = $derived(getIsSearching());
-  let searchError = $derived(getSearchError());
 
   let filteredSessions: DashboardSession[] = $derived(
     query.trim() === ""
-      ? allSessions.slice(0, 5)
+      ? allSessions.filter((s) => !isBackgroundSession(s)).slice(0, 5)
       : allSessions
+          .filter((s) => !isBackgroundSession(s))
           .filter((s) =>
             fuzzyMatch(
               [s.title ?? "", s.sessionId, s.machineAlias ?? ""].join(" "),
@@ -109,23 +95,14 @@
           .slice(0, 10),
   );
 
-  let dedupedServerResults: SearchResult[] = $derived(
-    (() => {
-      const instantIds = new Set(filteredSessions.map((s) => s.sessionId));
-      return serverResults.filter((r) => !instantIds.has(r.sessionId));
-    })(),
-  );
-
   // Flat results list for keyboard navigation
   type SessionResult = { type: "session"; item: DashboardSession };
   type PromptResult = { type: "prompt"; item: QueryEntry };
-  type ServerResult = { type: "server"; item: SearchResult };
-  type AnyResult = SessionResult | PromptResult | ServerResult;
+  type AnyResult = SessionResult | PromptResult;
 
   let results: AnyResult[] = $derived([
     ...filteredSessions.map((s): SessionResult => ({ type: "session", item: s })),
     ...filteredPrompts.map((p): PromptResult => ({ type: "prompt", item: p })),
-    ...dedupedServerResults.map((r): ServerResult => ({ type: "server", item: r })),
   ]);
 
   let totalResults = $derived(results.length);
@@ -146,13 +123,7 @@
     if (!open) {
       query = "";
       selectedIndex = 0;
-      clearSearch();
     }
-  });
-
-  $effect(() => {
-    if (!open) return;
-    performSearch(query, currentTimeRange);
   });
 
   // ── Event handlers ────────────────────────────────────────────────────
@@ -161,13 +132,6 @@
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();
-      return;
-    }
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const idx = TIME_RANGES.indexOf(currentTimeRange);
-      const next = TIME_RANGES[(idx + 1) % TIME_RANGES.length];
-      setTimeRange(next);
       return;
     }
     if (e.key === "ArrowDown") {
@@ -269,23 +233,9 @@
         {/if}
       </div>
 
-      <div class="time-range-bar">
-        {#each TIME_RANGES as range (range)}
-          <button
-            class="time-range-chip"
-            class:active={currentTimeRange === range}
-            onclick={() => setTimeRange(range)}
-            type="button"
-            aria-pressed={currentTimeRange === range}
-          >
-            {TIME_RANGE_LABELS[range]}
-          </button>
-        {/each}
-      </div>
-
       <!-- Results -->
       <div class="palette-results" role="listbox" aria-label="검색 결과">
-        {#if filteredSessions.length === 0 && filteredPrompts.length === 0 && query.trim().length < 2}
+        {#if filteredSessions.length === 0 && filteredPrompts.length === 0}
           <div class="empty-results">
             {query.trim()
               ? `"${truncate(query, 40)}"에 대한 결과 없음`
@@ -378,66 +328,12 @@
           {/if}
         {/if}
 
-        {#if query.trim().length >= 2}
-          <div class="result-group" data-testid="history-group">
-            <div class="group-header">
-              <span class="group-label">히스토리</span>
-              {#if isSearching}
-                <span class="searching-text">검색 중...</span>
-              {:else}
-                <span class="group-count">{dedupedServerResults.length}</span>
-              {/if}
-            </div>
-            {#if searchError}
-              <div class="server-error">서버 검색 실패</div>
-            {:else if !isSearching && dedupedServerResults.length === 0}
-              <div class="history-empty">히스토리 결과 없음</div>
-            {:else}
-              {#each dedupedServerResults as result, i (`${result.sessionId}-${result.matchField}-${i}`)}
-                {@const globalIdx = filteredSessions.length + filteredPrompts.length + i}
-                <button
-                  class="result-item"
-                  class:selected={selectedIndex === globalIdx}
-                  onclick={() => handleResultClick(result.sessionId)}
-                  onmouseenter={() => {
-                    selectedIndex = globalIdx;
-                  }}
-                  role="option"
-                  aria-selected={selectedIndex === globalIdx}
-                  data-testid="history-result"
-                >
-                  <div class="result-main">
-                    <span class="result-indicator history" aria-hidden="true">○</span>
-                    <span class="result-title">
-                      {@html highlightMatch(result.title ?? "Untitled Session", query)}
-                    </span>
-                    <span class="result-time">
-                      {relativeTime(result.timeUpdated)}
-                    </span>
-                  </div>
-                  <div class="result-meta">
-                    <span class="result-id">{truncate(result.sessionId, 20)}</span>
-                    {#if result.matchField !== "title" && result.matchSnippet}
-                      <span class="match-snippet">
-                        {@html highlightMatch(truncate(result.matchSnippet, 60), query)}
-                      </span>
-                    {/if}
-                    {#if result.machineAlias}
-                      <span class="machine-badge">{result.machineAlias}</span>
-                    {/if}
-                  </div>
-                </button>
-              {/each}
-            {/if}
-          </div>
-        {/if}
       </div>
 
       <!-- Footer hints -->
       <div class="palette-footer">
         <span class="hint"><kbd>↑</kbd><kbd>↓</kbd> 이동</span>
         <span class="hint"><kbd>↵</kbd> 선택</span>
-        <span class="hint"><kbd>⇥</kbd> 시간범위</span>
         <span class="hint"><kbd>Esc</kbd> 닫기</span>
       </div>
     </div>
@@ -537,45 +433,6 @@
     background: var(--bg-tertiary);
   }
 
-  /* ── Time range bar ── */
-  .time-range-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.5rem 1rem;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-
-  .time-range-chip {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 9999px;
-    padding: 0.2rem 0.625rem;
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-family: inherit;
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease,
-      color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .time-range-chip:hover {
-    color: var(--text-primary);
-    border-color: var(--accent);
-  }
-
-  .time-range-chip.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    font-weight: 600;
-  }
-
   /* ── Results area ── */
   .palette-results {
     flex: 1;
@@ -625,32 +482,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .searching-text {
-    font-size: 0.65rem;
-    color: var(--accent);
-    font-style: italic;
-    animation: pulse-opacity 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse-opacity {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .server-error {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-    color: var(--warning);
-    font-style: italic;
-  }
-
-  .history-empty {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    font-style: italic;
-  }
-
   /* ── Individual result ── */
   .result-item {
     width: 100%;
@@ -693,10 +524,6 @@
 
   .result-indicator.instant {
     color: var(--accent);
-  }
-
-  .result-indicator.history {
-    color: var(--text-secondary);
   }
 
   .result-title {
@@ -756,17 +583,6 @@
     white-space: nowrap;
     min-width: 0;
     flex: 1;
-  }
-
-  .match-snippet {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1;
-    font-style: italic;
   }
 
   .machine-badge {
