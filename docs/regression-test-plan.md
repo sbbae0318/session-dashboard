@@ -327,3 +327,77 @@ for q in queries:
 **검증 포인트**:
 - 여러 프로젝트의 세션 ID가 결과에 포함되는지
 - 각 세션의 query가 최신 프롬프트인지
+
+---
+
+## 11. Prompt List Regression — Bug 3: 세션 이름 대신 세션 ID 노출
+
+### 발견된 버그
+
+- Prompt List에서 세션 이름(title) 대신 `ses_30a1` 같은 세션 ID 앞 8자가 표시
+- `resolvedTitle` fallback 체인 3단계 모두 실패하여 `sessionId.slice(0, 8)`이 노출됨
+
+### 근본 원인 (3계층)
+
+| # | 문제 | 위치 | 심각도 |
+|---|------|------|--------|
+| 1 | SessionCache supplement entries가 `sessionTitle: null` 하드코딩 | `oc-query-collector.ts` — `SupplementData`에 `title` 필드 없음 | Critical |
+| 2 | PromptStore에 저장된 프롬프트의 `session_title`이 NULL이면 나중에 title 확정되어도 backfill 안 됨 | `prompt-store.ts` — backfill 메커니즘 부재 | Medium |
+| 3 | 프론트엔드 fallback이 sessions 스토어에서도 못 찾으면 sessionId.slice만 표시 | `RecentPrompts.svelte` — projectCwd 등 대안 fallback 없음 | Low |
+
+### 적용된 수정
+
+**oc-query-collector.ts**:
+- `SupplementData` 인터페이스에 `title?: string | null` 추가
+- supplement entries 생성 시 `sessionTitle: data.title ?? null` 사용
+
+**prompt-store.ts**:
+- `backfillTitles(titleMap)` 메서드 추가
+- SQL: `UPDATE prompt_history SET session_title = ? WHERE session_id = ? AND session_title IS NULL`
+
+**server.ts** (doCollection):
+- 수집된 entries + SessionCache에서 title map 생성
+- `promptStore.backfillTitles(titleMap)` 호출로 기존 NULL 타이틀 소급 적용
+
+**RecentPrompts.svelte**:
+- fallback 체인 확장: `entry.sessionTitle || session?.title || session?.projectCwd basename || sessionId.slice(0, 8)`
+
+### 수동 리그레션 시나리오
+
+**시나리오 I: Prompt List 세션 이름 표시**
+
+**전제 조건**: OpenCode 세션에서 프롬프트 전송
+
+**절차**:
+1. Dashboard Prompt List 확인
+2. 각 프롬프트 항목의 세션 이름이 `ses_xxxx` 형태가 아닌 실제 세션 제목인지 확인
+3. SessionCache 보완 세션(oc-serve에 없는 세션)의 프롬프트도 타이틀이 있는지 확인
+
+**예상 결과**: 모든 프롬프트에 세션 제목 또는 프로젝트 디렉토리 basename 표시, `ses_xxxx` 표시 없음
+
+**시나리오 J: 기존 NULL 타이틀 프롬프트 backfill**
+
+**절차**:
+1. Dashboard 접속 후 30초 대기 (backfill 사이클)
+2. 이전에 `ses_xxxx`로 표시되던 프롬프트가 이제 세션 제목으로 표시되는지 확인
+
+**예상 결과**: backfill 이후 기존 프롬프트도 세션 제목으로 갱신됨
+
+### API 레벨 검증
+
+```bash
+# PromptStore에서 session_title NULL인 항목 수 확인
+# (backfill 전후 비교)
+curl -s http://127.0.0.1:3098/api/queries?limit=50 | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+queries = data.get('queries', data) if isinstance(data, dict) else data
+null_titles = [q for q in queries if not q.get('sessionTitle')]
+print(f'Total: {len(queries)}, NULL titles: {len(null_titles)}')
+for q in null_titles[:5]:
+    print(f'  {q.get(\"sessionId\",\"\")[:20]} | {q.get(\"query\",\"\")[:40]}')"
+```
+
+**검증 포인트**:
+- `sessionTitle`이 NULL인 항목이 0에 가까운지
+- 30초 backfill 사이클 후 NULL 항목이 감소하는지

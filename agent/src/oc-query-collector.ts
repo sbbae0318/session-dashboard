@@ -48,6 +48,7 @@ export interface SupplementData {
   lastPrompt: string | null;
   lastPromptTime: number;
   status?: 'busy' | 'idle' | 'retry';
+  title?: string | null;
 }
 
 const QUERY_MAX_LENGTH = 2000;
@@ -160,7 +161,7 @@ export class OcQueryCollector {
         if (extracted === null) continue;            // 시스템 프롬프트 필터
         supplementEntries.push({
           sessionId,
-          sessionTitle: null,
+          sessionTitle: data.title ?? null,
           timestamp: data.lastPromptTime || Date.now(),
           query: extracted.slice(0, QUERY_MAX_LENGTH),
           isBackground: false,

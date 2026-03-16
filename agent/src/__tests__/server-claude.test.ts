@@ -8,12 +8,13 @@ import { randomBytes } from 'node:crypto';
 
 // PromptStore mock — prevent real SQLite access during tests
 vi.mock('../prompt-store.js', () => {
-  const PromptStore = vi.fn(function (this: { count: () => number; upsertMany: () => number; evict: () => number; trimToMax: () => number; getRecent: () => never[]; close: () => void }) {
+  const PromptStore = vi.fn(function (this: { count: () => number; upsertMany: () => number; evict: () => number; trimToMax: () => number; getRecent: () => never[]; backfillTitles: () => number; close: () => void }) {
     this.count = () => 0;
     this.upsertMany = () => 0;
     this.evict = () => 0;
     this.trimToMax = () => 0;
     this.getRecent = () => [];
+    this.backfillTitles = () => 0;
     this.close = () => {};
   });
   return { PromptStore };

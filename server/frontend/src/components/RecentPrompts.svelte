@@ -120,7 +120,8 @@
     <div class="prompts-list">
 
       {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp + '-' + i)}
-        {@const resolvedTitle = entry.sessionTitle || sessions.find(s => s.sessionId === entry.sessionId)?.title || entry.sessionId.slice(0, 8)}
+        {@const matchedSession = sessions.find(s => s.sessionId === entry.sessionId)}
+        {@const resolvedTitle = entry.sessionTitle || matchedSession?.title || matchedSession?.projectCwd?.split('/').pop() || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
         {@const session = sessions.find(s => s.sessionId === entry.sessionId)}

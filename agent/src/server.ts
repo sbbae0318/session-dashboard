@@ -140,6 +140,27 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 
         const inserted = promptStore!.upsertMany(entries);
         if (inserted > 0) console.log(`[prompt-store] Stored ${inserted} new prompts`);
+
+        // Backfill: session_title이 NULL인 기존 프롬프트에 현재 알려진 타이틀 소급 적용
+        const titleMap: Record<string, string> = {};
+        for (const e of entries) {
+          if (e.sessionTitle && !titleMap[e.sessionId]) {
+            titleMap[e.sessionId] = e.sessionTitle;
+          }
+        }
+        if (sessionCache) {
+          const cachedSessions = sessionCache.getSessionDetails().sessions;
+          for (const [sid, detail] of Object.entries(cachedSessions)) {
+            if (detail.title && !titleMap[sid]) {
+              titleMap[sid] = detail.title;
+            }
+          }
+        }
+        if (Object.keys(titleMap).length > 0) {
+          const backfilled = promptStore!.backfillTitles(titleMap);
+          if (backfilled > 0) console.log(`[prompt-store] Backfilled ${backfilled} prompt title(s)`);
+        }
+
         promptStore!.evict();
         promptStore!.trimToMax();
       } catch (err) {

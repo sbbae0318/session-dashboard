@@ -170,6 +170,27 @@ export class PromptStore {
     return row.cnt;
   }
 
+  /** session_title IS NULL인 프롬프트에 타이틀 소급 적용. */
+  backfillTitles(titleMap: Record<string, string>): number {
+    const entries = Object.entries(titleMap);
+    if (entries.length === 0) return 0;
+
+    const stmt = this.db.prepare(
+      'UPDATE prompt_history SET session_title = ? WHERE session_id = ? AND session_title IS NULL',
+    );
+
+    let updated = 0;
+    const runBatch = this.db.transaction((items: Array<[string, string]>) => {
+      for (const [sessionId, title] of items) {
+        const info = stmt.run(title, sessionId);
+        updated += info.changes;
+      }
+    });
+
+    runBatch(entries);
+    return updated;
+  }
+
   /** DB 연결 종료. 이후 작업 시 에러 발생. */
   close(): void {
     this.db.close();
