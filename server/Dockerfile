@@ -50,8 +50,8 @@ COPY --from=frontend-builder /app/dist/public/ ./dist/public/
 # Non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    mkdir -p /app/data && \
-    chown nodejs:nodejs /app/data
+    mkdir -p /app/data /app/memos && \
+    chown nodejs:nodejs /app/data /app/memos
 USER nodejs
 
 # Use /tmp for lock file in Docker (prevents PID 1 restart loop)
