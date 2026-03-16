@@ -9,6 +9,7 @@ import { ActiveSessionsModule } from './modules/active-sessions/index.js';
 import { RecentPromptsModule } from './modules/recent-prompts/index.js';
 import { EnrichmentModule } from './modules/enrichment/index.js';
 import { MemoModule } from './modules/memos/index.js';
+import { SearchModule } from './modules/search/index.js';
 import type { BackendModule } from './modules/types.js';
 import { SSEManager } from './sse/event-stream.js';
 import { createServer, startServer, stopServer } from './server.js';
@@ -53,8 +54,9 @@ async function main(): Promise<void> {
       mkdirSync(memoDir, { recursive: true });
       const defaultMachineId = machinesConfig[0]?.id ?? 'default';
       const memos = new MemoModule(memoDb, memoDir, defaultMachineId);
+      const search = new SearchModule(machineManager);
 
-      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos];
+      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos, search];
 
       // Wire module events → SSE broadcasts
       activeSessions.setUpdateCallback((sessions) => {
