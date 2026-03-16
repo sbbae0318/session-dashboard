@@ -122,11 +122,53 @@ export interface SessionMessage {
   tool?: string;
 }
 
+export interface SearchResult {
+  type: 'session' | 'prompt';
+  sessionId: string;
+  title: string | null;
+  directory: string | null;
+  timeCreated: number;
+  timeUpdated: number;
+  matchField: 'title' | 'query' | 'directory' | 'content';
+  matchSnippet: string;
+}
+
+export interface SearchOptions {
+  query: string;
+  from: number;   // timestamp ms
+  to: number;     // timestamp ms
+  limit: number;
+  offset: number;
+}
+
 export interface EnrichmentResponse<T> {
   data: T | null;
   available: boolean;
   error?: string;
   cachedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function createMatchSnippet(text: string, query: string): string {
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const pos = lowerText.indexOf(lowerQuery);
+  if (pos === -1) return text.slice(0, 100);
+
+  const start = Math.max(0, pos - 50);
+  const end = Math.min(text.length, pos + query.length + 50);
+
+  let snippet = '';
+  if (start > 0) snippet += '...';
+  snippet += text.slice(start, pos);
+  snippet += `<mark>${text.slice(pos, pos + query.length)}</mark>`;
+  snippet += text.slice(pos + query.length, end);
+  if (end < text.length) snippet += '...';
+
+  return snippet;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +196,10 @@ export class OpenCodeDBReader {
   private stmtSessionRecoveryMeta!: Statement;
   private stmtSessionLastTools!: Statement;
   private stmtSessionMessages!: Statement;
+  private stmtSearchSessions!: Statement;
+  private stmtSearchSessionsCount!: Statement;
+  private stmtSearchMessages!: Statement;
+  private stmtSearchMessagesCount!: Statement;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -199,6 +245,10 @@ export class OpenCodeDBReader {
     this.stmtSessionRecoveryMeta = this.prepareSessionRecoveryMetaStmt(db);
     this.stmtSessionLastTools = this.prepareSessionLastToolsStmt(db);
     this.stmtSessionMessages = this.prepareSessionMessagesStmt(db);
+    this.stmtSearchSessions = this.prepareSearchSessionsStmt(db);
+    this.stmtSearchSessionsCount = this.prepareSearchSessionsCountStmt(db);
+    this.stmtSearchMessages = this.prepareSearchMessagesStmt(db);
+    this.stmtSearchMessagesCount = this.prepareSearchMessagesCountStmt(db);
   }
 
   isAvailable(): boolean {
@@ -582,6 +632,66 @@ export class OpenCodeDBReader {
     return messages.reverse();
   }
 
+  searchSessions(options: SearchOptions): { results: SearchResult[]; total: number } {
+    const { query, from, to, limit, offset } = options;
+    const pattern = `%${query}%`;
+    const fetchLimit = limit + offset;
+
+    const sessionRows = this.stmtSearchSessions.all(from, to, pattern, pattern, fetchLimit, 0) as Array<{
+      id: string; title: string | null; directory: string | null;
+      time_created: number; time_updated: number;
+    }>;
+
+    const sessionCountRow = this.stmtSearchSessionsCount.get(from, to, pattern, pattern) as { cnt: number };
+    let totalCount = sessionCountRow.cnt;
+
+    const results: SearchResult[] = sessionRows.map(r => {
+      const matchField = r.title && r.title.toLowerCase().includes(query.toLowerCase()) ? 'title' as const : 'directory' as const;
+      const matchText = matchField === 'title' ? (r.title ?? '') : (r.directory ?? '');
+      return {
+        type: 'session' as const,
+        sessionId: r.id,
+        title: r.title,
+        directory: r.directory,
+        timeCreated: r.time_created,
+        timeUpdated: r.time_updated,
+        matchField,
+        matchSnippet: createMatchSnippet(matchText, query),
+      };
+    });
+
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if ((to - from) <= sevenDaysMs) {
+      const msgRows = this.stmtSearchMessages.all(from, to, pattern, fetchLimit, 0) as Array<{
+        id: string; title: string | null; directory: string | null;
+        time_created: number; time_updated: number;
+        content: string | null; role: string | null;
+      }>;
+
+      const msgCountRow = this.stmtSearchMessagesCount.get(from, to, pattern) as { cnt: number };
+      totalCount += msgCountRow.cnt;
+
+      for (const r of msgRows) {
+        const matchField = r.role === 'user' ? 'query' as const : 'content' as const;
+        results.push({
+          type: 'prompt',
+          sessionId: r.id,
+          title: r.title,
+          directory: r.directory,
+          timeCreated: r.time_created,
+          timeUpdated: r.time_updated,
+          matchField,
+          matchSnippet: createMatchSnippet(r.content ?? '', query),
+        });
+      }
+    }
+
+    results.sort((a, b) => b.timeUpdated - a.timeUpdated);
+
+    const paged = results.slice(offset, offset + limit);
+    return { results: paged, total: totalCount };
+  }
+
   close(): void {
     if (this.db) {
       this.db.close();
@@ -852,6 +962,50 @@ export class OpenCodeDBReader {
       WHERE session_id = ?
       ORDER BY time_created DESC
       LIMIT ?
+    `);
+  }
+
+  private prepareSearchSessionsStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT id, title, directory, time_created, time_updated
+      FROM session
+      WHERE time_created >= ? AND time_created <= ?
+        AND (title LIKE ? OR directory LIKE ?)
+      ORDER BY time_updated DESC
+      LIMIT ? OFFSET ?
+    `);
+  }
+
+  private prepareSearchSessionsCountStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM session
+      WHERE time_created >= ? AND time_created <= ?
+        AND (title LIKE ? OR directory LIKE ?)
+    `);
+  }
+
+  private prepareSearchMessagesStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT s.id, s.title, s.directory, s.time_created, s.time_updated,
+        json_extract(m.data, '$.content') AS content,
+        json_extract(m.data, '$.role') AS role
+      FROM message m
+      JOIN session s ON s.id = m.session_id
+      WHERE s.time_created >= ? AND s.time_created <= ?
+        AND json_extract(m.data, '$.content') LIKE ?
+      ORDER BY s.time_updated DESC
+      LIMIT ? OFFSET ?
+    `);
+  }
+
+  private prepareSearchMessagesCountStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM message m
+      JOIN session s ON s.id = m.session_id
+      WHERE s.time_created >= ? AND s.time_created <= ?
+        AND json_extract(m.data, '$.content') LIKE ?
     `);
   }
 }

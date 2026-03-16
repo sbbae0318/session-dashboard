@@ -32,7 +32,7 @@ import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ClaudeSource } from './claude-source.js';
 import { spawn } from 'node:child_process';
-import { OpenCodeDBReader, type EnrichmentResponse, type TokensData } from './opencode-db-reader.js';
+import { OpenCodeDBReader, type EnrichmentResponse, type TokensData, type SearchResult } from './opencode-db-reader.js';
 import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -463,6 +463,34 @@ ${formatted}`;
         console.error('[summarize] claude -p failed:', msg);
         return { summary: null, error: 'Summary generation failed' };
       }
+    },
+  );
+
+  app.get<{ Querystring: { q?: string; from?: string; to?: string; limit?: string; offset?: string } }>(
+    '/api/search',
+    async (request, reply) => {
+      const q = request.query.q;
+      if (!q || q.length < 2) {
+        return reply.code(400).send({ error: 'Query must be at least 2 characters' });
+      }
+
+      const now = Date.now();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      const fromTs = request.query.from ? parseInt(request.query.from, 10) : now - sevenDaysMs;
+      const toTs = request.query.to ? parseInt(request.query.to, 10) : now;
+
+      if (Number.isNaN(fromTs) || Number.isNaN(toTs)) {
+        return reply.code(400).send({ error: 'Invalid from/to timestamp' });
+      }
+
+      const limit = Math.min(Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1), MAX_LIMIT);
+      const offset = Math.max(parseInt(request.query.offset ?? '0', 10) || 0, 0);
+
+      const response = enrichResponse<{ results: SearchResult[]; total: number; hasMore: boolean }>(() => {
+        const { results, total } = ocDbReader!.searchSessions({ query: q, from: fromTs, to: toTs, limit, offset });
+        return { results, total, hasMore: offset + limit < total };
+      });
+      return response;
     },
   );
 
