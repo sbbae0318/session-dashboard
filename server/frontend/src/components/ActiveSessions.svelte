@@ -120,6 +120,9 @@
               <div class="session-header-top">
                 <span class="status-badge {ds.cssClass}">{ds.label}</span>
                 <span class="session-title">{session.title || session.sessionId.slice(0, 8)}</span>
+                {#if session.childSessionIds && session.childSessionIds.length > 0}
+                  <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
+                {/if}
                 <span class="header-actions">
                   <button
                     class="action-btn action-detail"
@@ -310,6 +313,19 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
     flex-shrink: 0;
+  }
+
+  .subagent-badge {
+    font-size: 0.55rem;
+    padding: 0.05rem 0.35rem;
+    background: rgba(139, 148, 158, 0.15);
+    color: var(--text-secondary);
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-weight: 600;
+    line-height: 1;
   }
 
   .machine-badge {
