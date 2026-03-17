@@ -15,6 +15,7 @@
   let projects = $derived(
     [...new Set(($impactData ?? []).map((i) => i.projectId))]
   );
+  let projectDirectoryMap = $derived(new Map(($impactData ?? []).map(i => [i.projectId, i.directory])));
 
   let filteredImpact = $derived(
     selectedProject === 'all'
@@ -64,7 +65,7 @@
       >
         <option value="all">All Projects</option>
         {#each projects as projectId (projectId)}
-          <option value={projectId}>{shortPath(projectId)}</option>
+          <option value={projectId}>{shortPath(projectDirectoryMap.get(projectId) ?? projectId)}</option>
         {/each}
       </select>
     </div>

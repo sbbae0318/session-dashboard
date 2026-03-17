@@ -26,6 +26,7 @@
   );
 
   let projects = $derived([...new Set(($timelineData ?? []).map(s => s.projectId))]);
+  let projectDirectoryMap = $derived(new Map(($timelineData ?? []).map(s => [s.projectId, s.directory])));
 
   let svgHeight = $derived(AXIS_HEIGHT + PADDING_TOP + filteredSessions.length * LANE_HEIGHT + 10);
 
@@ -74,7 +75,7 @@
     <select class="project-filter" value={selectedProject} onchange={handleProjectChange}>
       <option value="all">All Projects</option>
       {#each projects as proj}
-        <option value={proj}>{shortPath(proj)}</option>
+        <option value={proj}>{shortPath(projectDirectoryMap.get(proj) ?? proj)}</option>
       {/each}
     </select>
   </div>
