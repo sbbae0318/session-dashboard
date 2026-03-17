@@ -779,10 +779,46 @@ describe('ActiveSessionsModule — ghost filter + previousSessionMap (Task 3)', 
     await (module as any).poll();
 
     const sessions: any[] = (module as any).cachedSessions;
-    // Only the new session should be present
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].sessionId).toBe('ses_new');
-    expect(sessions.find((s: any) => s.sessionId === 'ses_old')).toBeUndefined();
+    expect(sessions.find((s: any) => s.sessionId === 'ses_new')).toBeDefined();
+    const old = sessions.find((s: any) => s.sessionId === 'ses_old');
+    expect(old).toBeDefined();
+    expect(old.status).toBe('idle');
+    expect(old.apiStatus).toBeNull();
+  });
+
+  it('Test P2: Session memory expires after TTL (5 min)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const pollAllSessionsFn = vi.fn();
+    const getMachineStatusesFn = vi.fn();
+
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'opencode' },
+      ],
+      getMachineStatuses: getMachineStatusesFn,
+      pollAllSessions: pollAllSessionsFn,
+      pollSessionDetails: vi.fn().mockResolvedValue({}),
+    });
+
+    pollAllSessionsFn.mockResolvedValueOnce({
+      sessions: [{ id: 'ses_mem', title: 'Memory Test', machineId: 'mac-1', machineAlias: 'Mac', machineHost: '10.0.0.1', directory: '/test', time: { created: 1000, updated: 2000 } }],
+      statuses: {},
+    });
+    getMachineStatusesFn.mockReturnValue([
+      { machineId: 'mac-1', connected: true, machineAlias: 'Mac', machineHost: '10.0.0.1', lastSeen: Date.now(), error: null, source: 'opencode' },
+    ]);
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+    expect((module as any).cachedSessions.find((s: any) => s.sessionId === 'ses_mem')).toBeDefined();
+
+    vi.advanceTimersByTime(301_000);
+
+    pollAllSessionsFn.mockResolvedValueOnce({ sessions: [], statuses: {} });
+    await (module as any).poll();
+
+    expect((module as any).cachedSessions.find((s: any) => s.sessionId === 'ses_mem')).toBeUndefined();
+    vi.useRealTimers();
   });
 });
 

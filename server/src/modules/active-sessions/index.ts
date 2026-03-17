@@ -30,6 +30,8 @@ interface DashboardSession {
   machineAlias: string;
 }
 
+const SESSION_MEMORY_TTL_MS = 300_000; // 5 minutes
+
 export class ActiveSessionsModule implements BackendModule {
   readonly id = "active-sessions";
   private readonly machineManager: MachineManager;
@@ -39,6 +41,7 @@ export class ActiveSessionsModule implements BackendModule {
   private onNewPromptFromSession: ((query: QueryEntry) => void) | null = null;
   private previousSessionMap: Map<string, DashboardSession> = new Map();
   private previousPromptKeys: Set<string> = new Set();
+  private sessionMemory: Map<string, { session: DashboardSession; lastSeenAt: number }> = new Map();
 
   constructor(machineManager: MachineManager) {
     this.machineManager = machineManager;
@@ -91,29 +94,37 @@ export class ActiveSessionsModule implements BackendModule {
       }
     }
 
-    // Filter out ghost/background sessions (no title = not a real user session)
-    // Claude Code sessions legitimately lack titles — always keep them
-    // Sessions with apiStatus (SSE cache confirmed) are also kept even without title
-    // Then sort by lastActivityTime descending
     const filtered = [...sessionMap.values()]
       .filter(s => s.source === 'claude-code' || s.title !== null || s.apiStatus !== null);
 
-    // Preserve sessions from machines that returned 0 sessions this cycle
-    // (likely due to poll failure) by merging from previousSessionMap
+    const now = Date.now();
+    for (const s of filtered) {
+      this.sessionMemory.set(s.sessionId, { session: s, lastSeenAt: now });
+    }
+
+    for (const [id, entry] of this.sessionMemory) {
+      if (now - entry.lastSeenAt > SESSION_MEMORY_TTL_MS) {
+        this.sessionMemory.delete(id);
+        continue;
+      }
+      const existsInCurrent = filtered.some(s => s.sessionId === id);
+      if (!existsInCurrent) {
+        filtered.push({ ...entry.session, status: 'idle', apiStatus: null, currentTool: null });
+      }
+    }
+
     const machineStatuses = this.machineManager.getMachineStatuses();
     const currentMachineIds = new Set(filtered.map(s => s.machineId));
     for (const ms of machineStatuses) {
       if (ms.connected && !currentMachineIds.has(ms.machineId)) {
-        // This machine is connected but returned no sessions — preserve previous data
         for (const prev of this.previousSessionMap.values()) {
-          if (prev.machineId === ms.machineId) {
+          if (prev.machineId === ms.machineId && this.sessionMemory.has(prev.sessionId)) {
             filtered.push(prev);
           }
         }
       }
     }
 
-    // Update previousSessionMap with current successful results
     this.previousSessionMap = sessionMap;
 
     this.cachedSessions = filtered
