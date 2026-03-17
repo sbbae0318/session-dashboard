@@ -429,12 +429,12 @@ export class OpenCodeDBReader {
 
     const rows = projectId
       ? this.stmtAllCodeImpactByProject.all(projectId, limit, offset) as Array<{
-          id: string; project_id: string; title: string | null;
+          id: string; project_id: string; title: string | null; directory: string | null;
           summary_additions: number; summary_deletions: number; summary_files: number;
           time_created: number; time_updated: number;
         }>
       : this.stmtAllCodeImpact.all(limit, offset) as Array<{
-          id: string; project_id: string; title: string | null;
+          id: string; project_id: string; title: string | null; directory: string | null;
           summary_additions: number; summary_deletions: number; summary_files: number;
           time_created: number; time_updated: number;
         }>;
@@ -443,7 +443,7 @@ export class OpenCodeDBReader {
       sessionId: r.id,
       sessionTitle: r.title ?? r.id.slice(0, 8),
       projectId: r.project_id,
-      directory: r.project_id,
+      directory: r.directory ?? r.project_id,
       additions: r.summary_additions,
       deletions: r.summary_deletions,
       files: r.summary_files,
@@ -456,6 +456,7 @@ export class OpenCodeDBReader {
 
     type TimelineRow = {
       id: string; project_id: string; parent_id: string | null; title: string | null;
+      directory: string | null;
       time_created: number; time_updated: number;
       summary_additions: number | null; summary_deletions: number | null;
       summary_files: number | null;
@@ -466,27 +467,33 @@ export class OpenCodeDBReader {
     if (since !== undefined) {
       if (projectId) {
         rows = this.db!.prepare(`
-          SELECT id, project_id, parent_id, title, time_created, time_updated,
-            summary_additions, summary_deletions, summary_files
-          FROM session
-          WHERE time_created >= ? AND time_created <= ? AND project_id = ? AND time_updated >= ?
-            AND parent_id IS NULL
-            AND title NOT LIKE 'Background:%'
-            AND title NOT LIKE 'Task:%'
-            AND title NOT LIKE '%@%'
-          ORDER BY time_created ASC
+          SELECT s.id, s.project_id, s.parent_id, s.title,
+            COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+            s.time_created, s.time_updated,
+            s.summary_additions, s.summary_deletions, s.summary_files
+          FROM session s
+          LEFT JOIN project p ON s.project_id = p.id
+          WHERE s.time_created >= ? AND s.time_created <= ? AND s.project_id = ? AND s.time_updated >= ?
+            AND s.parent_id IS NULL
+            AND s.title NOT LIKE 'Background:%'
+            AND s.title NOT LIKE 'Task:%'
+            AND s.title NOT LIKE '%@%'
+          ORDER BY s.time_created ASC
         `).all(from, to, projectId, since) as TimelineRow[];
       } else {
         rows = this.db!.prepare(`
-          SELECT id, project_id, parent_id, title, time_created, time_updated,
-            summary_additions, summary_deletions, summary_files
-          FROM session
-          WHERE time_created >= ? AND time_created <= ? AND time_updated >= ?
-            AND parent_id IS NULL
-            AND title NOT LIKE 'Background:%'
-            AND title NOT LIKE 'Task:%'
-            AND title NOT LIKE '%@%'
-          ORDER BY time_created ASC
+          SELECT s.id, s.project_id, s.parent_id, s.title,
+            COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+            s.time_created, s.time_updated,
+            s.summary_additions, s.summary_deletions, s.summary_files
+          FROM session s
+          LEFT JOIN project p ON s.project_id = p.id
+          WHERE s.time_created >= ? AND s.time_created <= ? AND s.time_updated >= ?
+            AND s.parent_id IS NULL
+            AND s.title NOT LIKE 'Background:%'
+            AND s.title NOT LIKE 'Task:%'
+            AND s.title NOT LIKE '%@%'
+          ORDER BY s.time_created ASC
         `).all(from, to, since) as TimelineRow[];
       }
     } else {
@@ -506,7 +513,7 @@ export class OpenCodeDBReader {
         sessionId: r.id,
         sessionTitle: r.title ?? r.id.slice(0, 8),
         projectId: r.project_id,
-        directory: r.project_id,
+        directory: r.directory ?? r.project_id,
         startTime: r.time_created,
         endTime,
         status,
@@ -802,49 +809,63 @@ export class OpenCodeDBReader {
 
   private prepareAllCodeImpactStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created, time_updated
-      FROM session
-      WHERE (COALESCE(summary_additions, 0) + COALESCE(summary_deletions, 0)) > 0
-      ORDER BY time_created DESC
+      SELECT s.id, s.project_id, s.title,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.summary_additions, s.summary_deletions, s.summary_files,
+        s.time_created, s.time_updated
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      WHERE (COALESCE(s.summary_additions, 0) + COALESCE(s.summary_deletions, 0)) > 0
+      ORDER BY s.time_created DESC
       LIMIT ? OFFSET ?
     `);
   }
 
   private prepareAllCodeImpactByProjectStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, title, summary_additions, summary_deletions, summary_files, time_created, time_updated
-      FROM session
-      WHERE project_id = ? AND (COALESCE(summary_additions, 0) + COALESCE(summary_deletions, 0)) > 0
-      ORDER BY time_created DESC
+      SELECT s.id, s.project_id, s.title,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.summary_additions, s.summary_deletions, s.summary_files,
+        s.time_created, s.time_updated
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      WHERE s.project_id = ? AND (COALESCE(s.summary_additions, 0) + COALESCE(s.summary_deletions, 0)) > 0
+      ORDER BY s.time_created DESC
       LIMIT ? OFFSET ?
     `);
   }
 
   private prepareTimelineStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, parent_id, title, time_created, time_updated,
-        summary_additions, summary_deletions, summary_files
-      FROM session
-      WHERE time_created >= ? AND time_created <= ?
-        AND parent_id IS NULL
-        AND title NOT LIKE 'Background:%'
-        AND title NOT LIKE 'Task:%'
-        AND title NOT LIKE '%@%'
-      ORDER BY time_created ASC
+      SELECT s.id, s.project_id, s.parent_id, s.title,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.time_created, s.time_updated,
+        s.summary_additions, s.summary_deletions, s.summary_files
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      WHERE s.time_created >= ? AND s.time_created <= ?
+        AND s.parent_id IS NULL
+        AND s.title NOT LIKE 'Background:%'
+        AND s.title NOT LIKE 'Task:%'
+        AND s.title NOT LIKE '%@%'
+      ORDER BY s.time_created ASC
     `);
   }
 
   private prepareTimelineByProjectStmt(db: Database.Database): Statement {
     return db.prepare(`
-      SELECT id, project_id, parent_id, title, time_created, time_updated,
-        summary_additions, summary_deletions, summary_files
-      FROM session
-      WHERE time_created >= ? AND time_created <= ? AND project_id = ?
-        AND parent_id IS NULL
-        AND title NOT LIKE 'Background:%'
-        AND title NOT LIKE 'Task:%'
-        AND title NOT LIKE '%@%'
-      ORDER BY time_created ASC
+      SELECT s.id, s.project_id, s.parent_id, s.title,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.time_created, s.time_updated,
+        s.summary_additions, s.summary_deletions, s.summary_files
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      WHERE s.time_created >= ? AND s.time_created <= ? AND s.project_id = ?
+        AND s.parent_id IS NULL
+        AND s.title NOT LIKE 'Background:%'
+        AND s.title NOT LIKE 'Task:%'
+        AND s.title NOT LIKE '%@%'
+      ORDER BY s.time_created ASC
     `);
   }
 
@@ -900,7 +921,7 @@ export class OpenCodeDBReader {
         s.id AS session_id,
         s.title AS session_title,
         s.project_id,
-        s.directory,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
         SUM(COALESCE(json_extract(m.data, '$.tokens.input'), 0)) AS total_input,
         SUM(COALESCE(json_extract(m.data, '$.tokens.output'), 0)) AS total_output,
         SUM(COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0)) AS total_reasoning,
@@ -919,6 +940,7 @@ export class OpenCodeDBReader {
         COUNT(m.id) AS msg_count,
         s.time_updated
       FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
       JOIN message m ON m.session_id = s.id AND json_extract(m.data, '$.role') = 'assistant'
       GROUP BY s.id
       ORDER BY s.time_updated DESC

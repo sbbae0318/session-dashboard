@@ -317,6 +317,15 @@ describe('OpenCodeDBReader', () => {
     }
   });
 
+  it('getAllSessionsCodeImpact() returns directory from project.worktree, not project_id hash', () => {
+    const impacts = reader.getAllSessionsCodeImpact({ limit: 10 });
+    const ses1Impact = impacts.find(i => i.sessionId === 'ses_1');
+    expect(ses1Impact).toBeDefined();
+    // directory should be the project worktree path, NOT the project_id hash
+    expect(ses1Impact!.directory).toBe('/home/user/my-app');
+    expect(ses1Impact!.directory).not.toBe('proj_1');
+  });
+
   it('getAllSessionsCodeImpact() filters by projectId', () => {
     const impacts = reader.getAllSessionsCodeImpact({ projectId: 'proj_2' });
     expect(impacts).toHaveLength(0);
@@ -331,6 +340,18 @@ describe('OpenCodeDBReader', () => {
       expect(entry.startTime).toBeGreaterThanOrEqual(1700000000);
       expect(entry.startTime).toBeLessThanOrEqual(1700100000);
     }
+  });
+
+  it('getSessionTimeline() returns directory from project.worktree, not project_id hash', () => {
+    const entries = reader.getSessionTimeline({ from: 1700000000, to: 1700100000 });
+    const ses1Entry = entries.find(e => e.sessionId === 'ses_1');
+    expect(ses1Entry).toBeDefined();
+    expect(ses1Entry!.directory).toBe('/home/user/my-app');
+    expect(ses1Entry!.directory).not.toBe('proj_1');
+
+    const ses3Entry = entries.find(e => e.sessionId === 'ses_3');
+    expect(ses3Entry).toBeDefined();
+    expect(ses3Entry!.directory).toBe('/home/user/other');
   });
 
   it('getSessionTimeline() filters by projectId', () => {
@@ -482,6 +503,42 @@ describe('OpenCodeDBReader', () => {
 
   it('constructor with invalid path throws', () => {
     expect(() => new OpenCodeDBReader('/nonexistent/path/db.sqlite')).toThrow();
+  });
+
+  // ── Orphaned sessions (no matching project row) ──
+
+  it('getAllSessionsCodeImpact() includes orphaned sessions with fallback directory', () => {
+    testDb.exec(`
+      INSERT INTO session VALUES ('ses_orphan', 'proj_orphan', NULL, NULL, 'Orphan session', 'v1', 'orphan', 50, 20, 3, 1700070000, 1700080000);
+    `);
+    const impacts = reader.getAllSessionsCodeImpact({ limit: 20 });
+    const orphan = impacts.find(i => i.sessionId === 'ses_orphan');
+    expect(orphan).toBeDefined();
+    expect(orphan!.directory).toBe('proj_orphan');
+  });
+
+  it('getSessionTimeline() includes orphaned sessions with fallback directory', () => {
+    testDb.exec(`
+      INSERT INTO session VALUES ('ses_orphan2', 'proj_orphan2', NULL, NULL, 'Orphan timeline', 'v1', 'orphan2', 0, 0, 0, 1700070000, 1700080000);
+    `);
+    const entries = reader.getSessionTimeline({ from: 1700000000, to: 1700100000 });
+    const orphan = entries.find(e => e.sessionId === 'ses_orphan2');
+    expect(orphan).toBeDefined();
+    expect(orphan!.directory).toBe('proj_orphan2');
+  });
+
+  it('getTokensData() returns directory from project.worktree, not session.directory or project_id', () => {
+    testDb.exec(`
+      INSERT INTO session VALUES ('ses_null_dir', 'proj_1', NULL, NULL, 'Null dir session', 'v1', 'nulldir', 0, 0, 0, 1700090000, 1700095000);
+    `);
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    insertMsg.run('msg_nd1', 'ses_null_dir', 1700091000, 1700091000,
+      makeAssistantData('claude-sonnet-4-20250514', { input: 10, output: 20, cache: { read: 100, write: 50 } }));
+
+    const tokensData = reader.getTokensData();
+    const ndSession = tokensData.sessions.find(s => s.sessionId === 'ses_null_dir');
+    expect(ndSession).toBeDefined();
+    expect(ndSession!.directory).toBe('/home/user/my-app');
   });
 
   // ── Schema validation ──
