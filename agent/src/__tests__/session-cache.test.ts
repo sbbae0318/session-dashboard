@@ -1392,4 +1392,91 @@ describe('SessionCache', () => {
     expect(entry.waitingForInput).toBe(true);
   });
 
+  // ── 43. DB fallback seeds sessions not in oc-serve cache ──
+
+  it('bootstrapFromDb seeds sessions from opencode.db that are not in cache', async () => {
+    const projectData = [{ id: 'proj-1', worktree: '/project/db', vcs: null, time: null, sandboxes: null }];
+    const statusData = { 'sess-sse': { type: 'busy' } };
+    const sessionList = [{ id: 'sess-sse', title: 'SSE Session', time: { created: 1000, updated: 2000 } }];
+
+    mockFetchJson
+      .mockResolvedValueOnce(projectData)
+      .mockResolvedValueOnce(statusData)
+      .mockResolvedValueOnce(sessionList)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const mockDbReader = {
+      isAvailable: () => true,
+      getRecentSessionMetas: () => [
+        { id: 'sess-sse', title: 'SSE Session', parentId: null, directory: '/project/db', timeCreated: 1000, timeUpdated: 2000 },
+        { id: 'sess-db-only', title: 'DB Only Session', parentId: null, directory: '/project/db', timeCreated: 500, timeUpdated: 1500 },
+        { id: 'sess-db-child', title: 'DB Child', parentId: 'sess-db-only', directory: '/project/db', timeCreated: 600, timeUpdated: 1600 },
+      ],
+    };
+
+    const mockRes = createMockResponse();
+    setupSseMock(mockRes);
+    cache = new SessionCache(4096, ':memory:');
+    cache.setDbReader(mockDbReader as any);
+    cache.start();
+    for (let i = 0; i < 5; i++) await flushPromises();
+
+    const sessions = cache.getSessionDetails().sessions;
+    expect(sessions['sess-sse']).toBeDefined();
+    expect(sessions['sess-sse'].status).toBe('busy');
+
+    expect(sessions['sess-db-only']).toBeDefined();
+    expect(sessions['sess-db-only'].status).toBe('idle');
+    expect(sessions['sess-db-only'].title).toBe('DB Only Session');
+
+    expect(sessions['sess-db-child']).toBeDefined();
+    expect(sessions['sess-db-child'].parentSessionId).toBe('sess-db-only');
+  });
+
+  // ── 44. DB fallback does not overwrite existing cache entries ──
+
+  it('bootstrapFromDb does not overwrite sessions already in cache', async () => {
+    const projectData = [{ id: 'proj-1', worktree: '/project/no-overwrite', vcs: null, time: null, sandboxes: null }];
+    const statusData = { 'sess-existing': { type: 'busy' } };
+    const sessionList = [{ id: 'sess-existing', title: 'Live', time: { created: 1000, updated: 2000 } }];
+
+    mockFetchJson
+      .mockResolvedValueOnce(projectData)
+      .mockResolvedValueOnce(statusData)
+      .mockResolvedValueOnce(sessionList)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const mockDbReader = {
+      isAvailable: () => true,
+      getRecentSessionMetas: () => [
+        { id: 'sess-existing', title: 'Stale Title From DB', parentId: null, directory: '/project/no-overwrite', timeCreated: 500, timeUpdated: 800 },
+      ],
+    };
+
+    const mockRes = createMockResponse();
+    setupSseMock(mockRes);
+    cache = new SessionCache(4096, ':memory:');
+    cache.setDbReader(mockDbReader as any);
+    cache.start();
+    for (let i = 0; i < 5; i++) await flushPromises();
+
+    const entry = cache.getSessionDetails().sessions['sess-existing'];
+    expect(entry).toBeDefined();
+    expect(entry.status).toBe('busy');
+  });
+
+  // ── 45. DB fallback handles unavailable reader gracefully ──
+
+  it('bootstrapFromDb is a no-op when dbReader is null', async () => {
+    mockFetchJson.mockResolvedValueOnce([]);
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
+  });
+
 });

@@ -12,6 +12,7 @@ import { fetchJson } from './oc-serve-proxy.js';
 import { SessionStore } from './session-store.js';
 import { extractUserPrompt } from './prompt-extractor.js';
 import { detectActiveDirectories } from './active-directories.js';
+import type { OpenCodeDBReader, RecentSessionMeta } from './opencode-db-reader.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -138,9 +139,14 @@ export class SessionCache {
   private projectsCache: { projects: OcServeProject[]; updatedAt: number } = { projects: [], updatedAt: 0 };
   private pendingMetadataFetches = new Set<string>();
   private onSessionBusyCallback: (() => void) | null = null;
+  private dbReader: OpenCodeDBReader | null = null;
 
   constructor(private ocServePort: number = 4096, dbPath?: string) {
     this.store = new SessionStore(dbPath);
+  }
+
+  setDbReader(reader: OpenCodeDBReader | null): void {
+    this.dbReader = reader;
   }
 
   onSessionBusy(cb: () => void): void {
@@ -716,6 +722,8 @@ export class SessionCache {
         }
       }
 
+      this.bootstrapFromDb();
+
       console.log(`[SessionCache] Bootstrap complete — ${this.store.count()} sessions cached`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -854,6 +862,43 @@ export class SessionCache {
         createdAt,
         lastActiveAt,
       });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // DB Fallback Bootstrap
+  // -------------------------------------------------------------------------
+
+  private bootstrapFromDb(): void {
+    if (!this.dbReader || !this.dbReader.isAvailable()) return;
+
+    try {
+      const recentMetas = this.dbReader.getRecentSessionMetas(TTL_MS);
+      let seeded = 0;
+      for (const meta of recentMetas) {
+        if (this.store.get(meta.id)) continue;
+
+        this.store.upsert(meta.id, {
+          status: 'idle',
+          lastPrompt: null,
+          lastPromptTime: 0,
+          currentTool: null,
+          directory: meta.directory,
+          waitingForInput: false,
+          updatedAt: meta.timeUpdated,
+          title: meta.title,
+          parentSessionId: meta.parentId,
+          createdAt: meta.timeCreated,
+          lastActiveAt: meta.timeUpdated,
+        });
+        seeded++;
+      }
+      if (seeded > 0) {
+        console.log(`[SessionCache] DB fallback: seeded ${seeded} session(s) from opencode.db`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[SessionCache] DB fallback failed:', msg);
     }
   }
 

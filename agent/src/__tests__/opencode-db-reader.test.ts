@@ -645,3 +645,61 @@ describe('getSessionTimeline — background filtering', () => {
     expect(ids.some(id => id.startsWith('bg_'))).toBe(false);
   });
 });
+
+// ── getRecentSessionMetas ──
+
+describe('getRecentSessionMetas', () => {
+  let testDb: Database.Database;
+  let reader: OpenCodeDBReader;
+
+  beforeEach(() => {
+    testDb = createTestDb();
+    const now = Date.now();
+    testDb.exec(`
+      INSERT INTO project VALUES ('proj_recent', '/Users/test/project-a', ${now}, ${now}, NULL, NULL);
+      INSERT INTO session VALUES ('ses_recent_1', 'proj_recent', NULL, NULL, 'Recent Session', 'v1', 'recent1', 0, 0, 0, ${now - 3600000}, ${now - 1800000});
+      INSERT INTO session VALUES ('ses_recent_2', 'proj_recent', 'ses_recent_1', NULL, 'Child Session', 'v1', 'recent2', 0, 0, 0, ${now - 3000000}, ${now - 600000});
+      INSERT INTO session VALUES ('ses_old', 'proj_recent', NULL, NULL, 'Old Session', 'v1', 'old1', 0, 0, 0, ${now - 864000000}, ${now - 864000000});
+    `);
+    reader = OpenCodeDBReader.fromDatabase(testDb);
+  });
+
+  afterEach(() => {
+    reader.close();
+    testDb.close();
+  });
+
+  it('returns sessions updated within the given time window', () => {
+    const metas = reader.getRecentSessionMetas(86_400_000);
+    const ids = metas.map(m => m.id);
+    expect(ids).toContain('ses_recent_1');
+    expect(ids).toContain('ses_recent_2');
+    expect(ids).not.toContain('ses_old');
+  });
+
+  it('returns directory from project.worktree via LEFT JOIN', () => {
+    const metas = reader.getRecentSessionMetas(86_400_000);
+    const meta = metas.find(m => m.id === 'ses_recent_1');
+    expect(meta).toBeDefined();
+    expect(meta!.directory).toBe('/Users/test/project-a');
+  });
+
+  it('returns parentId for child sessions', () => {
+    const metas = reader.getRecentSessionMetas(86_400_000);
+    const child = metas.find(m => m.id === 'ses_recent_2');
+    expect(child).toBeDefined();
+    expect(child!.parentId).toBe('ses_recent_1');
+  });
+
+  it('respects limit parameter', () => {
+    const metas = reader.getRecentSessionMetas(86_400_000, 1);
+    expect(metas).toHaveLength(1);
+  });
+
+  it('orders by time_updated DESC', () => {
+    const metas = reader.getRecentSessionMetas(86_400_000);
+    for (let i = 1; i < metas.length; i++) {
+      expect(metas[i - 1].timeUpdated).toBeGreaterThanOrEqual(metas[i].timeUpdated);
+    }
+  });
+});

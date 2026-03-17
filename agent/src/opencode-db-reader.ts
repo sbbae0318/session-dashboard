@@ -36,6 +36,15 @@ export interface SessionMeta {
   models: string[];
 }
 
+export interface RecentSessionMeta {
+  id: string;
+  title: string | null;
+  parentId: string | null;
+  directory: string | null;
+  timeCreated: number;
+  timeUpdated: number;
+}
+
 export interface SessionTokenStats {
   sessionId: string;
   sessionTitle: string;
@@ -200,6 +209,7 @@ export class OpenCodeDBReader {
   private stmtSearchSessionsCount!: Statement;
   private stmtSearchMessages!: Statement;
   private stmtSearchMessagesCount!: Statement;
+  private stmtRecentSessionMetas!: Statement;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -249,6 +259,7 @@ export class OpenCodeDBReader {
     this.stmtSearchSessionsCount = this.prepareSearchSessionsCountStmt(db);
     this.stmtSearchMessages = this.prepareSearchMessagesStmt(db);
     this.stmtSearchMessagesCount = this.prepareSearchMessagesCountStmt(db);
+    this.stmtRecentSessionMetas = this.prepareRecentSessionMetasStmt(db);
   }
 
   isAvailable(): boolean {
@@ -301,6 +312,22 @@ export class OpenCodeDBReader {
         models,
       };
     });
+  }
+
+  getRecentSessionMetas(sinceMs: number, limit = 2000): RecentSessionMeta[] {
+    const cutoff = Date.now() - sinceMs;
+    const rows = this.stmtRecentSessionMetas.all(cutoff, limit) as Array<{
+      id: string; title: string | null; parent_id: string | null;
+      directory: string | null; time_created: number; time_updated: number;
+    }>;
+    return rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      parentId: r.parent_id,
+      directory: r.directory,
+      timeCreated: r.time_created,
+      timeUpdated: r.time_updated,
+    }));
   }
 
   getSessionTokenStats(sessionId: string): SessionTokenStats | null {
@@ -1028,6 +1055,19 @@ export class OpenCodeDBReader {
       JOIN session s ON s.id = m.session_id
       WHERE s.time_created >= ? AND s.time_created <= ?
         AND json_extract(m.data, '$.content') LIKE ?
+    `);
+  }
+
+  private prepareRecentSessionMetasStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT s.id, s.title, s.parent_id,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.time_created, s.time_updated
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      WHERE s.time_updated >= ?
+      ORDER BY s.time_updated DESC
+      LIMIT ?
     `);
   }
 }

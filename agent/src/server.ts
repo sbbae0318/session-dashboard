@@ -328,6 +328,10 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     console.log('[enrichment] opencode.db not available — enrichment endpoints will return { available: false }');
   }
 
+  if (sessionCache && ocDbReader) {
+    sessionCache.setDbReader(ocDbReader);
+  }
+
   function enrichResponse<T>(fn: () => T): EnrichmentResponse<T> {
     if (!ocDbReader || !ocDbReader.isAvailable()) {
       return { data: null, available: false, error: 'DB not available', cachedAt: Date.now() };
