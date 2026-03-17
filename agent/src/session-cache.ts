@@ -73,9 +73,9 @@ interface OcServeMessage {
 // ---------------------------------------------------------------------------
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
-const TTL_MS = 86_400_000;
+const TTL_MS = 604_800_000;
 const EVICTION_INTERVAL_MS = 60_000;
-const MAX_CACHE_SIZE = 500;
+const MAX_CACHE_SIZE = 2_000;
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 1_000;
 const PROMPT_MAX_LENGTH = 200;
@@ -579,7 +579,7 @@ export class SessionCache {
           .filter(p => p.worktree)
           .map(async (project) => {
             const dir = encodeURIComponent(project.worktree);
-            const url = `${baseUrl}/session?directory=${dir}&limit=500`;
+            const url = `${baseUrl}/session?directory=${dir}&limit=2000`;
             const sessions = (await fetchJson(url, {}, 5000)) as Array<{ id?: string }>;
             if (Array.isArray(sessions)) {
               for (const s of sessions) {
@@ -762,7 +762,7 @@ export class SessionCache {
       fetchJson(`${baseUrl}/session/status?directory=${encodedDir}`, {}, 3000)
         .then(d => d as Record<string, { type: string }>)
         .catch(() => ({} as Record<string, { type: string }>)),
-      fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=500`, {}, 10000)
+      fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=2000`, {}, 10000)
         .then(d => (Array.isArray(d) ? d : []) as OcServeSessionMeta[])
         .catch(() => [] as OcServeSessionMeta[]),
     ]);
@@ -862,13 +862,17 @@ export class SessionCache {
   // -------------------------------------------------------------------------
 
   private evict(): void {
-    this.store.evict(TTL_MS);
+    this.store.evictByActivity(TTL_MS);
 
     if (this.store.count() > MAX_CACHE_SIZE) {
       const all = this.store.getAll();
       const entries = Object.entries(all);
       if (entries.length > MAX_CACHE_SIZE) {
-        const sorted = entries.sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+        const sorted = entries.sort((a, b) => {
+          const aTime = a[1].lastActiveAt || a[1].updatedAt;
+          const bTime = b[1].lastActiveAt || b[1].updatedAt;
+          return aTime - bTime;
+        });
         const toRemove = sorted.slice(0, entries.length - MAX_CACHE_SIZE);
         for (const [id] of toRemove) {
           this.store.delete(id);

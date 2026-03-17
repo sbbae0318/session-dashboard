@@ -276,9 +276,9 @@ describe('SessionCache', () => {
     expect(entry.lastPrompt).toBeNull();
   });
 
-  // ── 8. TTL eviction ──
+  // ── 8. TTL eviction (7 days) ──
 
-  it('evicts cache entries older than 24 hours', async () => {
+  it('evicts cache entries older than 7 days', async () => {
     const mockRes = createMockResponse();
     cache = startCache(mockRes);
     await flushPromises();
@@ -298,12 +298,36 @@ describe('SessionCache', () => {
 
     expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(2);
 
-    // TTL=86_400_000ms, eviction interval=60_000ms
-    // At 86_460_000ms the eviction runs and entries exceed 24h TTL
-    vi.advanceTimersByTime(86_460_000);
+    // TTL=604_800_000ms (7d), eviction interval=60_000ms
+    // At 604_860_000ms the eviction runs and entries exceed 7d TTL
+    vi.advanceTimersByTime(604_860_000);
     await flushPromises();
 
     expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
+  });
+
+  // ── 8b. Entries survive at 24h (old TTL would have evicted) ──
+
+  it('entries survive at 24 hours (regression: old 24h TTL would evict)', async () => {
+    mockFetchJson.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const mockRes = createMockResponse();
+    cache = startCache(mockRes);
+    await flushPromises();
+
+    simulateSseEvent(mockRes, {
+      payload: {
+        type: 'session.status',
+        properties: { sessionID: 'survive-1', status: { type: 'idle' } },
+      },
+    });
+
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(1);
+
+    vi.advanceTimersByTime(25 * 60 * 60 * 1000);
+    await flushPromises();
+
+    expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(1);
   });
 
   // ── 9. getSessionDetails() format ──

@@ -199,4 +199,48 @@ describe('SessionStore', () => {
     expect(() => store.delete('ghost')).not.toThrow();
     expect(store.count()).toBe(0);
   });
+
+  // ── 13. evictByActivity() — last_active_at 기반 제거 ──
+
+  it('evictByActivity() removes entries by last_active_at instead of updated_at', () => {
+    const now = Date.now();
+    const oldActivity = makeDetail({ updatedAt: now, lastActiveAt: now - 700_000 });
+    const recentActivity = makeDetail({ updatedAt: now - 700_000, lastActiveAt: now - 100_000 });
+
+    store.upsert('ses_old_activity', oldActivity);
+    store.upsert('ses_recent_activity', recentActivity);
+    expect(store.count()).toBe(2);
+
+    const evicted = store.evictByActivity(600_000);
+
+    expect(evicted).toBe(1);
+    expect(store.get('ses_old_activity')).toBeNull();
+    expect(store.get('ses_recent_activity')).not.toBeNull();
+    expect(store.count()).toBe(1);
+  });
+
+  // ── 14. evictByActivity() — lastActiveAt=0 세션은 updatedAt 폴백 ──
+
+  it('evictByActivity() falls back to updated_at when last_active_at is 0', () => {
+    const now = Date.now();
+    const noActivity = makeDetail({ updatedAt: now - 100_000, lastActiveAt: 0 });
+    const oldNoActivity = makeDetail({ updatedAt: now - 700_000, lastActiveAt: 0 });
+
+    store.upsert('ses_no_activity_recent', noActivity);
+    store.upsert('ses_no_activity_old', oldNoActivity);
+    expect(store.count()).toBe(2);
+
+    const evicted = store.evictByActivity(600_000);
+
+    expect(evicted).toBe(1);
+    expect(store.get('ses_no_activity_recent')).not.toBeNull();
+    expect(store.get('ses_no_activity_old')).toBeNull();
+  });
+
+  // ── 15. evictByActivity() — 빈 스토어 ──
+
+  it('evictByActivity() returns 0 when store is empty', () => {
+    const evicted = store.evictByActivity(600_000);
+    expect(evicted).toBe(0);
+  });
 });

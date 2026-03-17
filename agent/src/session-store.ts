@@ -43,6 +43,7 @@ export class SessionStore {
   private readonly stmtGetAll: Statement;
   private readonly stmtDelete: Statement;
   private readonly stmtEvict: Statement;
+  private readonly stmtEvictByActivity: Statement;
   private readonly stmtCount: Statement;
 
   constructor(dbPath: string = './data/session-cache.db') {
@@ -107,6 +108,10 @@ export class SessionStore {
       'DELETE FROM session_status WHERE updated_at < ?',
     );
 
+    this.stmtEvictByActivity = this.db.prepare(
+      'DELETE FROM session_status WHERE CASE WHEN last_active_at > 0 THEN last_active_at ELSE updated_at END < ?',
+    );
+
     this.stmtCount = this.db.prepare(
       'SELECT COUNT(*) AS cnt FROM session_status',
     );
@@ -152,13 +157,15 @@ export class SessionStore {
     this.stmtDelete.run(sessionId);
   }
 
-  /**
-   * maxAgeMs보다 오래된 세션 제거.
-   * @returns 삭제된 행 수
-   */
   evict(maxAgeMs: number): number {
     const cutoff = Date.now() - maxAgeMs;
     const info = this.stmtEvict.run(cutoff);
+    return info.changes;
+  }
+
+  evictByActivity(maxAgeMs: number): number {
+    const cutoff = Date.now() - maxAgeMs;
+    const info = this.stmtEvictByActivity.run(cutoff);
     return info.changes;
   }
 

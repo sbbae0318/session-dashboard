@@ -51,7 +51,7 @@ function getVersion(): string {
   }
 }
 
-const MAX_LIMIT = 500;
+const MAX_LIMIT = 2_000;
 const DEFAULT_LIMIT = 50;
 const PROMPT_COLLECTION_INTERVAL_MS = 30_000; // 30 seconds
 const OC_SERVE_CACHE_TTL = 10_000; // 10 seconds
