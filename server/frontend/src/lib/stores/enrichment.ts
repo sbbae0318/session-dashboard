@@ -283,6 +283,53 @@ export function handleMergedEnrichmentSSEUpdate(feature: string): void {
   handleEnrichmentSSEUpdate(feature);
 }
 
+export interface ActivitySegment {
+  startTime: number;
+  endTime: number;
+  type: 'working';
+}
+
+export const sessionSegmentsData = writable<Map<string, ActivitySegment[]>>(new Map());
+export const sessionSegmentsLoading = writable<Map<string, boolean>>(new Map());
+
+export async function fetchSessionSegments(sessionId: string): Promise<ActivitySegment[]> {
+  const cached = get(sessionSegmentsData).get(sessionId);
+  if (cached) return cached;
+
+  sessionSegmentsLoading.update(m => {
+    const next = new Map(m);
+    next.set(sessionId, true);
+    return next;
+  });
+
+  try {
+    const machineId = resolveEnrichmentMachineId();
+    const url = machineId
+      ? `/api/enrichment/${machineId}/timeline-segments?sessionId=${sessionId}`
+      : `/api/enrichment/merged/timeline-segments?sessionId=${sessionId}`;
+
+    const res = await fetchJSON<{ segments: ActivitySegment[] }>(url);
+    const segments = res.segments ?? [];
+
+    sessionSegmentsData.update(m => {
+      const next = new Map(m);
+      next.set(sessionId, segments);
+      return next;
+    });
+
+    return segments;
+  } catch (e) {
+    console.error('Failed to fetch session segments:', e);
+    return [];
+  } finally {
+    sessionSegmentsLoading.update(m => {
+      const next = new Map(m);
+      next.set(sessionId, false);
+      return next;
+    });
+  }
+}
+
 export async function fetchSummary(sessionId: string): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
   if (!machineId) return;
