@@ -5,6 +5,8 @@
     timelineAvailable,
     timelineLoading,
     fetchTimelineData,
+    sessionSegmentsData,
+    fetchSessionSegments,
     type MergedTimelineEntry,
   } from '../../lib/stores/enrichment';
   import { onMachineChange, getSelectedMachineId } from '../../lib/stores/machine.svelte';
@@ -24,6 +26,14 @@
       selectedProject === 'all' || s.projectId === selectedProject
     )
   );
+
+  let segments = $derived($sessionSegmentsData);
+
+  $effect(() => {
+    for (const session of filteredSessions) {
+      void fetchSessionSegments(session.sessionId);
+    }
+  });
 
   let projects = $derived([...new Set(($timelineData ?? []).map(s => s.projectId))]);
   let projectDirectoryMap = $derived(new Map(($timelineData ?? []).map(s => [s.projectId, s.directory])));
@@ -124,20 +134,39 @@
             {@const startX = timeToX(session.startTime, timeRange.from, timeRange.to, SVG_WIDTH)}
             {@const endX = timeToX(session.endTime ?? Date.now(), timeRange.from, timeRange.to, SVG_WIDTH)}
             {@const blockWidth = Math.max(endX - startX, 4)}
+            {@const sessionSegs = segments.get(session.sessionId)}
 
             <g data-testid="swim-lane" class="swim-lane">
               <rect x={0} y={y} width={SVG_WIDTH} height={LANE_HEIGHT}
                 fill={i % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)'} opacity="0.5" />
 
-              <rect
-                x={startX}
-                y={laneY}
-                width={blockWidth}
-                height={laneH}
-                rx="3"
-                fill={session.status === 'busy' ? 'var(--accent)' : session.status === 'completed' ? 'var(--success)' : 'var(--text-secondary)'}
-                opacity="0.7"
-              />
+              {#if sessionSegs !== undefined}
+                {#each sessionSegs as seg}
+                  {@const segStartX = timeToX(seg.startTime, timeRange.from, timeRange.to, SVG_WIDTH)}
+                  {@const segEndX = timeToX(seg.endTime, timeRange.from, timeRange.to, SVG_WIDTH)}
+                  {@const segWidth = Math.max(segEndX - segStartX, 4)}
+                  <rect
+                    x={segStartX}
+                    y={laneY}
+                    width={segWidth}
+                    height={laneH}
+                    rx="3"
+                    fill="var(--accent)"
+                    opacity="0.8"
+                    class="segment-rect"
+                  />
+                {/each}
+              {:else}
+                <rect
+                  x={startX}
+                  y={laneY}
+                  width={blockWidth}
+                  height={laneH}
+                  rx="3"
+                  fill={session.status === 'busy' ? 'var(--accent)' : session.status === 'completed' ? 'var(--success)' : 'var(--text-secondary)'}
+                  opacity="0.4"
+                />
+              {/if}
             </g>
           {/each}
 
@@ -202,4 +231,5 @@
     padding: 2rem;
     text-align: center;
   }
+  .segment-rect:hover { opacity: 1; }
 </style>
