@@ -404,6 +404,33 @@ describe('EnrichmentModule — timeline-segments routes', () => {
     await app.close();
   });
 
+  it('GET /api/enrichment/merged/timeline-segments is NOT intercepted by merged/:feature catch-all', async () => {
+    const segmentsResponse: SessionSegmentsResponse = {
+      sessionId: 'ses_abc',
+      segments: [{ startTime: 1000, endTime: 2000, type: 'working' }],
+    };
+
+    mockMachineManager = createMockMachineManager({
+      fetchFromMachine: vi.fn().mockResolvedValue(segmentsResponse),
+    });
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(body.error).toBeUndefined();
+    expect(body.segments).toBeDefined();
+    expect(body.machineId).toBe('mac-test');
+    await app.close();
+  });
+
   it('GET /api/enrichment/merged/timeline-segments handles machine failures gracefully', async () => {
     const machine2: MachineConfig = { id: 'mac-2', alias: 'Mac 2', host: '10.0.0.2', port: 3098, apiKey: 'key2', source: 'opencode' };
 

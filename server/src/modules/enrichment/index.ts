@@ -66,6 +66,63 @@ export class EnrichmentModule implements BackendModule {
     );
 
     app.get<{
+      Querystring: { sessionId?: string };
+    }>(
+      '/api/enrichment/merged/timeline-segments',
+      async (req, reply) => {
+        const { sessionId } = req.query;
+        if (!sessionId) {
+          return reply.status(400).send({ error: 'sessionId query parameter is required' });
+        }
+        const machines = this.machineManager.getMachines();
+        const results = await Promise.allSettled(
+          machines.map(async (machine) => {
+            const data = await this.machineManager.fetchFromMachine<SessionSegmentsResponse>(
+              machine,
+              `/api/enrichment/timeline-segments?sessionId=${encodeURIComponent(sessionId)}`,
+            );
+            return { machine, data };
+          }),
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            const { machine, data } = result.value;
+            if (data.segments && data.segments.length > 0) {
+              return {
+                ...data,
+                machineId: machine.id,
+                machineAlias: machine.alias,
+              };
+            }
+          }
+        }
+
+        return { sessionId, segments: [], machineId: null, machineAlias: null };
+      },
+    );
+
+    app.get<{
+      Params: { machineId: string };
+      Querystring: { sessionId?: string };
+    }>(
+      '/api/enrichment/:machineId/timeline-segments',
+      async (req, reply) => {
+        const { machineId } = req.params;
+        const { sessionId } = req.query;
+        if (!sessionId) {
+          return reply.status(400).send({ error: 'sessionId query parameter is required' });
+        }
+        const machine = this.machineManager.getMachines().find(m => m.id === machineId);
+        if (!machine) return { error: 'Machine not found' };
+        return this.machineManager.fetchFromMachine(
+          machine,
+          `/api/enrichment/timeline-segments?sessionId=${encodeURIComponent(sessionId)}`,
+        );
+      },
+    );
+
+    app.get<{
       Params: { feature: string };
       Querystring: { from?: string; to?: string };
     }>(
@@ -159,62 +216,6 @@ export class EnrichmentModule implements BackendModule {
       },
     );
 
-    app.get<{
-      Params: { machineId: string };
-      Querystring: { sessionId?: string };
-    }>(
-      '/api/enrichment/:machineId/timeline-segments',
-      async (req, reply) => {
-        const { machineId } = req.params;
-        const { sessionId } = req.query;
-        if (!sessionId) {
-          return reply.status(400).send({ error: 'sessionId query parameter is required' });
-        }
-        const machine = this.machineManager.getMachines().find(m => m.id === machineId);
-        if (!machine) return { error: 'Machine not found' };
-        return this.machineManager.fetchFromMachine(
-          machine,
-          `/api/enrichment/timeline-segments?sessionId=${encodeURIComponent(sessionId)}`,
-        );
-      },
-    );
-
-    app.get<{
-      Querystring: { sessionId?: string };
-    }>(
-      '/api/enrichment/merged/timeline-segments',
-      async (req, reply) => {
-        const { sessionId } = req.query;
-        if (!sessionId) {
-          return reply.status(400).send({ error: 'sessionId query parameter is required' });
-        }
-        const machines = this.machineManager.getMachines();
-        const results = await Promise.allSettled(
-          machines.map(async (machine) => {
-            const data = await this.machineManager.fetchFromMachine<SessionSegmentsResponse>(
-              machine,
-              `/api/enrichment/timeline-segments?sessionId=${encodeURIComponent(sessionId)}`,
-            );
-            return { machine, data };
-          }),
-        );
-
-        for (const result of results) {
-          if (result.status === 'fulfilled') {
-            const { machine, data } = result.value;
-            if (data.segments && data.segments.length > 0) {
-              return {
-                ...data,
-                machineId: machine.id,
-                machineAlias: machine.alias,
-              };
-            }
-          }
-        }
-
-        return { sessionId, segments: [], machineId: null, machineAlias: null };
-      },
-    );
   }
 
   async start(): Promise<void> {
