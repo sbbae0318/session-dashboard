@@ -9,7 +9,7 @@
   import MachineSelector from './components/MachineSelector.svelte';
   import { fetchMachines, setMachines } from './lib/stores/machine.svelte';
   import { createSSEClient } from "./lib/sse-client";
-  import { reviveSessions } from "./lib/stores/dismissed.svelte";
+  import { reviveSessions, dismissSession } from "./lib/stores/dismissed.svelte";
   import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
   import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
@@ -91,6 +91,15 @@
     if (refetchTimer) clearInterval(refetchTimer);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
+
+  function handleDismissFromDetail() {
+    if (!detailId) return;
+    const session = getSessions().find(s => s.sessionId === detailId);
+    if (session) {
+      dismissSession(session.sessionId, session.lastActivityTime);
+    }
+    popToOverview();
+  }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -182,6 +191,7 @@
       <div class="detail-header view-transition">
         <button class="back-btn" onclick={popToOverview}>← 돌아가기</button>
         <span class="detail-session-id">{detailId}</span>
+        <button class="dismiss-btn" onclick={handleDismissFromDetail}>숨기기</button>
       </div>
     {/if}
     <div class="dashboard-layout">
@@ -239,6 +249,25 @@
   onSelectSession={(id) => { pushSessionDetail(id); paletteOpen = false; }}
 />
 <style>
+  .dismiss-btn {
+    margin-left: auto;
+    background: none;
+    border: 1px solid rgba(248, 81, 73, 0.4);
+    border-radius: 9999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.7rem;
+    color: rgba(248, 81, 73, 0.7);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .dismiss-btn:hover {
+    background: rgba(248, 81, 73, 0.12);
+    border-color: rgb(248, 81, 73);
+    color: rgb(248, 81, 73);
+  }
+
   .view-transition {
     transition: transform 200ms ease-out, opacity 200ms ease-out;
   }

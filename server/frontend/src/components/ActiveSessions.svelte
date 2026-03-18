@@ -3,8 +3,8 @@
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { getSelectedSessionId, selectSession, getSourceFilter } from "../lib/stores/filter.svelte";
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
-  import { dismissSession, isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
-  import { getDetailSessionId, pushSessionDetail } from '../lib/stores/navigation.svelte';
+  import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
+  import { pushSessionDetail } from '../lib/stores/navigation.svelte';
   import { relativeTime, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
@@ -20,15 +20,6 @@
   let showMachines = $derived(shouldShowMachineFilter());
   let machineFilter = $derived(getSelectedMachineId());
   let sourceFilter = $derived(getSourceFilter());
-  let detailId = $derived(getDetailSessionId());
-
-
-
-  function handleDismiss(sessionId: string, lastActivityTime: number, event: Event): void {
-    event.stopPropagation();
-    dismissSession(sessionId, lastActivityTime);
-  }
-
   // --- Clipboard copy: build session resume command ---
   let toastMessage = $state<string | null>(null);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -61,6 +52,7 @@
   function handleSessionClick(session: DashboardSession): void {
     selectSession(session.sessionId);
     copySessionCommand(session);
+    pushSessionDetail(session.sessionId);
   }
 
   // Top-level sessions: no parent, or parent not in active set
@@ -109,7 +101,6 @@
           <div
             class="session-item"
             class:selected={selectedSessionId === session.sessionId}
-            class:detail-active={detailId === session.sessionId}
             onclick={() => handleSessionClick(session)}
             role="button"
             tabindex="0"
@@ -123,18 +114,6 @@
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
                   <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
                 {/if}
-                <span class="header-actions">
-                  <button
-                    class="action-btn action-detail"
-                    onclick={(e) => { e.stopPropagation(); pushSessionDetail(session.sessionId); }}
-                    title="View session detail"
-                  >›</button>
-                  <button
-                    class="action-btn action-dismiss"
-                    onclick={(e) => handleDismiss(session.sessionId, session.lastActivityTime, e)}
-                    title="Hide until new activity"
-                  >×</button>
-                </span>
               </div>
               <!-- Row 2: time · machine · source -->
               <div class="session-header-meta">
@@ -226,13 +205,6 @@
     box-shadow: inset 3px 0 0 var(--accent);
   }
 
-  .session-item.detail-active {
-    border-color: var(--accent);
-    background: rgba(88, 166, 255, 0.12);
-    box-shadow: inset 3px 0 0 var(--accent);
-  }
-
-
   .session-header {
     display: flex;
     flex-direction: column;
@@ -279,19 +251,6 @@
   .source-text.claude {
     color: #a871ff;
   }
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-
-  .session-item:hover .header-actions {
-    opacity: 1;
-  }
-
   .session-title {
     font-size: 0.85rem;
     font-weight: 600;
@@ -454,34 +413,6 @@
     font-style: italic;
   }
 
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.4rem;
-    height: 1.4rem;
-    background: rgba(139, 148, 158, 0.08);
-    border: none;
-    border-radius: var(--radius-sm, 4px);
-    cursor: pointer;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    line-height: 1;
-    padding: 0;
-    font-family: inherit;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-
-  .action-detail:hover {
-    background: rgba(88, 166, 255, 0.15);
-    color: var(--accent);
-  }
-
-  .action-dismiss:hover {
-    background: rgba(248, 81, 73, 0.15);
-    color: var(--error);
-  }
-
   .restore-btn {
     display: block;
     width: 100%;
@@ -512,20 +443,6 @@
   font-style: italic;
 }
 
-  /* ===== Touch devices ===== */
-  @media (pointer: coarse) {
-    .header-actions {
-      opacity: 1;
-    }
-
-    .action-btn {
-      width: 2rem;
-      height: 2rem;
-      font-size: 1rem;
-    }
-
-  }
-
   /* ===== Mobile (≤599px) ===== */
   @media (max-width: 599px) {
     .session-item {
@@ -548,12 +465,6 @@
     .session-cwd,
     .session-prompt {
       font-size: 0.75rem;
-    }
-
-    .action-btn {
-      width: 1.6rem;
-      height: 1.6rem;
-      font-size: 0.9rem;
     }
   }
 
