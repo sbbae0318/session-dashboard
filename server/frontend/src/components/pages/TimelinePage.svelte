@@ -46,6 +46,44 @@
 
   let isAllMode = $derived(getSelectedMachineId() === null);
 
+  interface TooltipState {
+    x: number;
+    y: number;
+    startTime: number;
+    endTime: number;
+  }
+
+  let tooltip = $state<TooltipState | null>(null);
+
+  function formatTime(ts: number): string {
+    const d = new Date(ts);
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const s = d.getSeconds().toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
+  function formatDuration(ms: number): string {
+    const totalSec = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  }
+
+  function showTooltip(e: MouseEvent, seg: { startTime: number; endTime: number }): void {
+    tooltip = {
+      x: e.clientX + 12,
+      y: e.clientY - 8,
+      startTime: seg.startTime,
+      endTime: seg.endTime,
+    };
+  }
+
+  function hideTooltip(): void {
+    tooltip = null;
+  }
+
   function shortPath(dir: string): string {
     const parts = dir.replace(/\\/g, '/').split('/').filter(Boolean);
     return parts.slice(-2).join('/');
@@ -154,6 +192,8 @@
                     fill="var(--accent)"
                     opacity="0.8"
                     class="segment-rect"
+                    onmouseenter={(e) => showTooltip(e, seg)}
+                    onmouseleave={hideTooltip}
                   />
                 {/each}
               {:else}
@@ -182,6 +222,16 @@
     </div>
   {/if}
 </div>
+
+{#if tooltip}
+  <div
+    class="seg-tooltip"
+    style="left: {tooltip.x}px; top: {tooltip.y}px;"
+  >
+    <div class="seg-tooltip-range">{formatTime(tooltip.startTime)} — {formatTime(tooltip.endTime)}</div>
+    <div class="seg-tooltip-duration">{formatDuration(tooltip.endTime - tooltip.startTime)}</div>
+  </div>
+{/if}
 
 <style>
   .page-container { padding: 1.5rem; flex: 1; overflow: hidden; }
@@ -231,5 +281,20 @@
     padding: 2rem;
     text-align: center;
   }
-  .segment-rect:hover { opacity: 1; }
+  .segment-rect:hover { opacity: 1; cursor: crosshair; }
+  .seg-tooltip {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  .seg-tooltip-range { margin-bottom: 0.2rem; }
+  .seg-tooltip-duration { color: var(--text-secondary); font-size: 0.7rem; }
 </style>
