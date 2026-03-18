@@ -703,3 +703,95 @@ describe('getRecentSessionMetas', () => {
     }
   });
 });
+
+// ── getSessionActivitySegments ──
+
+describe('getSessionActivitySegments', () => {
+  let reader: OpenCodeDBReader;
+  let testDb: Database.Database;
+
+  beforeEach(() => {
+    testDb = createTestDb();
+    seedTestData(testDb);
+
+    // Seed assistant messages with time.created / time.completed for activity segments
+    const insertMsg = testDb.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+
+    // ses_1: two assistant messages with full time data (out-of-order insert to test sorting)
+    insertMsg.run('msg_seg_2', 'ses_1', 1700003000, 1700003500, JSON.stringify({
+      role: 'assistant', time: { created: 1700003000, completed: 1700003500 },
+    }));
+    insertMsg.run('msg_seg_1', 'ses_1', 1700001000, 1700001800, JSON.stringify({
+      role: 'assistant', time: { created: 1700001000, completed: 1700001800 },
+    }));
+
+    // ses_1: assistant message with null time.completed → fallback to time_updated
+    insertMsg.run('msg_seg_3', 'ses_1', 1700005000, 1700005900, JSON.stringify({
+      role: 'assistant', time: { created: 1700005000, completed: null },
+    }));
+
+    // ses_1: user message with time (should be excluded — not assistant)
+    insertMsg.run('msg_seg_u', 'ses_1', 1700006000, 1700006100, JSON.stringify({
+      role: 'user', time: { created: 1700006000, completed: 1700006100 },
+    }));
+
+    // ses_3: assistant message without time.created (should be excluded)
+    insertMsg.run('msg_seg_no_time', 'ses_3', 1700031000, 1700031500, JSON.stringify({
+      role: 'assistant', time: {},
+    }));
+
+    reader = OpenCodeDBReader.fromDatabase(testDb);
+  });
+
+  afterEach(() => {
+    try { reader.close(); } catch { /* already closed */ }
+  });
+
+  it('returns activity segments for assistant messages', () => {
+    const segments = reader.getSessionActivitySegments('ses_1');
+    expect(segments.length).toBe(3);
+    for (const seg of segments) {
+      expect(seg.type).toBe('working');
+      expect(seg.startTime).toBeLessThanOrEqual(seg.endTime);
+    }
+  });
+
+  it('returns segments sorted by startTime ascending', () => {
+    const segments = reader.getSessionActivitySegments('ses_1');
+    for (let i = 1; i < segments.length; i++) {
+      expect(segments[i].startTime).toBeGreaterThanOrEqual(segments[i - 1].startTime);
+    }
+    // Verify specific order
+    expect(segments[0].startTime).toBe(1700001000);
+    expect(segments[1].startTime).toBe(1700003000);
+    expect(segments[2].startTime).toBe(1700005000);
+  });
+
+  it('uses time_updated as fallback when time.completed is null', () => {
+    const segments = reader.getSessionActivitySegments('ses_1');
+    const fallbackSeg = segments.find(s => s.startTime === 1700005000);
+    expect(fallbackSeg).toBeDefined();
+    // time_updated = 1700005900 (from INSERT)
+    expect(fallbackSeg!.endTime).toBe(1700005900);
+  });
+
+  it('returns empty array for session with no activity segments', () => {
+    expect(reader.getSessionActivitySegments('ses_4')).toEqual([]);
+  });
+
+  it('returns empty array for non-existent session', () => {
+    expect(reader.getSessionActivitySegments('nonexistent_session')).toEqual([]);
+  });
+
+  it('excludes non-assistant messages', () => {
+    const segments = reader.getSessionActivitySegments('ses_1');
+    // user message at 1700006000 should not appear
+    const userSeg = segments.find(s => s.startTime === 1700006000);
+    expect(userSeg).toBeUndefined();
+  });
+
+  it('excludes messages without time.created', () => {
+    const segments = reader.getSessionActivitySegments('ses_3');
+    expect(segments).toEqual([]);
+  });
+});

@@ -142,6 +142,12 @@ export interface SearchResult {
   matchSnippet: string;
 }
 
+export interface ActivitySegment {
+  startTime: number;
+  endTime: number;
+  type: 'working';
+}
+
 export interface SearchOptions {
   query: string;
   from: number;   // timestamp ms
@@ -210,6 +216,7 @@ export class OpenCodeDBReader {
   private stmtSearchMessages!: Statement;
   private stmtSearchMessagesCount!: Statement;
   private stmtRecentSessionMetas!: Statement;
+  private stmtActivitySegments!: Statement;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -260,6 +267,7 @@ export class OpenCodeDBReader {
     this.stmtSearchMessages = this.prepareSearchMessagesStmt(db);
     this.stmtSearchMessagesCount = this.prepareSearchMessagesCountStmt(db);
     this.stmtRecentSessionMetas = this.prepareRecentSessionMetasStmt(db);
+    this.stmtActivitySegments = this.prepareActivitySegmentsStmt(db);
   }
 
   isAvailable(): boolean {
@@ -547,6 +555,15 @@ export class OpenCodeDBReader {
         parentId: r.parent_id ?? null,
       };
     });
+  }
+
+  getSessionActivitySegments(sessionId: string): ActivitySegment[] {
+    type SegRow = { seg_start: number | null; seg_end: number | null };
+    const rows = this.stmtActivitySegments.all(sessionId) as SegRow[];
+    return rows
+      .filter((r): r is { seg_start: number; seg_end: number } =>
+        r.seg_start !== null && r.seg_end !== null)
+      .map(r => ({ startTime: r.seg_start, endTime: r.seg_end, type: 'working' as const }));
   }
 
   getSessionRecoveryContext(sessionId: string): RecoveryContext | null {
@@ -1068,6 +1085,18 @@ export class OpenCodeDBReader {
       WHERE s.time_updated >= ?
       ORDER BY s.time_updated DESC
       LIMIT ?
+    `);
+  }
+
+  private prepareActivitySegmentsStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT json_extract(data, '$.time.created') AS seg_start,
+        COALESCE(json_extract(data, '$.time.completed'), m.time_updated) AS seg_end
+      FROM message m
+      WHERE m.session_id = ?
+        AND json_extract(data, '$.role') = 'assistant'
+        AND json_extract(data, '$.time.created') IS NOT NULL
+      ORDER BY seg_start ASC
     `);
   }
 }
