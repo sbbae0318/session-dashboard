@@ -476,6 +476,7 @@ export class MachineManager {
       const request = httpGet(url, { headers, signal: controller.signal }, (response: IncomingMessage) => {
         let data = '';
         response.on('data', (chunk: Buffer) => { data += chunk; });
+        response.on('error', (err: Error) => { clearTimeout(timeoutId); reject(err); });
         response.on('end', () => {
           clearTimeout(timeoutId);
           if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
@@ -509,6 +510,7 @@ export class MachineManager {
       }, (response: IncomingMessage) => {
         let data = '';
         response.on('data', (chunk: Buffer) => { data += chunk; });
+        response.on('error', (err: Error) => { clearTimeout(timeoutId); reject(err); });
         response.on('end', () => {
           clearTimeout(timeoutId);
           if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {

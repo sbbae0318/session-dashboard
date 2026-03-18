@@ -81,6 +81,8 @@ const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 1_000;
 const PROMPT_MAX_LENGTH = 200;
 const PROJECTS_CACHE_TTL_MS = 300_000; // 5 minutes
+const SSE_BUFFER_MAX_BYTES = 1_048_576; // 1 MB
+const SSE_DATA_LINES_MAX = 1_000;
 
 const SYSTEM_PROMPT_PREFIXES = [
   '[SYSTEM DIRECTIVE:',
@@ -296,10 +298,16 @@ export class SessionCache {
     });
   }
 
-  /** Parse an SSE chunk handling TCP fragmentation via line-based buffering. */
   private parseSseChunk(chunk: string): void {
     this.resetHeartbeat();
     this.sseBuffer += chunk;
+
+    if (this.sseBuffer.length > SSE_BUFFER_MAX_BYTES) {
+      console.warn(`[SessionCache] SSE buffer exceeded ${SSE_BUFFER_MAX_BYTES} bytes — resetting`);
+      this.sseBuffer = '';
+      this.sseDataLines = [];
+      return;
+    }
 
     const lines = this.sseBuffer.split('\n');
     this.sseBuffer = lines.pop() ?? '';
@@ -307,6 +315,10 @@ export class SessionCache {
     for (const line of lines) {
       if (line.startsWith('data: ')) {
         this.sseDataLines.push(line.slice(6));
+        if (this.sseDataLines.length > SSE_DATA_LINES_MAX) {
+          console.warn(`[SessionCache] SSE data lines exceeded ${SSE_DATA_LINES_MAX} — flushing`);
+          this.sseDataLines = [];
+        }
       } else if (line === '' && this.sseDataLines.length > 0) {
         const eventData = this.sseDataLines.join('\n');
         this.sseDataLines = [];

@@ -56,6 +56,7 @@ USER nodejs
 
 # Use /tmp for lock file in Docker (prevents PID 1 restart loop)
 ENV LOCK_FILE_PATH=/tmp/session-dashboard.lock
+ENV NODE_OPTIONS="--max-old-space-size=384"
 
 EXPOSE 3097
 

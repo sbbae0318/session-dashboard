@@ -34,6 +34,11 @@ export function fetchJson(url: string, headers: Record<string, string>, timeout:
           data += chunk;
         });
 
+        response.on('error', (err) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+
         response.on('end', () => {
           clearTimeout(timeoutId);
 

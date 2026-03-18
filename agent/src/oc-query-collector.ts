@@ -121,16 +121,34 @@ export class OcQueryCollector {
    * oc-serve 다운 시 빈 배열 + console.warn.
    */
    async collectQueries(limit: number = 50): Promise<QueryEntry[]> {
-    // Step 1: 모든 프로젝트 worktree에서 세션 수집 (multi-project)
+    const cacheEntries: QueryEntry[] = [];
+    const cacheSessionIds = new Set<string>();
+    if (this.getSupplementData) {
+      const supplementData = this.getSupplementData();
+      for (const [sessionId, data] of Object.entries(supplementData)) {
+        if (!data.lastPrompt) continue;
+        const extracted = extractUserPrompt(data.lastPrompt);
+        if (extracted === null) continue;
+        cacheSessionIds.add(sessionId);
+        cacheEntries.push({
+          sessionId,
+          sessionTitle: data.title ?? null,
+          timestamp: data.lastPromptTime || Date.now(),
+          query: extracted.slice(0, QUERY_MAX_LENGTH),
+          isBackground: false,
+          source: 'opencode',
+          completedAt: data.status === 'idle' ? (data.lastPromptTime || Date.now()) : null,
+        });
+      }
+    }
+
     let sessions: OcServeSession[] = [];
     const worktrees = await this.fetchProjectWorktrees();
     if (worktrees.length > 0) {
       sessions = await this.fetchSessionsFromAllProjects(worktrees);
     }
 
-    // Step 1.5: 전역 세션 보완 — 등록 안 된 프로젝트의 세션도 수집
-    // per-project 쿼리는 oc-serve에 등록된 프로젝트만 반환하므로,
-    // directory 필터 없이 전체 세션을 가져와서 누락분을 추가
+    // 전역 세션 보완 — 등록 안 된 프로젝트의 세션도 수집
     try {
       const url = `http://127.0.0.1:${this.ocServePort}/session?limit=${INTERNAL_SESSION_FETCH_LIMIT}`;
       const data = await fetchJson(url, {}, SESSION_LIST_TIMEOUT_MS);
@@ -143,35 +161,13 @@ export class OcQueryCollector {
         }
       }
     } catch {
-      if (sessions.length === 0) {
-        console.warn('[oc-query-collector] session list fetch failed, falling back to SessionCache only');
+      if (sessions.length === 0 && cacheEntries.length === 0) {
+        console.warn('[oc-query-collector] session list fetch failed, no cache data available');
       }
     }
 
-    // SessionCache 보완: oc-serve 목록에 없는 활성 세션의 lastPrompt를 직접 사용
-    // oc-serve message 엔드포인트를 호출하지 않아선 응답 속도와 안정성이 크게 상승
-    const supplementEntries: QueryEntry[] = [];
-    if (this.getSupplementData) {
-      const supplementData = this.getSupplementData();
-      const existingIds = new Set(sessions.map((s) => s.id));
-      for (const [sessionId, data] of Object.entries(supplementData)) {
-        if (existingIds.has(sessionId)) continue;   // oc-serve에도 있는 세션은 스킵
-        if (!data.lastPrompt) continue;             // 프롬프트 없는 세션 스킵
-        const extracted = extractUserPrompt(data.lastPrompt);
-        if (extracted === null) continue;            // 시스템 프롬프트 필터
-        supplementEntries.push({
-          sessionId,
-          sessionTitle: data.title ?? null,
-          timestamp: data.lastPromptTime || Date.now(),
-          query: extracted.slice(0, QUERY_MAX_LENGTH),
-          isBackground: false,
-          source: 'opencode',
-          completedAt: data.status === 'idle' ? (data.lastPromptTime || Date.now()) : null,
-        });
-      }
-    }
+    const uncachedSessions = sessions.filter(s => !cacheSessionIds.has(s.id));
 
-    // 정렬 헬퍼
     const getUpdatedTime = (s: OcServeSession): number => {
       const t = s.time;
       return typeof t === 'object' && t !== null ? t.updated ?? t.created : (t || 0);
@@ -179,23 +175,21 @@ export class OcQueryCollector {
     const byUpdatedDesc = (a: OcServeSession, b: OcServeSession) =>
       getUpdatedTime(b) - getUpdatedTime(a);
 
-    // 메인 세션 (parentID 없는 세션) — 최신 limit*2개만 message fetch
-    const mainSessions = sessions
+    const UNCACHED_FETCH_LIMIT = 20;
+    const mainUncached = uncachedSessions
       .filter((s) => !s.parentID)
       .sort(byUpdatedDesc)
-      .slice(0, limit * 2);
+      .slice(0, UNCACHED_FETCH_LIMIT);
 
-    // 서브에이전트 세션 (parentID 있는 세션) — 최근 BG_SESSION_LIMIT개
-    const BG_SESSION_LIMIT = 30;
-    const bgSessions = sessions
+    const BG_SESSION_LIMIT = 10;
+    const bgUncached = uncachedSessions
       .filter((s) => !!s.parentID)
       .sort(byUpdatedDesc)
       .slice(0, BG_SESSION_LIMIT);
 
-    // 메인 + bg 병렬 수집
     const [mainResults, bgResults] = await Promise.all([
-      Promise.allSettled(mainSessions.map((s) => this.collectFromSession(s))),
-      Promise.allSettled(bgSessions.map((s) => this.collectFromSession(s))),
+      Promise.allSettled(mainUncached.map((s) => this.collectFromSession(s))),
+      Promise.allSettled(bgUncached.map((s) => this.collectFromSession(s))),
     ]);
 
     const ocServeEntries: QueryEntry[] = [];
@@ -207,14 +201,13 @@ export class OcQueryCollector {
     for (const result of bgResults) {
       if (result.status === 'fulfilled') {
         for (const entry of result.value) {
-          entry.isBackground = true;  // 서브에이전트 = 항상 background
+          entry.isBackground = true;
         }
         ocServeEntries.push(...result.value);
       }
     }
 
-    // oc-serve 엔트리 + SessionCache 보완 엔트리 합치지
-    const entries = [...ocServeEntries, ...supplementEntries];
+    const entries = [...cacheEntries, ...ocServeEntries];
 
     // 최신순 정렬 후 limit 적용
     entries.sort((a, b) => b.timestamp - a.timestamp);

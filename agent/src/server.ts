@@ -116,6 +116,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   // Conditionally create PromptStore + background collection (depends on oc-serve)
   let promptStore: PromptStore | null = null;
   let bgCollectionInterval: NodeJS.Timeout | null = null;
+  let busyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   if (ocServeEnabled && ocQueryCollector) {
     promptStore = new PromptStore();
 
@@ -177,7 +178,6 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     }, PROMPT_COLLECTION_INTERVAL_MS);
 
     if (sessionCache) {
-      let busyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
       sessionCache.onSessionBusy(() => {
         if (busyDebounceTimer) return;
         busyDebounceTimer = setTimeout(() => {
@@ -420,7 +420,22 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     },
   );
 
+  const SUMMARY_CACHE_MAX = 100;
+  const SUMMARY_CACHE_TTL_MS = 3_600_000;
   const summaryCache = new Map<string, { summary: string; generatedAt: number }>();
+  const summaryCacheEvictionTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of summaryCache) {
+      if (now - entry.generatedAt > SUMMARY_CACHE_TTL_MS) {
+        summaryCache.delete(key);
+      }
+    }
+    if (summaryCache.size > SUMMARY_CACHE_MAX) {
+      const sorted = [...summaryCache.entries()].sort((a, b) => a[1].generatedAt - b[1].generatedAt);
+      const toRemove = sorted.slice(0, summaryCache.size - SUMMARY_CACHE_MAX);
+      for (const [key] of toRemove) summaryCache.delete(key);
+    }
+  }, 60_000);
 
   app.post<{ Params: { sessionId: string } }>(
     '/api/enrichment/recovery/:sessionId/summarize',
@@ -428,7 +443,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       const { sessionId } = request.params;
 
       const cached = summaryCache.get(sessionId);
-      if (cached && (Date.now() - cached.generatedAt) < 3_600_000) {
+      if (cached && (Date.now() - cached.generatedAt) < SUMMARY_CACHE_TTL_MS) {
         return { summary: cached.summary, generatedAt: cached.generatedAt, cached: true };
       }
 
@@ -533,9 +548,10 @@ ${formatted}`;
     },
   );
 
-  // Graceful shutdown
   app.addHook('onClose', async () => {
     if (bgCollectionInterval) clearInterval(bgCollectionInterval);
+    if (busyDebounceTimer) clearTimeout(busyDebounceTimer);
+    clearInterval(summaryCacheEvictionTimer);
     if (promptStore) promptStore.close();
     if (sessionCache) sessionCache.stop();
     if (claudeHeartbeat) claudeHeartbeat.stop();
