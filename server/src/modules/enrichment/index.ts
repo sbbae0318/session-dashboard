@@ -77,11 +77,12 @@ export class EnrichmentModule implements BackendModule {
         const machines = this.machineManager.getMachines();
         const results = await Promise.allSettled(
           machines.map(async (machine) => {
-            const data = await this.machineManager.fetchFromMachine<SessionSegmentsResponse>(
+            const raw = await this.machineManager.fetchFromMachine<EnrichmentResponse<SessionSegmentsResponse>>(
               machine,
               `/api/enrichment/timeline-segments?sessionId=${encodeURIComponent(sessionId)}`,
             );
-            return { machine, data };
+            const segData = raw.data ?? raw as unknown as SessionSegmentsResponse;
+            return { machine, data: segData };
           }),
         );
 
