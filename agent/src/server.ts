@@ -394,6 +394,20 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     return enrichResponse(() => ocDbReader!.getAllProjects());
   });
 
+  app.get<{ Querystring: { sessionId?: string } }>(
+    '/api/enrichment/timeline-segments',
+    async (request, reply) => {
+      const { sessionId } = request.query;
+      if (!sessionId) {
+        return reply.code(400).send({ error: 'sessionId is required', available: false });
+      }
+      return enrichResponse(() => {
+        const segments = ocDbReader!.getSessionActivitySegments(sessionId);
+        return { sessionId, segments };
+      });
+    },
+  );
+
   app.get<{ Querystring: { sessionId?: string; limit?: string } }>(
     '/api/enrichment/recovery',
     async (request) => {
