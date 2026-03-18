@@ -4,7 +4,7 @@ import { EnrichmentModule } from '../modules/enrichment/index.js';
 import type { MachineManager } from '../machines/machine-manager.js';
 import type { SSEManager } from '../sse/event-stream.js';
 import type { MachineConfig } from '../config/machines.js';
-import type { EnrichmentResponse, TokensData, ProjectSummary } from '../modules/enrichment/types.js';
+import type { EnrichmentResponse, TokensData, ProjectSummary, SessionSegmentsResponse } from '../modules/enrichment/types.js';
 
 const TEST_MACHINE: MachineConfig = {
   id: 'mac-test',
@@ -254,6 +254,188 @@ describe('EnrichmentModule — registerRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(body).toBe('null');
+    await app.close();
+  });
+});
+
+describe('EnrichmentModule — timeline-segments routes', () => {
+  let module: EnrichmentModule;
+  let mockMachineManager: MachineManager;
+  let mockSseManager: SSEManager;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  it('GET /api/enrichment/:machineId/timeline-segments returns 400 without sessionId', async () => {
+    mockMachineManager = createMockMachineManager();
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({ method: 'GET', url: '/api/enrichment/mac-test/timeline-segments' });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({ error: 'sessionId query parameter is required' });
+    await app.close();
+  });
+
+  it('GET /api/enrichment/:machineId/timeline-segments proxies to machine', async () => {
+    const segmentsResponse: SessionSegmentsResponse = {
+      sessionId: 'ses_abc',
+      segments: [{ startTime: 1000, endTime: 2000, type: 'working' }],
+    };
+
+    mockMachineManager = createMockMachineManager({
+      fetchFromMachine: vi.fn().mockResolvedValue(segmentsResponse),
+    });
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/mac-test/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.sessionId).toBe('ses_abc');
+    expect(body.segments).toHaveLength(1);
+    expect(mockMachineManager.fetchFromMachine).toHaveBeenCalledWith(
+      TEST_MACHINE,
+      '/api/enrichment/timeline-segments?sessionId=ses_abc',
+    );
+    await app.close();
+  });
+
+  it('GET /api/enrichment/:machineId/timeline-segments returns error for unknown machine', async () => {
+    mockMachineManager = createMockMachineManager();
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/unknown-machine/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.error).toBe('Machine not found');
+    await app.close();
+  });
+
+  it('GET /api/enrichment/merged/timeline-segments returns 400 without sessionId', async () => {
+    mockMachineManager = createMockMachineManager();
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({ method: 'GET', url: '/api/enrichment/merged/timeline-segments' });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({ error: 'sessionId query parameter is required' });
+    await app.close();
+  });
+
+  it('GET /api/enrichment/merged/timeline-segments returns first non-empty result with machine info', async () => {
+    const machine2: MachineConfig = { id: 'mac-2', alias: 'Mac 2', host: '10.0.0.2', port: 3098, apiKey: 'key2', source: 'opencode' };
+
+    const fetchMock = vi.fn().mockImplementation(async (machine: MachineConfig) => {
+      if (machine.id === 'mac-test') {
+        return { sessionId: 'ses_abc', segments: [] };
+      }
+      return {
+        sessionId: 'ses_abc',
+        segments: [{ startTime: 1000, endTime: 2000, type: 'working' }],
+      };
+    });
+
+    mockMachineManager = createMockMachineManager({
+      getMachines: () => [TEST_MACHINE, machine2],
+      fetchFromMachine: fetchMock,
+    });
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.segments).toHaveLength(1);
+    expect(body.machineId).toBe('mac-2');
+    expect(body.machineAlias).toBe('Mac 2');
+    await app.close();
+  });
+
+  it('GET /api/enrichment/merged/timeline-segments returns empty when no machine has segments', async () => {
+    mockMachineManager = createMockMachineManager({
+      fetchFromMachine: vi.fn().mockResolvedValue({ sessionId: 'ses_abc', segments: [] }),
+    });
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.segments).toEqual([]);
+    expect(body.machineId).toBeNull();
+    await app.close();
+  });
+
+  it('GET /api/enrichment/merged/timeline-segments handles machine failures gracefully', async () => {
+    const machine2: MachineConfig = { id: 'mac-2', alias: 'Mac 2', host: '10.0.0.2', port: 3098, apiKey: 'key2', source: 'opencode' };
+
+    const fetchMock = vi.fn().mockImplementation(async (machine: MachineConfig) => {
+      if (machine.id === 'mac-test') {
+        throw new Error('agent down');
+      }
+      return {
+        sessionId: 'ses_abc',
+        segments: [{ startTime: 1000, endTime: 2000, type: 'working' }],
+      };
+    });
+
+    mockMachineManager = createMockMachineManager({
+      getMachines: () => [TEST_MACHINE, machine2],
+      fetchFromMachine: fetchMock,
+    });
+    mockSseManager = createMockSseManager();
+    module = new EnrichmentModule(mockMachineManager, mockSseManager, ':memory:');
+
+    const app = Fastify();
+    module.registerRoutes(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/enrichment/merged/timeline-segments?sessionId=ses_abc',
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.segments).toHaveLength(1);
+    expect(body.machineId).toBe('mac-2');
     await app.close();
   });
 });
