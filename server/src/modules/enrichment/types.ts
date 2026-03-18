@@ -171,3 +171,20 @@ export interface EnrichmentCacheRow {
   available: number;   // 0 or 1
   updated_at: number;
 }
+
+// --- Activity Segments ---
+export interface ActivitySegment {
+  startTime: number;
+  endTime: number;
+  type: 'working';
+}
+
+export interface SessionSegmentsResponse {
+  sessionId: string;
+  segments: ActivitySegment[];
+}
+
+export interface MergedSessionSegmentsResponse extends SessionSegmentsResponse {
+  machineId: string;
+  machineAlias: string;
+}
