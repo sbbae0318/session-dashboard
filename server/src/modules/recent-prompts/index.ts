@@ -66,16 +66,27 @@ export class RecentPromptsModule implements BackendModule {
       machineAlias: raw.machineAlias,
     }));
 
+    // Deduplicate by sessionId+timestamp
+    const seen = new Set<string>();
+    const dedupedQueries: QueryEntry[] = [];
+    for (const query of newQueries) {
+      const key = `${query.sessionId}-${query.timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        dedupedQueries.push(query);
+      }
+    }
+
     // Detect new queries (by sessionId+timestamp not in previous cache)
     const previousKeys = new Set(
       this.cachedQueries.map(q => `${q.sessionId}-${q.timestamp}`),
     );
-    for (const query of newQueries) {
+    for (const query of dedupedQueries) {
       if (!previousKeys.has(`${query.sessionId}-${query.timestamp}`)) {
         this.onNewQuery?.(query);
       }
     }
 
-    this.cachedQueries = newQueries;
+    this.cachedQueries = dedupedQueries;
   }
 }
