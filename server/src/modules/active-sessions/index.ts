@@ -185,7 +185,12 @@ export class ActiveSessionsModule implements BackendModule {
 
       // apiStatus: prefer cache (SSE-sourced) over REST polling — but ONLY if SSE is connected
       let apiStatus: DashboardSession['apiStatus'] = null;
-      if (!isClaudeCode) {
+      if (isClaudeCode) {
+        // claude-code: no SSE cache — use REST polling status
+        if (isActive) {
+          apiStatus = (allStatuses[id]?.type ?? null) as DashboardSession['apiStatus'];
+        }
+      } else {
         if (cached && cached.sseConnected !== false) {
           // SSE connected (or sseConnected not present for backward compat) — trust cache
           apiStatus = cached.status as DashboardSession['apiStatus'];

@@ -162,8 +162,8 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
     });
   });
 
-  describe('Claude sessions have apiStatus=null, currentTool=null', () => {
-    it('should set apiStatus=null for Claude sessions', async () => {
+  describe('Claude sessions have apiStatus from polling, currentTool=null', () => {
+    it('should set apiStatus from REST polling for active Claude sessions', async () => {
       setupUrlRouter({
         'http://10.0.0.2:3100/api/claude/sessions': JSON.stringify({
           sessions: [{
@@ -178,7 +178,7 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
       const sessions = await pollAndCapture([makeClaudeMachine()]);
 
       expect(sessions).toHaveLength(1);
-      expect(sessions[0].apiStatus).toBeNull();
+      expect(sessions[0].apiStatus).toBe('active');
     });
 
     it('should set currentTool=null for Claude sessions', async () => {
@@ -276,7 +276,7 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
       expect(claudeSession).toBeDefined();
       expect(claudeSession!.source).toBe('claude-code');
-      expect(claudeSession!.apiStatus).toBeNull();
+      expect(claudeSession!.apiStatus).toBe('active'); // claude-code sessions now get apiStatus from polling
       expect(claudeSession!.currentTool).toBeNull();
     });
 
