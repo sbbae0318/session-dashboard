@@ -310,7 +310,7 @@ export class MachineManager {
           seenIds.add(sessionId);
           sessions.push({ ...session, id: sessionId, source: 'claude-code' });
           const sessionStatus = String(session.status ?? 'busy');
-          statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'active' };
+          statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'busy' };
           cachedDetails[sessionId] = {
             status: sessionStatus === 'idle' ? 'idle' : 'busy',
             lastPrompt: (session.lastPrompt as string) ?? null,
@@ -454,7 +454,7 @@ export class MachineManager {
             seenIds.add(sessionId);
             allSessions.push({ ...session, id: sessionId, source: 'claude-code' });
             const sessionStatus = String(session.status ?? 'busy');
-            statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'active' };
+            statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'busy' };
           }
         }
       } catch (err) {

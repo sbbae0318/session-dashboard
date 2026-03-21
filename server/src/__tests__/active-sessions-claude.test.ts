@@ -178,7 +178,7 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
       const sessions = await pollAndCapture([makeClaudeMachine()]);
 
       expect(sessions).toHaveLength(1);
-      expect(sessions[0].apiStatus).toBe('active');
+      expect(sessions[0].apiStatus).toBe('busy');
     });
 
     it('should set currentTool=null for Claude sessions', async () => {
@@ -276,7 +276,7 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
 
       expect(claudeSession).toBeDefined();
       expect(claudeSession!.source).toBe('claude-code');
-      expect(claudeSession!.apiStatus).toBe('active'); // claude-code sessions now get apiStatus from polling
+      expect(claudeSession!.apiStatus).toBe('busy'); // claude-code sessions now get apiStatus from polling
       expect(claudeSession!.currentTool).toBeNull();
     });
 
