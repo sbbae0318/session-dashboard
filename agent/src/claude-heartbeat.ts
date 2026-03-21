@@ -239,9 +239,9 @@ export class ClaudeHeartbeat {
         lastFileModified,
         lastResponseTime,
         lastPrompt,
-        // Preserve hook-sourced fields if session already exists
-        currentTool: this.sessions.get(sessionId)?.currentTool ?? null,
-        waitingForInput: this.sessions.get(sessionId)?.waitingForInput ?? false,
+        // Preserve hook-sourced fields only when busy — reset on idle
+        currentTool: status === 'idle' ? null : (this.sessions.get(sessionId)?.currentTool ?? null),
+        waitingForInput: status === 'idle' ? false : (this.sessions.get(sessionId)?.waitingForInput ?? false),
       };
 
       this.sessions.set(info.sessionId, info);
