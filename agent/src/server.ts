@@ -188,13 +188,14 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     }
   }
 
-  // Conditionally create Claude modules
-  let claudeHeartbeat: ClaudeHeartbeat | null = null;
+  // Always create ClaudeHeartbeat (needed for hooks receiver even when source != claude-code)
+  const claudeHeartbeat = new ClaudeHeartbeat();
+  claudeHeartbeat.start();
+
+  // ClaudeSource only needed when Claude routes are active
   let claudeSource: ClaudeSource | null = null;
   if (claudeEnabled) {
-    claudeHeartbeat = new ClaudeHeartbeat();
     claudeSource = new ClaudeSource(config.claudeHistoryDir);
-    claudeHeartbeat.start();
     claudeSource.start();
   }
 
@@ -319,7 +320,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   if (claudeEnabled) {
     // GET /api/claude/sessions
     app.get('/api/claude/sessions', async () => {
-      const sessions = claudeHeartbeat!.getActiveSessions();
+      const sessions = claudeHeartbeat.getActiveSessions();
       return { sessions };
     });
 
@@ -330,53 +331,55 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       return { queries };
     });
 
-    // POST /hooks/event — Claude Code hooks receiver
-    app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
-      const body = request.body;
-      const eventName = String(body.hook_event_name ?? '');
-      const sessionId = String(body.session_id ?? '');
-      if (!sessionId) return { ok: false, error: 'missing session_id' };
-
-      switch (eventName) {
-        case 'PreToolUse': {
-          const toolName = String(body.tool_name ?? 'unknown');
-          claudeHeartbeat!.handleToolEvent(sessionId, toolName);
-          break;
-        }
-        case 'PostToolUse': {
-          claudeHeartbeat!.handleToolEvent(sessionId, null);
-          break;
-        }
-        case 'UserPromptSubmit': {
-          const prompt = String(
-            (body.user_prompt as Record<string, unknown>)?.content
-            ?? body.prompt ?? '',
-          );
-          claudeHeartbeat!.handlePromptEvent(sessionId, prompt, Date.now());
-          break;
-        }
-        case 'Stop':
-        case 'SubagentStop': {
-          claudeHeartbeat!.handleStatusEvent(sessionId, 'idle');
-          break;
-        }
-        case 'Notification': {
-          const notifType = String(body.notification_type ?? '');
-          if (notifType === 'permission_prompt' || notifType === 'idle_prompt') {
-            claudeHeartbeat!.handleWaitingEvent(sessionId, true);
-          }
-          break;
-        }
-        case 'SessionStart': {
-          claudeHeartbeat!.handleStatusEvent(sessionId, 'busy');
-          break;
-        }
-        default:
-          break;
-      }
-      return { ok: true };
-    });
   }
+
+  // POST /hooks/event — Claude Code hooks receiver (always registered)
+  app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
+    if (!claudeHeartbeat) return { ok: false, error: 'claude not enabled' };
+    const body = request.body;
+    const eventName = String(body.hook_event_name ?? '');
+    const sessionId = String(body.session_id ?? '');
+    if (!sessionId) return { ok: false, error: 'missing session_id' };
+
+    switch (eventName) {
+      case 'PreToolUse': {
+        const toolName = String(body.tool_name ?? 'unknown');
+        claudeHeartbeat.handleToolEvent(sessionId, toolName);
+        break;
+      }
+      case 'PostToolUse': {
+        claudeHeartbeat.handleToolEvent(sessionId, null);
+        break;
+      }
+      case 'UserPromptSubmit': {
+        const prompt = String(
+          (body.user_prompt as Record<string, unknown>)?.content
+          ?? body.prompt ?? '',
+        );
+        claudeHeartbeat.handlePromptEvent(sessionId, prompt, Date.now());
+        break;
+      }
+      case 'Stop':
+      case 'SubagentStop': {
+        claudeHeartbeat.handleStatusEvent(sessionId, 'idle');
+        break;
+      }
+      case 'Notification': {
+        const notifType = String(body.notification_type ?? '');
+        if (notifType === 'permission_prompt' || notifType === 'idle_prompt') {
+          claudeHeartbeat.handleWaitingEvent(sessionId, true);
+        }
+        break;
+      }
+      case 'SessionStart': {
+        claudeHeartbeat.handleStatusEvent(sessionId, 'busy');
+        break;
+      }
+      default:
+        break;
+    }
+    return { ok: true };
+  });
 
   // Enrichment routes (opencode.db readonly access)
   let ocDbReader: OpenCodeDBReader | null = null;
@@ -612,7 +615,7 @@ ${formatted}`;
     clearInterval(summaryCacheEvictionTimer);
     if (promptStore) promptStore.close();
     if (sessionCache) sessionCache.stop();
-    if (claudeHeartbeat) claudeHeartbeat.stop();
+    claudeHeartbeat.stop();
     if (claudeSource) claudeSource.stop();
     if (ocDbReader) ocDbReader.close();
   });

@@ -15,8 +15,8 @@ export function authPreHandler(
   reply: FastifyReply,
   done: HookHandlerDoneFunction,
 ): void {
-  // Skip auth for health and token endpoints
-  if (request.url === '/health' || request.url === '/api/auth/token') {
+  // Skip auth for health, token, and hooks endpoints
+  if (request.url === '/health' || request.url === '/api/auth/token' || request.url === '/hooks/event') {
     done();
     return;
   }
