@@ -50,7 +50,8 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => { void shutdown(); });
 
   try {
-    const address = await server.listen({ port: config.port, host: '0.0.0.0' });
+    const host = process.env['HOST'] ?? '127.0.0.1';
+    const address = await server.listen({ port: config.port, host });
     server.log.info(`dashboard-agent listening at ${address}`);
   } catch (err) {
     server.log.error(err);

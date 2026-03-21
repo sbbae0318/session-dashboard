@@ -117,8 +117,9 @@ export async function startServer(
   app: FastifyInstance,
   port: number = 3097,
 ): Promise<void> {
-  await app.listen({ port, host: "0.0.0.0" });
-  console.log(`[Server] Listening on http://0.0.0.0:${port}`);
+  const host = process.env['HOST'] ?? '127.0.0.1';
+  await app.listen({ port, host });
+  console.log(`[Server] Listening on http://${host}:${port}`);
 }
 
 export async function stopServer(app: FastifyInstance): Promise<void> {

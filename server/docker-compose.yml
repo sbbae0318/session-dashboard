@@ -16,6 +16,7 @@ services:
     environment:
       - DASHBOARD_PORT=${DASHBOARD_PORT:-3097}
       - MEMO_DIR=/app/memos
+      - HOST=0.0.0.0
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3097/health"]
       interval: 30s
