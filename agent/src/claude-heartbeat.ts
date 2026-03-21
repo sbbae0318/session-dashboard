@@ -23,6 +23,9 @@ export interface ClaudeSessionInfo {
   readonly lastResponseTime: number | null;
   readonly lastFileModified: number;
   readonly lastPrompt: string | null;
+  // Hook-sourced fields (real-time updates from Claude Code hooks)
+  readonly currentTool: string | null;
+  readonly waitingForInput: boolean;
 }
 
 interface ConversationData {
@@ -89,6 +92,52 @@ export class ClaudeHeartbeat {
 
   getActiveSessions(): ClaudeSessionInfo[] {
     return Array.from(this.sessions.values());
+  }
+
+  // -------------------------------------------------------------------------
+  // Hook event handlers (real-time updates from Claude Code hooks)
+  // -------------------------------------------------------------------------
+
+  /** Update currentTool from PreToolUse/PostToolUse hook events */
+  handleToolEvent(sessionId: string, toolName: string | null): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.sessions.set(sessionId, { ...session, currentTool: toolName });
+  }
+
+  /** Update status from UserPromptSubmit/Stop hook events */
+  handleStatusEvent(sessionId: string, status: 'busy' | 'idle'): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.sessions.set(sessionId, {
+      ...session,
+      status,
+      // Clear tool and waitingForInput on idle
+      ...(status === 'idle' ? { currentTool: null, waitingForInput: false } : {}),
+    });
+  }
+
+  /** Update waitingForInput from Notification hook events */
+  handleWaitingEvent(sessionId: string, waiting: boolean): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.sessions.set(sessionId, { ...session, waitingForInput: waiting });
+  }
+
+  /** Update lastPrompt from UserPromptSubmit hook events */
+  handlePromptEvent(sessionId: string, prompt: string, timestamp: number): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    const lastPrompt = prompt.length > MAX_PROMPT_LENGTH
+      ? prompt.slice(0, MAX_PROMPT_LENGTH)
+      : prompt;
+    this.sessions.set(sessionId, {
+      ...session,
+      status: 'busy',
+      lastPrompt,
+      lastPromptTime: timestamp,
+      waitingForInput: false,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -190,6 +239,9 @@ export class ClaudeHeartbeat {
         lastFileModified,
         lastResponseTime,
         lastPrompt,
+        // Preserve hook-sourced fields if session already exists
+        currentTool: this.sessions.get(sessionId)?.currentTool ?? null,
+        waitingForInput: this.sessions.get(sessionId)?.waitingForInput ?? false,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -431,6 +483,8 @@ export class ClaudeHeartbeat {
                 lastFileModified: fileStat.mtimeMs,
                 lastResponseTime,
                 lastPrompt,
+                currentTool: null,
+                waitingForInput: false,
               });
             } catch {
               continue;

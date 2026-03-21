@@ -207,14 +207,18 @@ export class ActiveSessionsModule implements BackendModule {
         title: (s.title as string) ?? null,
         projectCwd: (s.directory as string) ?? null,
         status: isActive ? 'active' : 'idle',
-        waitingForInput: (cached && cached.sseConnected !== false) ? (cached.waitingForInput ?? false) : false,
+        waitingForInput: isClaudeCode
+          ? (cached?.waitingForInput ?? false)
+          : (cached && cached.sseConnected !== false) ? (cached.waitingForInput ?? false) : false,
         startTime: isClaudeCode
           ? (s.startTime as number) ?? Date.now()
           : (s.time as { created?: number })?.created ?? Date.now(),
         lastActivityTime: isClaudeCode
           ? (s.lastResponseTime as number) ?? (s.lastFileModified as number) ?? Date.now()
           : (s.time as { updated?: number })?.updated ?? Date.now(),
-        currentTool: isClaudeCode ? null : (cached?.currentTool ?? (allStatuses[id]?.type === 'busy' ? 'working' : null)),
+        currentTool: isClaudeCode
+          ? (cached?.currentTool ?? null)
+          : (cached?.currentTool ?? (allStatuses[id]?.type === 'busy' ? 'working' : null)),
         duration: null,
         summary: null,
         apiStatus,

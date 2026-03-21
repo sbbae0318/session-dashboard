@@ -315,11 +315,12 @@ export class MachineManager {
             status: sessionStatus === 'idle' ? 'idle' : 'busy',
             lastPrompt: (session.lastPrompt as string) ?? null,
             lastPromptTime: (session.lastPromptTime as number) ?? 0,
-            currentTool: null,
+            currentTool: (session.currentTool as string | null) ?? null,
             directory: (session.cwd as string) ?? null,
             updatedAt: (session.lastHeartbeat as number) ?? Date.now(),
             lastResponseTime: (session.lastResponseTime as number) ?? null,
             lastFileModified: (session.lastFileModified as number) ?? null,
+            waitingForInput: (session.waitingForInput as boolean) ?? false,
           };
         }
       }

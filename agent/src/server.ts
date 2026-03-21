@@ -261,7 +261,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     return response;
   });
 
-  // GET /api/sessions — proxy to oc-serve /session, wrap in { sessions }
+  // GET /api/sessions — proxy to oc-serve /session, fallback to opencode.db
   app.get<{ Querystring: { directory?: string; limit?: string } }>('/api/sessions', async (request, reply) => {
     try {
       const headers: Record<string, string> = {};
@@ -277,10 +277,21 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       const url = `http://127.0.0.1:${ocServePort}/session${qs ? `?${qs}` : ''}`;
       const data = await fetchJson(url, headers, 3000);
 
-      // oc-serve returns an array; wrap in { sessions } for DashboardClient
       const sessions = Array.isArray(data) ? data : [];
       return { sessions };
     } catch {
+      if (ocDbReader && ocDbReader.isAvailable()) {
+        const limit = parseLimit(request.query.limit);
+        const metas = ocDbReader.getRecentSessionMetas(7 * 24 * 60 * 60 * 1000, limit);
+        const sessions = metas.map(m => ({
+          id: m.id,
+          title: m.title,
+          parentID: m.parentId,
+          directory: m.directory,
+          time: { created: m.timeCreated, updated: m.timeUpdated },
+        }));
+        return { sessions, fallback: true };
+      }
       return reply.code(502).send({ error: 'oc-serve unavailable', code: 'OC_SERVE_DOWN' });
     }
   });
@@ -317,6 +328,53 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       const limit = parseLimit(request.query.limit);
       const queries = await claudeSource!.getRecentQueries(limit);
       return { queries };
+    });
+
+    // POST /hooks/event — Claude Code hooks receiver
+    app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
+      const body = request.body;
+      const eventName = String(body.hook_event_name ?? '');
+      const sessionId = String(body.session_id ?? '');
+      if (!sessionId) return { ok: false, error: 'missing session_id' };
+
+      switch (eventName) {
+        case 'PreToolUse': {
+          const toolName = String(body.tool_name ?? 'unknown');
+          claudeHeartbeat!.handleToolEvent(sessionId, toolName);
+          break;
+        }
+        case 'PostToolUse': {
+          claudeHeartbeat!.handleToolEvent(sessionId, null);
+          break;
+        }
+        case 'UserPromptSubmit': {
+          const prompt = String(
+            (body.user_prompt as Record<string, unknown>)?.content
+            ?? body.prompt ?? '',
+          );
+          claudeHeartbeat!.handlePromptEvent(sessionId, prompt, Date.now());
+          break;
+        }
+        case 'Stop':
+        case 'SubagentStop': {
+          claudeHeartbeat!.handleStatusEvent(sessionId, 'idle');
+          break;
+        }
+        case 'Notification': {
+          const notifType = String(body.notification_type ?? '');
+          if (notifType === 'permission_prompt' || notifType === 'idle_prompt') {
+            claudeHeartbeat!.handleWaitingEvent(sessionId, true);
+          }
+          break;
+        }
+        case 'SessionStart': {
+          claudeHeartbeat!.handleStatusEvent(sessionId, 'busy');
+          break;
+        }
+        default:
+          break;
+      }
+      return { ok: true };
     });
   }
 
