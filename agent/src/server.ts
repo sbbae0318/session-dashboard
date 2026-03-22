@@ -564,7 +564,7 @@ ${formatted}`;
 
       try {
         const summary = await new Promise<string>((resolve, reject) => {
-          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5'], {
+          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'], {
             stdio: ['pipe', 'pipe', 'pipe'],
             timeout: 60_000,
           });
@@ -641,7 +641,7 @@ ${formatted}`;
 
       try {
         const summary = await new Promise<string>((resolve, reject) => {
-          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5'], {
+          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'], {
             stdio: ['pipe', 'pipe', 'pipe'],
             timeout: 60_000,
           });
