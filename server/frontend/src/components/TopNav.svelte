@@ -3,12 +3,12 @@
 
   const tabs = [
     { view: 'overview' as const, label: 'Dashboard' },
+    { view: 'summaries' as const, label: 'Summaries' },
     { view: 'token-cost' as const, label: 'Tokens' },
     { view: 'code-impact' as const, label: 'Impact' },
     { view: 'timeline' as const, label: 'Timeline' },
     { view: 'projects' as const, label: 'Projects' },
     { view: 'context-recovery' as const, label: 'Recovery' },
-    { view: 'summaries' as const, label: 'Summaries' },
     { view: 'memos' as const, label: 'Memos' },
   ];
 
