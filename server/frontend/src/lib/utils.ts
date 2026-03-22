@@ -32,6 +32,12 @@ export function formatDuration(ms: number): string {
   return `${secs}s`;
 }
 
+export function formatRss(kb: number): string {
+  if (kb >= 1024 * 1024) return `${(kb / 1024 / 1024).toFixed(1)}GB`;
+  if (kb >= 1024) return `${Math.round(kb / 1024)}MB`;
+  return `${kb}KB`;
+}
+
 export function getQueryResult(
   query: { sessionId: string; timestamp: number; completedAt?: number | null },
   sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }>

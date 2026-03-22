@@ -30,6 +30,7 @@ import { SessionCache } from './session-cache.js';
 import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
+import { ProcessScanner } from './process-scanner.js';
 import { ClaudeSource } from './claude-source.js';
 import { spawn } from 'node:child_process';
 import { OpenCodeDBReader, type EnrichmentResponse, type TokensData, type SearchResult } from './opencode-db-reader.js';
@@ -188,8 +189,14 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     }
   }
 
+  // ProcessScanner: OS 프로세스 테이블 기반 보조 모니터링
+  const processScanner = new ProcessScanner();
+  // 주기적 스캔 시작 (10초 캐시, 첫 호출 시 자동 시작)
+  const processScanInterval = setInterval(() => { void processScanner.scan(); }, 10_000);
+  void processScanner.scan();
+
   // Always create ClaudeHeartbeat (needed for hooks receiver even when source != claude-code)
-  const claudeHeartbeat = new ClaudeHeartbeat();
+  const claudeHeartbeat = new ClaudeHeartbeat(undefined, undefined, processScanner);
   claudeHeartbeat.start();
 
   // ClaudeSource only needed when Claude routes are active

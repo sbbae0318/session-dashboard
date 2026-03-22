@@ -4,6 +4,7 @@ import { watch, type FSWatcher } from 'node:fs';
 import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import type { ProcessScanner, ProcessMetrics } from './process-scanner.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,6 +28,7 @@ export interface ClaudeSessionInfo {
   readonly currentTool: string | null;
   readonly waitingForInput: boolean;
   readonly hooksActive: boolean;
+  readonly processMetrics: ProcessMetrics | null;
 }
 
 interface ConversationData {
@@ -53,16 +55,18 @@ const MAX_PROMPT_LENGTH = 200;
 export class ClaudeHeartbeat {
   private readonly heartbeatsDir: string;
   private readonly claudeProjectsDir: string;
+  private readonly processScanner: ProcessScanner | null;
   private watcher: FSWatcher | null = null;
   private projectsWatcher: FSWatcher | null = null;
   private sessions: Map<string, ClaudeSessionInfo> = new Map();
   private evictionInterval: NodeJS.Timeout | null = null;
 
-  constructor(heartbeatsDir?: string, claudeProjectsDir?: string) {
+  constructor(heartbeatsDir?: string, claudeProjectsDir?: string, processScanner?: ProcessScanner) {
     this.heartbeatsDir =
       heartbeatsDir ?? join(homedir(), '.opencode', 'history', 'heartbeats');
     this.claudeProjectsDir =
       claudeProjectsDir ?? join(homedir(), '.claude', 'projects');
+    this.processScanner = processScanner ?? null;
   }
 
   start(): void {
@@ -236,9 +240,18 @@ export class ClaudeHeartbeat {
       const rawLastPrompt = parsed?.lastPrompt ?? null;
       const lastPrompt = rawLastPrompt ? (extractUserPrompt(rawLastPrompt) ?? null) : null;
 
+      // 프로세스 메트릭: PID 직접 매칭 → CWD 매칭 순
+      const pid = Number(data['pid'] ?? 0);
+      let processMetrics: ProcessMetrics | null = null;
+      if (this.processScanner) {
+        processMetrics = pid > 0
+          ? this.processScanner.getMetricsByPid(pid)
+          : this.processScanner.getMetricsByCwd(cwd, 'claude');
+      }
+
       const info: ClaudeSessionInfo = {
         sessionId,
-        pid: Number(data['pid'] ?? 0),
+        pid,
         cwd,
         project: String(data['project'] ?? ''),
         startTime: Number(data['startTime'] ?? 0),
@@ -256,6 +269,7 @@ export class ClaudeHeartbeat {
         currentTool: status === 'idle' ? null : (this.sessions.get(sessionId)?.currentTool ?? null),
         waitingForInput: false,
         hooksActive: this.sessions.get(sessionId)?.hooksActive ?? false,
+        processMetrics,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -500,6 +514,7 @@ export class ClaudeHeartbeat {
                 currentTool: null,
                 waitingForInput: false,
                 hooksActive: false,
+                processMetrics: this.processScanner?.getMetricsByCwd(this.decodePath(encodedDir), 'claude') ?? null,
               });
             } catch {
               continue;

@@ -28,6 +28,7 @@ export interface CachedSessionDetail {
   readonly sseConnected?: boolean;
   readonly waitingForInput?: boolean;
   readonly hooksActive?: boolean;
+  readonly processMetrics?: { alive: boolean; cpuPercent: number; rssKb: number } | null;
   readonly title?: string | null;
   readonly parentSessionId?: string | null;
   readonly createdAt?: number;
@@ -323,6 +324,7 @@ export class MachineManager {
             lastFileModified: (session.lastFileModified as number) ?? null,
             waitingForInput: (session.waitingForInput as boolean) ?? false,
             hooksActive: (session.hooksActive as boolean) ?? false,
+            processMetrics: (session.processMetrics as { alive: boolean; cpuPercent: number; rssKb: number } | null) ?? null,
           };
         }
       }

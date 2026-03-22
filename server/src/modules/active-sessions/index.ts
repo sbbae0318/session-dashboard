@@ -203,6 +203,7 @@ export class ActiveSessionsModule implements BackendModule {
           : cached?.lastPromptTime ?? null,
         source: isClaudeCode ? 'claude-code' : 'opencode',
         ...(isClaudeCode ? { hooksActive: cached?.hooksActive ?? false } : {}),
+        processMetrics: cached?.processMetrics ?? null,
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
         machineAlias: (s.machineAlias as string) ?? '',

@@ -62,6 +62,8 @@ export interface DashboardSession {
   source: SessionSource;
   /** Claude 세션 전용: hooks 연결 여부. OpenCode 세션에는 없음 */
   hooksActive?: boolean;
+  /** OS 프로세스 테이블 메트릭. 프로세스 미발견 시 null */
+  processMetrics?: { alive: boolean; cpuPercent: number; rssKb: number } | null;
 
   // Machine 식별
   machineId: string;

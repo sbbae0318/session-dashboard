@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatDuration, copyToClipboard } from "../lib/utils";
+  import { relativeTime, formatDuration, formatRss, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -149,6 +149,12 @@
                   {/if}
                 {:else}
                   <span class="source-text opencode">OpenCode</span>
+                {/if}
+                {#if session.processMetrics}
+                  <span class="meta-sep">·</span>
+                  <span class="process-metric" title="CPU {session.processMetrics.cpuPercent.toFixed(1)}% · RSS {formatRss(session.processMetrics.rssKb)}">
+                    {session.processMetrics.cpuPercent.toFixed(0)}% · {formatRss(session.processMetrics.rssKb)}
+                  </span>
                 {/if}
               </div>
             </div>
@@ -382,6 +388,13 @@
     font-family: "SF Mono", "Fira Code", monospace;
     font-size: 0.65rem;
     opacity: 0.8;
+  }
+
+  .process-metric {
+    white-space: nowrap;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.6rem;
+    opacity: 0.7;
   }
 
   .session-cwd {
