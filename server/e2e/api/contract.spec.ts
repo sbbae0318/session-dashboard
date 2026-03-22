@@ -96,6 +96,18 @@ test.describe('GET /api/sessions — SessionsResponse 계약', () => {
     }
   });
 
+  test('Working 세션의 lastActivityTime이 최근이어야 함 (5분 이내)', async ({ request }) => {
+    const body = await (await request.get('/api/sessions')).json();
+    const now = Date.now();
+    for (const s of body.sessions) {
+      if (s.apiStatus === 'busy' || s.currentTool) {
+        const ageMinutes = (now - s.lastActivityTime) / 60_000;
+        // Working 세션은 hook으로 lastActivityTime이 갱신되므로 5분 이내여야 함
+        expect(ageMinutes).toBeLessThan(5);
+      }
+    }
+  });
+
   test('lastActivityTime 기준 내림차순 정렬', async ({ request }) => {
     const body = await (await request.get('/api/sessions')).json();
     const times: number[] = body.sessions.map((s: { lastActivityTime: number }) => s.lastActivityTime);
