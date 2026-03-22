@@ -1,0 +1,11 @@
+[      65ms] Error: https://svelte.dev/e/each_key_duplicate
+    at dl (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:2643)
+    at http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:33873
+    at Ai (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:24432)
+    at Qs (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:25543)
+    at Nt (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:20965)
+    at Qa (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:21867)
+    at Re (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:33540)
+    at D (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:21364)
+    at http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:32189
+    at Ai (http://192.168.0.2:3097/assets/index-mGrNawyd.js:1:24432)

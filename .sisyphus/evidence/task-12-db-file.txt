@@ -1,0 +1,6 @@
+SQLite DB 파일 존재 확인 (2026-03-15)
+
+$ docker exec session-dashboard ls -la /app/data/enrichment-cache.db
+-rw-r--r--    1 nodejs   nogroup    2334720 Mar 15 07:09 /app/data/enrichment-cache.db
+
+결과: DB 파일 존재 확인 (약 2.3MB)

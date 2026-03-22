@@ -1,0 +1,30 @@
+F1 SMOKE TEST RESULTS
+Timestamp: 2026-03-16
+Server: 192.168.0.2:3097
+---
+Check 1 - Background Sessions: [total=193 background=0] [PASS]
+Check 2a - Full Payload: [66200 bytes] [PASS] (< 100KB = 102400)
+Check 2b - 24h Payload: [4760 bytes] [PASS] (< 30KB = 30720)
+Check 3 - Container: [PASS] (session-dashboard Up 2 minutes (healthy))
+Check 4 - Agent API: [total=240 background=201] [FAIL]
+---
+VERDICT: REJECT
+
+FAIL REASON (Check 4):
+- Agent API (port 3098, /api/enrichment/timeline) returns 201 background sessions out of 240 total
+- Root cause: agent/dist/opencode-db-reader.js is STALE (built 2026-03-14 21:21)
+  vs agent/src/opencode-db-reader.ts (modified 2026-03-16 00:27)
+- The compiled dist is missing the background filtering SQL clauses:
+    AND parent_id IS NULL
+    AND title NOT LIKE 'Background:%'
+    AND title NOT LIKE 'Task:%'
+    AND title NOT LIKE '%@%'
+- The source code has these filters but the agent server was NOT rebuilt after the changes
+- Fix required: cd /home/sbbae/project/session-dashboard/agent && npm run build && pm2 restart agent (or equivalent)
+
+PASSING CHECKS DETAIL:
+- Check 1: Merged timeline (3097) correctly filters background sessions (total=193, background=0)
+- Check 2a: Full payload 66200 bytes (64.6 KB) < 100KB threshold
+- Check 2b: 24h payload 4760 bytes (4.6 KB) < 30KB threshold
+- Check 3: Container session-dashboard is healthy
+- Check 4: Agent API (3098) NOT rebuilt - dist is outdated, background filtering not applied

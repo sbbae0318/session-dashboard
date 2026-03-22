@@ -1,0 +1,83 @@
+F2 Code Quality Review — Enrichment Pipeline Recheck
+=====================================================
+Date: 2026-03-15
+Reviewer: Sisyphus-Junior (claude-opus-4-6)
+
+Previous F2 REJECT Issues (now fixed):
+1. better-sqlite3 미설치 → npm install로 해결됨
+2. getMergedData() 72줄 → mergeTokensData() + mergeArrayFeature() + getMergedData()로 분리됨
+
+---
+
+Build: PASS
+  Command: cd server && npm run build
+  Result: exit 0, tsc compiled without errors
+
+Tests: 204 pass / 0 fail
+  Command: cd server && npm test
+  Result: 16 test files, 204 tests all passed (vitest v4.0.18)
+  Test suites:
+    - active-sessions-claude.test.ts (18 tests)
+    - active-sessions.test.ts (25 tests)
+    - machine-manager.test.ts (25 tests)
+    - enrichment-cache-db.test.ts (14 tests)
+    - enrichment-merge.test.ts (13 tests)
+    - enrichment-module.test.ts (11 tests)
+    - machines-config.test.ts (16 tests)
+    - server.test.ts (4 tests)
+    - event-stream.test.ts (8 tests)
+    - machine-manager-active-dirs.test.ts (10 tests)
+    - recent-prompts-source.test.ts (14 tests)
+    - machine-manager-source.test.ts (15 tests)
+    - aggregation.test.ts (7 tests)
+    - utils.test.ts (8 tests)
+    - queries-reader.test.ts (5 tests)
+    - jsonl-reader.test.ts (11 tests)
+
+TypeScript: PASS
+  Command: cd server && npx tsc --noEmit
+  Result: 0 errors
+
+Code Issues: NONE
+  - `as any`: 0 occurrences (server/src/modules/enrichment + frontend/src)
+  - `@ts-ignore`: 0 occurrences
+  - `INSERT OR REPLACE`: 0 occurrences (all use ON CONFLICT DO UPDATE)
+  - `console.log` (prod): 2 operational logs in index.ts
+    - L168: cache load count (startup diagnostic)
+    - L193: cleanup deleted count (maintenance log)
+    → Acceptable: server-side operational logging with [EnrichmentModule] prefix
+
+getMergedData split: VERIFIED
+  - mergeTokensData(): lines 288-320 (33 lines) ✓
+  - mergeArrayFeature(): lines 322-364 (43 lines) ✓
+  - getMergedData(): lines 366-372 (7 lines) — dispatcher only ✓
+  All helper functions under 50-line limit.
+
+Detailed Code Review:
+  1. enrichment/index.ts (373 lines)
+     - Clean separation of concerns: routing, lifecycle, polling, merging
+     - mergeTokensData handles tokens-specific structure (grandTotal aggregation)
+     - mergeArrayFeature handles array-based features with proper sorting per type
+     - All SQL uses ON CONFLICT DO UPDATE (no INSERT OR REPLACE)
+     - No empty catches — all errors logged with console.warn
+
+  2. enrichment-cache-db.ts (269 lines)
+     - WAL mode + proper pragmas for performance
+     - All 3 upserts use ON CONFLICT DO UPDATE pattern
+     - Type-safe DB row parsing with explicit type annotations
+     - Batch delete with LIMIT for cleanup (no unbounded deletes)
+     - Transaction-wrapped bulk inserts for timeline entries
+
+  3. frontend/stores/enrichment.ts (292 lines)
+     - fetchTokenStats() properly normalizes merged response:
+       merged MergedTokensData → flatMap machines.data.sessions → TokensData
+     - All error catches use console.error (frontend logging, acceptable)
+     - SSE handlers properly gate on machine selection
+
+  4. ProjectsPage.svelte (495 lines)
+     - each key: `${project.id}-${(project as MergedProjectSummary).machineId ?? 'single'}`
+       → Composite key prevents duplicate DOM nodes when same project appears on multiple machines
+     - Type assertion uses MergedProjectSummary (not `as any`) — acceptable
+     - All CSS uses CSS variables (no Tailwind)
+
+VERDICT: APPROVE

@@ -1,0 +1,45 @@
+== Deploy Status (task-7 final) ==
+Date: 2026-03-15
+
+== Commit ==
+35d2cc8 fix(frontend): fix each_key_duplicate error in Projects page for all-machines mode
+
+== Push ==
+git push origin main → success (b897127..35d2cc8  main -> main)
+
+== Docker Build + Deploy ==
+- git pull: Fast-forward (1 file changed, 2 insertions, 1 deletion)
+- docker compose build --no-cache: SUCCESS
+  - Frontend build: ✓ (143 modules, 1.84s)
+  - Backend tests: ✓ (14 test files, 180 tests passed)
+  - Backend build (tsc): ✓
+- docker compose up -d --force-recreate: SUCCESS
+
+== Container Status ==
+Name: session-dashboard
+Status: Up (healthy)
+Image: server-session-dashboard
+Ports: 0.0.0.0:3097->3097/tcp
+
+== API Check ==
+GET /api/enrichment/merged/projects
+- total: 18 projects
+- available: True
+- sample id: b9bef0a0cdddebf49be266b2a6d944bc2182da0b
+
+== Browser QA (Playwright) ==
+1. "전체" 모드 → Projects 탭: ✓ (18개 프로젝트 렌더링, 에러 0)
+2. "전체" 모드 → Timeline 탭: ✓ (swim-lane 데이터 표시)
+3. "전체" 모드 → Tokens 탭: ✓ (로드됨, 기존 TypeError 1건 - 별도 이슈)
+4. "전체" 모드 → Code Impact 탭: ✓
+5. "전체" 모드 → Context Recovery 탭: ✓
+6. "MacBook Pro" → Timeline 탭: ✓ (데이터 표시)
+
+== Console Errors ==
+- Projects 탭 (전체 모드): 0 errors
+- Tokens 탭: 1 error (TypeError: x is not iterable) - 기존 이슈, 이번 수정과 무관
+
+== Evidence Files ==
+- task-7-final-projects-all.png: Projects 탭 "전체" 모드 스크린샷
+- task-7-final-all-tabs.png: MacBook Pro Timeline 탭 스크린샷
+- task-7-final-deploy-status.txt: 이 파일

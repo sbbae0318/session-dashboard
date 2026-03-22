@@ -1,0 +1,7 @@
+24h timeline payload 크기 확인 (2026-03-15)
+
+$ curl -s 'http://localhost:3097/api/enrichment/merged/timeline?from=<24h_ago>&to=<now>' | wc -c
+48628
+
+결과: 47.4KB < 50KB 기준 통과
+(기존 390KB → 47.4KB, 약 88% 감소)

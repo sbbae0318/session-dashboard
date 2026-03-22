@@ -1,0 +1,51 @@
+=== Deployment Status ===
+Target: 192.168.0.2:3097
+Container: session-dashboard
+Status: Up 13 seconds (healthy)
+
+=== Deploy Command ===
+ssh sbbae@192.168.0.2 "cd /home/sbbae/project/session-dashboard && git pull origin main && cd server && docker compose build --no-cache && docker compose up -d --force-recreate"
+
+=== Git State ===
+Merged: feat/timeline-macbook-fix → main (9f42380)
+Pushed: origin/main
+
+=== Docker Build ===
+- Frontend build: OK (143 modules, 1.90s)
+- Backend test: 14 files, 180 tests passed
+- Backend build: tsc OK
+- Container recreated and started
+
+=== Browser QA Results ===
+
+## 시나리오 1: "전체" 모드 Timeline
+- 초기 상태: "타임라인 데이터 없음" (agent 재시작 필요)
+- agent 재시작 후: 데이터 표시됨 (macbook 데이터 사용)
+- NOTE: "전체" 모드에서 merged 엔드포인트 미사용 버그 발견
+  - resolveEnrichmentMachineId()가 null 대신 첫 번째 머신 ID 반환
+  - /api/enrichment/macbook/timeline 호출 (merged 대신)
+- Screenshot: task-7-deployed-timeline-all.png ✓
+
+## 시나리오 2: "MacBook Pro" 선택 시 Timeline
+- MacBook agent 재시작 후 데이터 정상 표시 (801개 세션)
+- "타임라인 데이터 없음" 해소
+- Screenshot: task-7-deployed-timeline-macbook.png ✓
+
+## 시나리오 3: 5개 enrichment 탭 "전체" 모드
+1. Token/Cost 탭: ✓ 데이터 정상 표시
+   - Screenshot: task-7-tokens-tab.png
+2. Code Impact 탭: ✓ 데이터 정상 표시 (다수 세션)
+   - Screenshot: task-7-impact-tab.png
+3. Timeline 탭: ✓ 데이터 표시 (agent 재시작 후)
+   - Screenshot: task-7-deployed-timeline-all.png
+4. Projects 탭: ⚠ "데이터 로딩 중…" + TypeError 에러
+   - Screenshot: task-7-projects-tab.png
+   - Console: TypeError: Cannot read properties of undefined
+5. Recovery 탭: ✓ 데이터 정상 표시
+   - Screenshot: task-7-recovery-tab.png
+
+## 발견된 이슈
+1. "전체" 모드에서 merged 엔드포인트 미사용 (enrichment.ts resolveEnrichmentMachineId 버그)
+2. Projects 탭 TypeError 에러 (데이터 로딩 실패)
+3. MacBook agent는 서버 배포 후 수동 재시작 필요
+

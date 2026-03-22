@@ -1,0 +1,44 @@
+F2 PLAYWRIGHT QA RESULTS
+---
+Check 1 - Page Load: PASS
+  - URL: http://192.168.0.2:3097/?view=timeline
+  - Page Title: "Session Dashboard"
+  - Timeline view loaded successfully with session list and swimlane chart
+  - Navigation tabs visible: Dashboard, Tokens, Impact, Timeline, Projects, Recovery, Memos
+  - Time preset buttons visible: 1h, 6h, 24h, 7d
+  - Project filter dropdown working
+
+Check 2 - No BG Sessions: PASS
+  - "Background:" prefix sessions: 0 (NONE FOUND)
+  - "Task:" prefix sessions: 0 (NONE FOUND)
+  - "@" containing sessions: 0 (NONE FOUND)
+  - Sample titles (5):
+    1. "Python debugger breakpoint not working"
+    2. "Dashboard session notes feature"
+    3. "Gemini auth 플러그인 추가"
+    4. "Opencode Gemini integration setup"
+    5. "Docker interval-aggregator error analysis"
+  - NOTE: 7 sessions with "look_at:" prefix visible (QA agent sessions, not Background/Task pattern)
+  - Human-like titles: 6/13 in 24h view (Python debugger, Dashboard session notes, Gemini auth, etc.)
+
+Check 3 - Time Presets: PASS
+  - 1h preset: 4 sessions displayed (time axis: 오후 11:43 ~ 오전 12:43)
+  - 24h preset: 13 sessions displayed (time axis: 오전 12:44 ~ 오전 12:44 next day)
+  - 7d preset: 60+ sessions displayed (time axis: 3/9 ~ 3/16)
+  - Data correctly updates on each preset change
+  - Session count increases with wider time range: 4 → 13 → 60+
+  - Project filter options also update (more projects visible in 7d)
+
+Check 4 - Console Errors: PASS
+  - JavaScript errors: 0
+  - Warnings: 0
+  - Total console messages at error level: 0
+---
+VERDICT: APPROVE
+
+All 4 checks passed. The Timeline page loads correctly, background sessions are 
+properly filtered (no "Background:", "Task:", or "@" patterns), time presets work 
+with appropriate data scaling, and no JavaScript console errors detected.
+
+Evidence screenshot saved: .sisyphus/evidence/f2-timeline-qa.png
+Test date: 2026-03-16

@@ -1,0 +1,32 @@
+## Task 4: NaN Bug Fix — ?? → || in parseInt calls
+
+### 수정 파일
+- `agent/src/server.ts` (worktree: /Users/sbbae/project/session-dashboard-timeline-fix)
+
+### 수정 내용 (3곳)
+
+**Line 360 (timeline endpoint - from param):**
+- Before: `const from = parseInt(request.query.from ?? '0', 10);`
+- After:  `const from = parseInt(request.query.from || '0', 10);`
+
+**Line 361 (timeline endpoint - to param):**
+- Before: `const to = parseInt(request.query.to ?? String(Date.now()), 10);`
+- After:  `const to = parseInt(request.query.to || String(Date.now()), 10);`
+
+**Line 378 (recovery endpoint - limit param):**
+- Before: `const limitNum = parseInt(limit ?? '20', 10);`
+- After:  `const limitNum = parseInt(limit || '20', 10);`
+
+### 버그 메커니즘
+Fastify는 query string 파라미터가 없을 때 `undefined`가 아닌 `''`(빈 문자열)을 반환.
+`'' ?? '0'` = `''` (nullish coalescing은 null/undefined만 처리)
+→ `parseInt('', 10)` = NaN
+→ SQLite `WHERE time_created >= NaN` = 0 결과
+
+`||` 연산자는 falsy 값(빈 문자열 포함)을 처리하므로:
+`'' || '0'` = `'0'` → `parseInt('0', 10)` = 0 (정상)
+
+### 검증 결과
+- 빌드: `npm run build` → 성공 (tsc 에러 없음)
+- 테스트: `npm test` → 14 test files, 290 tests passed
+- 날짜: 2026-03-15

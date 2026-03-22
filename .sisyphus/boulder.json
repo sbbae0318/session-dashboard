@@ -1,10 +1,1 @@
-{
-  "active_plan": "/Users/sbbae/project/session-dashboard/.sisyphus/plans/opencode-db-enrichment.md",
-  "started_at": "2026-03-14T01:47:10.174Z",
-  "session_ids": [
-    "ses_317b39380ffeCrtCtkuKE7Ez7r"
-  ],
-  "plan_name": "opencode-db-enrichment",
-  "agent": "atlas",
-  "worktree_path": "/Users/sbbae/project/session-dashboard-oc-enrich"
-}
+{"active_plan": "/Users/sbbae/project/session-dashboard/.sisyphus/plans/session-list-ui-improve.md", "started_at": "2026-03-18T06:00:25Z", "session_ids": ["ses_300d538ffffeFYEeWDyVl352Ff"], "plan_name": "session-list-ui-improve", "worktree_path": "/Users/sbbae/project/session-dashboard-visibility-fix"}

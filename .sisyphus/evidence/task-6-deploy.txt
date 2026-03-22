@@ -1,0 +1,6 @@
+8d8a0dd02434   server-session-dashboard                                                                          "docker-entrypoint.s…"   About a minute ago   Up About a minute (healthy)   0.0.0.0:3097->3097/tcp, :::3097->3097/tcp                                                                  session-dashboard
+---
+426602
+24h payload:
+4755
+background sessions in response: 0 (filtered)

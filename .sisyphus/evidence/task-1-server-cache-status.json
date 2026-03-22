@@ -1,0 +1,57 @@
+{
+  "server_machines": {
+    "url": "http://192.168.0.2:3097/api/machines",
+    "response": {
+      "machines": [
+        {
+          "id": "macbook",
+          "alias": "MacBook Pro",
+          "host": "192.168.0.63",
+          "status": "connected",
+          "lastSeen": 1773545414109,
+          "error": null
+        },
+        {
+          "id": "workstation-local",
+          "alias": "Workstation",
+          "host": "host.docker.internal",
+          "status": "connected",
+          "lastSeen": 1773545414109,
+          "error": null
+        }
+      ]
+    }
+  },
+  "macbook_timeline_cache": {
+    "url": "http://192.168.0.2:3097/api/enrichment/macbook/timeline",
+    "available": true,
+    "data_count": 0,
+    "cachedAt": 1773545412506,
+    "note": "서버가 agent에 파라미터 없이 요청하므로 NaN 버그로 빈 배열 캐시됨"
+  },
+  "server_machines_yml": {
+    "macbook": {
+      "id": "macbook",
+      "alias": "MacBook Pro",
+      "host": "192.168.0.63",
+      "port": 3098,
+      "apiKey": "test-local-key",
+      "source": "both"
+    },
+    "workstation_local": {
+      "id": "workstation-local",
+      "alias": "Workstation",
+      "host": "host.docker.internal",
+      "port": 3098,
+      "apiKey": "556ee13b5c3d3f86f2b7569b27abdb01",
+      "source": "opencode"
+    }
+  },
+  "server_poll_behavior": {
+    "feature": "timeline",
+    "poll_interval_ms": 10000,
+    "request_url": "/api/enrichment/timeline",
+    "params_sent": "none (no from/to params)",
+    "bug": "서버가 from/to 파라미터 없이 agent에 요청 → agent에서 NaN 발생 → 빈 배열 반환"
+  }
+}

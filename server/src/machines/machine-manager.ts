@@ -264,6 +264,27 @@ export class MachineManager {
     const cachedDetails: Record<string, CachedSessionDetail> = {};
     const seenIds = new Set<string>();
 
+    // Fetch process table data (best-effort, non-blocking)
+    interface ProcessInfoFromAgent {
+      pid: number;
+      cpu: number;
+      rss: number;
+      cwd: string | null;
+      comm: string;
+    }
+    let processByCwd: Map<string, ProcessInfoFromAgent> = new Map();
+    try {
+      const baseUrl = `http://${machine.host}:${machine.port}`;
+      const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
+      const psRaw = await this.httpGet(`${baseUrl}/api/process-status`, headers, 3000);
+      const psData = JSON.parse(psRaw) as { processes: ProcessInfoFromAgent[] };
+      for (const p of psData.processes ?? []) {
+        if (p.cwd) processByCwd.set(p.cwd, p);
+      }
+    } catch {
+      // Agent may not support process-status yet — skip
+    }
+
     if (machine.source === 'opencode' || machine.source === 'both') {
       const baseUrl = `http://${machine.host}:${machine.port}`;
       const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
@@ -273,6 +294,12 @@ export class MachineManager {
       for (const [id, detail] of Object.entries(response.sessions)) {
         if (seenIds.has(id)) continue;
         seenIds.add(id);
+
+        // CWD 매칭으로 OpenCode 세션에 processMetrics 주입
+        const proc = detail.directory ? processByCwd.get(detail.directory) : null;
+        const processMetrics = proc
+          ? { alive: true, cpuPercent: proc.cpu, rssKb: proc.rss }
+          : null;
 
         sessions.push({
           id,
@@ -295,6 +322,7 @@ export class MachineManager {
           createdAt: detail.createdAt,
           lastActiveAt: detail.lastActiveAt,
           sseConnected: response.meta.sseConnected,
+          processMetrics,
         };
       }
     }

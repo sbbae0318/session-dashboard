@@ -1,0 +1,25 @@
+=== MacBook Agent Health Check ===
+Date: 2026-03-15
+
+--- Port 3098 (machines.yml 설정 포트) ---
+curl -s -H "Authorization: Bearer test-local-key" http://localhost:3098/health
+Response: {"status":"ok","version":"1.0.0","uptime":78242,"ocServeConnected":true,"sseConnected":true,"claudeSourceConnected":true}
+HTTP Status: 200
+
+--- Port 3101 (lsof에서 발견된 다른 포트) ---
+curl -s -H "Authorization: Bearer test-local-key" http://localhost:3101/health
+Response: {"status":"ok","version":"1.0.0","uptime":78202,"ocServeConnected":true,"sseConnected":true,"claudeSourceConnected":true}
+HTTP Status: 200
+
+--- Process Info ---
+PID 49982: node dist/index.js (port 3098, CWD: /Users/sbbae/project/session-dashboard/agent)
+PID 39877: node dist/index.js (port 3101, CWD: unknown - 다른 agent 인스턴스)
+
+--- machines.yml 설정 ---
+host: 192.168.0.63
+port: 3098  ← 실제 agent port
+apiKey: test-local-key
+
+--- 결론 ---
+Agent 정상 동작 중. 연결 문제 없음.
+서버(192.168.0.2)에서도 Docker 컨테이너에서도 3098 포트로 정상 접근 가능.

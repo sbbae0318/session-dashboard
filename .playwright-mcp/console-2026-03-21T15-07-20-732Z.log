@@ -1,0 +1,16 @@
+[  210064ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/sessions:0
+[  210064ms] [ERROR] Failed to fetch sessions: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:5994)
+    at sa (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:6197)
+    at http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:77939 @ http://192.168.0.2:3097/assets/index-mGrNawyd.js:1
+[  210065ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/queries?limit=200:0
+[  210065ms] [ERROR] Failed to fetch queries: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:5994)
+    at ia (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:16419)
+    at http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:77944 @ http://192.168.0.2:3097/assets/index-mGrNawyd.js:1
+[  210065ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/machines:0
+[  210065ms] [ERROR] Failed to fetch machines: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:5994)
+    at aa (http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:6802)
+    at http://192.168.0.2:3097/assets/index-mGrNawyd.js:2:77949 @ http://192.168.0.2:3097/assets/index-mGrNawyd.js:1
+[  217275ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0

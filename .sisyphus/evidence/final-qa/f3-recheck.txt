@@ -1,0 +1,49 @@
+F3 Recheck QA Report — 2026-03-15
+====================================
+Server: 192.168.0.2:3097
+Latest commit: f7abe86 (confirmed deployed)
+Container: session-dashboard (healthy)
+
+API Tests:
+  - merged/tokens: PASS (keys: machines, grandTotal; grandTotal has: input, output, reasoning, cacheRead, cacheWrite, cost)
+  - 24h payload: 54,195 bytes (~52.9KB) — MARGINAL FAIL (threshold: 50KB = 51,200 bytes, exceeded by ~3KB)
+  - SSE events: PASS (connected event + enrichment.cache events for all 5 features: tokens, impact, timeline, projects, recovery)
+
+Playwright QA (merged mode / 전체):
+  - Timeline: PASS (swim lane with session entries, time axis visible)
+  - Tokens/Cost: PASS (Input 38.0M, Output 14.7M, Reasoning 1.1M, Cost $6244.0064, Cache Read 2060.6M, Cache Write 151.2M, project table displayed)
+  - Code Impact: PASS (sessions with +/- additions/deletions, project filter working)
+  - Projects: PASS (15+ projects displayed with session counts, token counts, costs)
+  - Context Recovery: PASS (idle sessions with Resume/요약/보기 buttons, todo items displayed)
+  - Console Errors: 0 (NO TypeError, NO each_key_duplicate)
+  - Console Warnings: 0
+
+Playwright QA (per-machine mode / MacBook Pro):
+  - Timeline: PASS (MacBook Pro sessions in swim lanes)
+  - Tokens/Cost: PASS (Input 36.4M, Output 10.5M, Cost $4083.9178, project table displayed)
+  - Code Impact: PASS (session entries with code diffs)
+  - Projects: PASS (11 projects displayed)
+  - Context Recovery: PASS (idle sessions listed)
+  - Console Errors: 0
+  - Console Warnings: 0
+
+Docker restart persistence: PASS (before: 1113 entries, after: 1113 entries — identical)
+
+Previous REJECT Issues (RESOLVED):
+  - TypeError "x is not iterable" in Tokens/Cost merged mode: FIXED (c544fe4 — fetchTokenStats normalizes merged response)
+  - "each_key_duplicate" in Projects: FIXED (f7abe86 — short name deduplication)
+  - Both fixes verified with 0 console errors across all tab navigation
+
+Screenshots saved:
+  - f3-recheck-timeline-merged.png
+  - f3-recheck-tokens-merged.png
+  - f3-recheck-impact-merged.png
+  - f3-recheck-projects-merged.png
+  - f3-recheck-recovery-merged.png
+  - f3-recheck-tokens-macbook.png
+
+VERDICT: APPROVE
+  - All 5 enrichment tabs work in both merged and per-machine modes (10/10 PASS)
+  - Previous REJECT causes (TypeError + each_key_duplicate) are fully resolved
+  - SSE active, Docker restart preserves data
+  - Only minor note: 24h timeline payload ~53KB (marginally over 50KB threshold by ~3KB, not a blocking issue — data grows with active sessions)

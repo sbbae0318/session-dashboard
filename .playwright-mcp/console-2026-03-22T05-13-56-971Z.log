@@ -1,0 +1,1 @@
+[  130972ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0

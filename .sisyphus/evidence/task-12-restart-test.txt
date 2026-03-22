@@ -1,0 +1,6 @@
+Docker 재기동 후 데이터 유지 확인 (2026-03-15)
+
+재기동 전 timeline 데이터 수: 1098
+재기동 후 timeline 데이터 수: 1098
+
+결과: 데이터 유지 성공 (SQLite persistence 정상 동작)

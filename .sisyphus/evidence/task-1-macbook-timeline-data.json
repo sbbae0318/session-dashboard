@@ -1,0 +1,84 @@
+{
+  "diagnosis": "timeline API 파라미터 없이 호출 시 빈 배열 반환 (NaN 버그)",
+  "without_params": {
+    "url": "http://localhost:3098/api/enrichment/timeline",
+    "response": {"data": [], "available": true, "cachedAt": 1773545624077},
+    "data_count": 0
+  },
+  "with_params": {
+    "url": "http://localhost:3098/api/enrichment/timeline?from=0&to=<now>",
+    "data_count": 795,
+    "available": true
+  },
+  "sample_data": {
+    "first_3": [
+      {
+        "sessionId": "ses_41b5ef9efffe2nRAg5mlcrX8LH",
+        "projectId": "global",
+        "title": "oh_my_opencode.json 성능 최적화",
+        "timeCreated": 1769067316753,
+        "timeUpdated": 1769067378835,
+        "additions": 0,
+        "deletions": 0,
+        "files": 0
+      },
+      {
+        "sessionId": "ses_41b5eb801ffeuAuHMhd5dfoYPd",
+        "projectId": "global",
+        "title": "Background: oh-my-opencode config",
+        "timeCreated": 1769067333631,
+        "timeUpdated": 1769067334956,
+        "additions": 0,
+        "deletions": 0,
+        "files": 0
+      },
+      {
+        "sessionId": "ses_41b5cfb59ffeAh13TwMjNos3NM",
+        "projectId": "global",
+        "title": "Quick question",
+        "timeCreated": 1769067447462,
+        "timeUpdated": 1769067448361,
+        "additions": 0,
+        "deletions": 0,
+        "files": 0
+      }
+    ],
+    "last_3": [
+      {
+        "sessionId": "ses_310ca3a2fffeRpVXayb8cOKRLe",
+        "projectId": "f52c3ef0f44848add4a35c60473cb77cdf753a08",
+        "title": "Explore timeline data flow and MacBook Pro connectivity patterns (@explore subagent)",
+        "timeCreated": 1773539804624,
+        "timeUpdated": 1773539907828,
+        "additions": 0,
+        "deletions": 0,
+        "files": 0
+      },
+      {
+        "sessionId": "ses_310ca263fffegdhmoYwwWtqXuL",
+        "projectId": "f52c3ef0f44848add4a35c60473cb77cdf753a08",
+        "title": "Check git status, gitignore, and machines.yml exposure (@explore subagent)",
+        "timeCreated": 1773539809728,
+        "timeUpdated": 1773539869680,
+        "additions": 0,
+        "deletions": 0,
+        "files": 0
+      },
+      {
+        "sessionId": "ses_310753987ffexQGj1h6IPSy2H3",
+        "projectId": "f52c3ef0f44848add4a35c60473cb77cdf753a08",
+        "title": "Task 1: MacBook Agent 진단 — 연결/데이터 상태 확인 (@Sisyphus-Junior subagent)",
+        "timeCreated": 1773545375352,
+        "timeUpdated": 1773545588293,
+        "additions": 25,
+        "deletions": 0,
+        "files": 1
+      }
+    ]
+  },
+  "db_info": {
+    "path": "/Users/sbbae/.local/share/opencode/opencode.db",
+    "total_sessions": 795,
+    "sessions_in_range_0_to_now": 795
+  }
+}

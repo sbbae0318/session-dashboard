@@ -340,6 +340,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 
   }
 
+  // GET /api/process-status — OS process table scan results
+  app.get('/api/process-status', async () => {
+    const result = await processScanner.scan();
+    return result;
+  });
+
   // POST /hooks/event — Claude Code hooks receiver (always registered)
   app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
     if (!claudeHeartbeat) return { ok: false, error: 'claude not enabled' };

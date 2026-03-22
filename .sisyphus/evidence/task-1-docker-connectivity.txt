@@ -1,0 +1,28 @@
+=== Docker 컨테이너 내부 연결 결과 ===
+Date: 2026-03-15
+
+--- 서버(192.168.0.2)에서 MacBook agent 직접 연결 테스트 ---
+Command: curl -s -w '[HTTP %{http_code}]' -H 'Authorization: Bearer test-local-key' http://192.168.0.63:3098/health
+Result: {"status":"ok","version":"1.0.0","uptime":78242,"ocServeConnected":true,"sseConnected":true}[HTTP 200]
+Status: ✅ 연결 성공
+
+--- Docker 컨테이너(session-dashboard)에서 MacBook agent 연결 테스트 ---
+Command: docker exec session-dashboard wget -qO- --timeout=5 http://192.168.0.63:3098/health
+Result: {"status":"ok","version":"1.0.0","uptime":78242,"ocServeConnected":true,"sseConnected":true}
+Status: ✅ 연결 성공
+
+--- Docker 컨테이너에서 timeline 요청 ---
+Command: docker exec session-dashboard wget -qO- --timeout=5 'http://192.168.0.63:3098/api/enrichment/timeline'
+Result: {"data":[],"available":true,"cachedAt":1773545442994}
+Status: ⚠️ 연결은 성공하지만 데이터 빈 배열 (NaN 버그)
+
+--- 결론 ---
+Docker 컨테이너에서 MacBook LAN IP(192.168.0.63)로의 연결은 정상 작동.
+extra_hosts: host.docker.internal:host-gateway 없이도 LAN IP 직접 접근 가능.
+연결 문제 없음 - 데이터 문제(NaN 버그)가 원인.
+
+--- machines.yml 설정 (서버) ---
+macbook:
+  host: 192.168.0.63
+  port: 3098  ← 올바른 포트
+  apiKey: test-local-key
