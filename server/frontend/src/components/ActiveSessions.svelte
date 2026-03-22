@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DashboardSession } from "../types";
   import { getSessions } from "../lib/stores/sessions.svelte";
-  import { getSelectedSessionId, selectSession, getSourceFilter, getTimeRangeCutoff } from "../lib/stores/filter.svelte";
+  import { getSelectedSessionId, selectSession, getSourceFilter, getTimeRangeCutoff, getProjectFilter, setProjectFilter } from "../lib/stores/filter.svelte";
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail } from '../lib/stores/navigation.svelte';
@@ -20,6 +20,27 @@
   let showMachines = $derived(shouldShowMachineFilter());
   let machineFilter = $derived(getSelectedMachineId());
   let sourceFilter = $derived(getSourceFilter());
+  let projectFilter = $derived(getProjectFilter());
+
+  // Extract unique projectCwd values from all visible sessions
+  let uniqueProjects = $derived(
+    [...new Set(
+      sessions
+        .filter(s => !machineFilter || s.machineId === machineFilter)
+        .filter(s => {
+          if (sourceFilter === "all") return true;
+          if (sourceFilter === "opencode") return !s.source || s.source === "opencode";
+          return s.source === sourceFilter;
+        })
+        .map(s => s.projectCwd)
+        .filter((cwd): cwd is string => cwd != null)
+    )].sort((a, b) => {
+      const aName = a.split("/").pop() ?? a;
+      const bName = b.split("/").pop() ?? b;
+      return aName.localeCompare(bName);
+    })
+  );
+
   // --- Clipboard copy: build session resume command ---
   let toastMessage = $state<string | null>(null);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -71,6 +92,7 @@
         return cutoff === 0 || s.lastActivityTime >= cutoff;
       })
       .filter(s => !s.parentSessionId)
+      .filter(s => !projectFilter || s.projectCwd === projectFilter)
   );
 
 
@@ -96,6 +118,20 @@
 </script>
 
 <div class="active-sessions" data-testid="active-sessions">
+  {#if uniqueProjects.length > 1}
+    <div class="project-filter-bar">
+      <select
+        class="project-filter-select"
+        value={projectFilter ?? ''}
+        onchange={(e) => setProjectFilter(e.currentTarget.value || null)}
+      >
+        <option value="">전체 프로젝트</option>
+        {#each uniqueProjects as cwd}
+          <option value={cwd} title={cwd}>{cwd.split("/").slice(-2).join("/")}</option>
+        {/each}
+      </select>
+    </div>
+  {/if}
   {#if sessions.length === 0}
     <div class="empty-state">세션 없음</div>
   {:else}
@@ -192,6 +228,28 @@
 {/if}
 
 <style>
+  .project-filter-bar {
+    margin-bottom: 0.5rem;
+  }
+
+  .project-filter-select {
+    width: 100%;
+    font-size: 0.78rem;
+    font-family: "SF Mono", "Fira Code", monospace;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .project-filter-select:focus {
+    border-color: var(--accent);
+  }
+
   .sessions-list {
     display: flex;
     flex-direction: column;

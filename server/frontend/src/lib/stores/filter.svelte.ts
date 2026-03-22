@@ -10,6 +10,18 @@ export function selectSession(sessionId: string): void {
 
 export function clearFilter(): void {
   selectedSessionId = null;
+  projectFilter = null;
+}
+
+// Project filter
+let projectFilter = $state<string | null>(null);
+
+export function getProjectFilter(): string | null {
+  return projectFilter;
+}
+
+export function setProjectFilter(cwd: string | null): void {
+  projectFilter = cwd;
 }
 
 // Source filter
