@@ -191,6 +191,15 @@ export class PromptStore {
     return updated;
   }
 
+  /** 특정 세션의 프롬프트를 시간순으로 반환. */
+  getBySessionId(sessionId: string, limit: number = 100): QueryEntry[] {
+    const stmt = this.db.prepare(
+      'SELECT * FROM prompt_history WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?',
+    );
+    const rows = stmt.all(sessionId, limit) as PromptRow[];
+    return rows.map(rowToQueryEntry);
+  }
+
   /** DB 연결 종료. 이후 작업 시 에러 발생. */
   close(): void {
     this.db.close();

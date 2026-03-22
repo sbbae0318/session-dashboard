@@ -8,6 +8,7 @@
     { view: 'timeline' as const, label: 'Timeline' },
     { view: 'projects' as const, label: 'Projects' },
     { view: 'context-recovery' as const, label: 'Recovery' },
+    { view: 'summaries' as const, label: 'Summaries' },
     { view: 'memos' as const, label: 'Memos' },
   ];
 

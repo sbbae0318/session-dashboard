@@ -217,6 +217,43 @@ export class EnrichmentModule implements BackendModule {
       },
     );
 
+    // 범용 세션 요약 — Agent로 위임
+    app.post<{ Params: { machineId: string; sessionId: string } }>(
+      '/api/enrichment/:machineId/session-summary/:sessionId',
+      async (req) => {
+        const { machineId, sessionId } = req.params;
+        const machine = this.machineManager.getMachines().find(m => m.id === machineId);
+        if (!machine) return { error: 'Machine not found' };
+        return this.machineManager.fetchFromMachine(
+          machine,
+          `/api/session-summary/${sessionId}`,
+          { method: 'POST' },
+        );
+      },
+    );
+
+    // 자동 머신 탐색 요약 — 모든 머신을 순회하여 첫 번째 성공 반환
+    app.post<{ Params: { sessionId: string } }>(
+      '/api/session-summary/:sessionId',
+      async (req) => {
+        const { sessionId } = req.params;
+        const machines = this.machineManager.getMachines();
+        for (const machine of machines) {
+          try {
+            const result = await this.machineManager.fetchFromMachine<{ summary: string | null; error?: string }>(
+              machine,
+              `/api/session-summary/${sessionId}`,
+              { method: 'POST' },
+            );
+            if (result.summary) return { ...result, machineId: machine.id };
+          } catch {
+            continue;
+          }
+        }
+        return { summary: null, error: 'No machine could generate summary' };
+      },
+    );
+
   }
 
   async start(): Promise<void> {

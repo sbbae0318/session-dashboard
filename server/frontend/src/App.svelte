@@ -19,6 +19,7 @@
   import TimelinePage from './components/pages/TimelinePage.svelte';
   import ProjectsPage from './components/pages/ProjectsPage.svelte';
   import ContextRecoveryPage from './components/pages/ContextRecoveryPage.svelte';
+  import SummariesPage from './components/pages/SummariesPage.svelte';
   import MemosPage from './components/pages/MemosPage.svelte';
 
   let connected = $state(false);
@@ -201,6 +202,8 @@
     <ProjectsPage />
   {:else if currentView === 'context-recovery'}
     <ContextRecoveryPage />
+  {:else if currentView === 'summaries'}
+    <SummariesPage />
   {:else if currentView === 'memos'}
     <MemosPage />
   {:else}

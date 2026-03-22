@@ -348,3 +348,21 @@ export async function fetchSummary(sessionId: string): Promise<void> {
     summaryLoadingIds.update(ids => ids.filter(id => id !== sessionId));
   }
 }
+
+/** 범용 세션 요약 — 모든 세션 대상 (머신 자동 탐색) */
+export async function fetchSessionSummary(sessionId: string): Promise<void> {
+  summaryLoadingIds.update(ids => [...ids, sessionId]);
+  try {
+    const res = await fetchJSON<{ summary: string; generatedAt: number; promptCount?: number }>(
+      `/api/session-summary/${sessionId}`,
+      { method: 'POST' },
+    );
+    if (res.summary) {
+      summaryCache.update(cache => ({ ...cache, [sessionId]: res }));
+    }
+  } catch (e) {
+    console.error('Failed to fetch session summary:', e);
+  } finally {
+    summaryLoadingIds.update(ids => ids.filter(id => id !== sessionId));
+  }
+}

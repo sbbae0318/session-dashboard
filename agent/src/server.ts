@@ -598,6 +598,80 @@ ${formatted}`;
     },
   );
 
+  // POST /api/session-summary/:sessionId — 범용 세션 요약 (OpenCode + Claude 모두)
+  app.post<{ Params: { sessionId: string } }>(
+    '/api/session-summary/:sessionId',
+    async (request) => {
+      const { sessionId } = request.params;
+
+      const cached = summaryCache.get(sessionId);
+      if (cached && (Date.now() - cached.generatedAt) < SUMMARY_CACHE_TTL_MS) {
+        return { summary: cached.summary, generatedAt: cached.generatedAt, cached: true };
+      }
+
+      if (!promptStore) {
+        return { summary: null, error: 'PromptStore not available' };
+      }
+
+      const prompts = promptStore.getBySessionId(sessionId, 50);
+      if (prompts.length === 0) {
+        return { summary: null, error: 'No prompts found for session' };
+      }
+
+      const formatted = prompts.map(p => {
+        const d = new Date(p.timestamp);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `[${hh}:${mm}] "${p.query}"`;
+      }).join('\n');
+
+      const sessionTitle = prompts[0].sessionTitle ?? sessionId.slice(0, 12);
+
+      const prompt = `다음은 코딩 세션의 사용자 프롬프트 목록입니다.
+이 세션에서 무슨 작업을 했는지 간결하게 요약하세요.
+
+규칙:
+- 한국어로 작성
+- 2~3문장으로 요약: 무엇을 했고, 현재 상태는 무엇인지
+- 핵심 작업만 언급 (사소한 것 제외)
+
+세션: ${sessionTitle}
+프롬프트 (${prompts.length}개):
+${formatted}`;
+
+      try {
+        const summary = await new Promise<string>((resolve, reject) => {
+          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5'], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 60_000,
+          });
+
+          let stdout = '';
+          let stderr = '';
+          child.stdout.on('data', (chunk: Buffer) => { stdout += chunk; });
+          child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
+
+          child.on('close', (code) => {
+            if (code === 0) resolve(stdout.trim());
+            else reject(new Error(`claude -p exited ${code}: ${stderr}`));
+          });
+
+          child.on('error', reject);
+          child.stdin.write(prompt);
+          child.stdin.end();
+        });
+
+        const result = { summary, generatedAt: Date.now() };
+        summaryCache.set(sessionId, result);
+        return { ...result, promptCount: prompts.length, cached: false };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[session-summary] claude -p failed:', msg);
+        return { summary: null, error: 'Summary generation failed' };
+      }
+    },
+  );
+
   app.get<{ Querystring: { q?: string; from?: string; to?: string; limit?: string; offset?: string } }>(
     '/api/search',
     async (request, reply) => {

@@ -1,5 +1,5 @@
 
-type ViewType = 
+type ViewType =
   | 'overview'
   | 'session-detail'
   | 'token-cost'
@@ -7,6 +7,7 @@ type ViewType =
   | 'timeline'
   | 'projects'
   | 'context-recovery'
+  | 'summaries'
   | 'memos';
 
 const VALID_VIEWS: ViewType[] = [
@@ -17,6 +18,7 @@ const VALID_VIEWS: ViewType[] = [
   'timeline',
   'projects',
   'context-recovery',
+  'summaries',
   'memos',
 ];
 
@@ -26,6 +28,7 @@ const ENRICHMENT_VIEWS: ViewType[] = [
   'timeline',
   'projects',
   'context-recovery',
+  'summaries',
 ];
 
 interface NavigationState {
