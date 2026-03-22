@@ -304,16 +304,23 @@ export class ClaudeHeartbeat {
     let lastPromptTime: number | null = null;
     let lastResponseTime: number | null = null;
 
-    // Forward scan: find first user message → title
+    // Forward scan: find first user message → title, also detect custom-title
+    let firstUserTitle: string | null = null;
+    let customTitle: string | null = null;
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
         const entry = JSON.parse(line) as Record<string, unknown>;
-        if (entry.type === 'user') {
+        // custom-title: 사용자가 세션 이름을 변경한 경우 (마지막 값 우선)
+        if (entry.type === 'custom-title' && typeof entry.customTitle === 'string') {
+          customTitle = entry.customTitle.slice(0, MAX_TITLE_LENGTH).trim();
+          continue;
+        }
+        if (!firstUserTitle && entry.type === 'user') {
           const msg = entry.message as Record<string, unknown> | undefined;
           const msgContent = msg?.content;
           if (typeof msgContent === 'string' && msgContent.trim()) {
-            title = msgContent.slice(0, MAX_TITLE_LENGTH).trim();
+            firstUserTitle = msgContent.slice(0, MAX_TITLE_LENGTH).trim();
           } else if (Array.isArray(msgContent)) {
             for (const part of msgContent) {
               const p = part as Record<string, unknown>;
@@ -322,17 +329,18 @@ export class ClaudeHeartbeat {
                 typeof p.text === 'string' &&
                 p.text.trim()
               ) {
-                title = (p.text as string).slice(0, MAX_TITLE_LENGTH).trim();
+                firstUserTitle = (p.text as string).slice(0, MAX_TITLE_LENGTH).trim();
                 break;
               }
             }
           }
-          break;
         }
       } catch {
         continue;
       }
     }
+    // custom-title이 있으면 우선, 없으면 첫 user 메시지를 title로
+    title = customTitle ?? firstUserTitle;
 
     // Reverse scan: find last user/assistant → status, timestamps, lastPrompt
     let foundStatus = false;
