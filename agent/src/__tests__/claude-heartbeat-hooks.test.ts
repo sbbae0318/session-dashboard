@@ -286,5 +286,41 @@ describe('ClaudeHeartbeat — hook handler 상태 전이', () => {
       expect(s.waitingForInput).toBe(false);
       expect(s.currentTool).toBeNull();
     });
+
+    // ── lastHeartbeat / lastFileModified 갱신 ──
+
+    describe('활동 시간 갱신 (Working 중 시간 업데이트)', () => {
+      it('handleToolEvent → lastHeartbeat 갱신', async () => {
+        const before = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        await new Promise(r => setTimeout(r, 5));
+        hb.handleToolEvent(SID, 'Bash');
+        const after = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        expect(after).toBeGreaterThan(before);
+      });
+
+      it('handlePromptEvent → lastHeartbeat 갱신', async () => {
+        const before = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        await new Promise(r => setTimeout(r, 5));
+        hb.handlePromptEvent(SID, 'test', Date.now());
+        const after = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        expect(after).toBeGreaterThan(before);
+      });
+
+      it('handleStatusEvent → lastHeartbeat 갱신', async () => {
+        const before = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        await new Promise(r => setTimeout(r, 5));
+        hb.handleStatusEvent(SID, 'idle');
+        const after = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        expect(after).toBeGreaterThan(before);
+      });
+
+      it('handleWaitingEvent → lastHeartbeat 갱신', async () => {
+        const before = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        await new Promise(r => setTimeout(r, 5));
+        hb.handleWaitingEvent(SID, true);
+        const after = hb.getActiveSessions().find(s => s.sessionId === SID)!.lastHeartbeat;
+        expect(after).toBeGreaterThan(before);
+      });
+    });
   });
 });

@@ -107,11 +107,14 @@ export class ClaudeHeartbeat {
   handleToolEvent(sessionId: string, toolName: string | null): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+    const now = Date.now();
     // PreToolUse means permission was granted → clear waitingForInput
     this.sessions.set(sessionId, {
       ...session,
       currentTool: toolName,
       hooksActive: true,
+      lastHeartbeat: now,
+      lastFileModified: now,
       ...(toolName ? { waitingForInput: false, status: 'busy' as const } : {}),
     });
   }
@@ -120,10 +123,13 @@ export class ClaudeHeartbeat {
   handleStatusEvent(sessionId: string, status: 'busy' | 'idle'): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+    const now = Date.now();
     this.sessions.set(sessionId, {
       ...session,
       status,
       hooksActive: true,
+      lastHeartbeat: now,
+      lastFileModified: now,
       // Clear tool and waitingForInput on idle
       ...(status === 'idle' ? { currentTool: null, waitingForInput: false } : {}),
     });
@@ -133,7 +139,8 @@ export class ClaudeHeartbeat {
   handleWaitingEvent(sessionId: string, waiting: boolean): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    this.sessions.set(sessionId, { ...session, waitingForInput: waiting, hooksActive: true });
+    const now = Date.now();
+    this.sessions.set(sessionId, { ...session, waitingForInput: waiting, hooksActive: true, lastHeartbeat: now, lastFileModified: now });
   }
 
   /** Update lastPrompt from UserPromptSubmit hook events */
@@ -143,6 +150,7 @@ export class ClaudeHeartbeat {
     const lastPrompt = prompt.length > MAX_PROMPT_LENGTH
       ? prompt.slice(0, MAX_PROMPT_LENGTH)
       : prompt;
+    const now = Date.now();
     this.sessions.set(sessionId, {
       ...session,
       status: 'busy',
@@ -150,6 +158,8 @@ export class ClaudeHeartbeat {
       lastPromptTime: timestamp,
       waitingForInput: false,
       hooksActive: true,
+      lastHeartbeat: now,
+      lastFileModified: now,
       // 첫 prompt를 title로 설정 (JSONL 파싱 전에도 즉시 title 확보)
       title: session.title ?? lastPrompt.slice(0, MAX_TITLE_LENGTH),
     });
