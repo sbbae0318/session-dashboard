@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail } from '../lib/stores/navigation.svelte';
-  import { relativeTime, copyToClipboard } from "../lib/utils";
+  import { relativeTime, formatDuration, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -110,7 +110,7 @@
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
                 <span class="status-badge {ds.cssClass}">{ds.label}</span>
-                <span class="session-title">{session.title || session.sessionId.slice(0, 8)}</span>
+                <span class="session-title">{session.title || session.lastPrompt?.slice(0, 60) || session.sessionId.slice(0, 8)}</span>
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
                   <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
                 {/if}
@@ -127,6 +127,10 @@
                 {:else}
                   <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
                 {/if}
+                {#if (ds.cssClass === 'status-working' || ds.cssClass === 'status-waiting') && session.startTime > 0}
+                  <span class="meta-sep">·</span>
+                  <span class="session-duration-meta">{(tick, formatDuration(Date.now() - session.startTime))}</span>
+                {/if}
                 {#if session.machineAlias}
                   <span class="meta-sep">·</span>
                   <span class="machine-meta">{session.machineAlias}</span>
@@ -134,6 +138,9 @@
                 <span class="meta-sep">·</span>
                 {#if session.source === "claude-code"}
                   <span class="source-text claude">Claude</span>
+                  {#if session.hooksActive === false}
+                    <span class="no-hooks-indicator" title="Hooks 미연결 — currentTool, lastPrompt 등 실시간 데이터 미수신">no hooks</span>
+                  {/if}
                 {:else}
                   <span class="source-text opencode">OpenCode</span>
                 {/if}
@@ -251,6 +258,13 @@
   .source-text.claude {
     color: #a871ff;
   }
+
+  .no-hooks-indicator {
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    opacity: 0.5;
+    font-style: italic;
+  }
   .session-title {
     font-size: 0.85rem;
     font-weight: 600;
@@ -355,6 +369,13 @@
   .session-duration {
     font-size: 0.7rem;
     color: var(--text-secondary);
+  }
+
+  .session-duration-meta {
+    white-space: nowrap;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.65rem;
+    opacity: 0.8;
   }
 
   .session-cwd {

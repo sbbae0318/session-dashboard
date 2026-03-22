@@ -27,6 +27,7 @@ export interface CachedSessionDetail {
   readonly lastFileModified?: number | null;
   readonly sseConnected?: boolean;
   readonly waitingForInput?: boolean;
+  readonly hooksActive?: boolean;
   readonly title?: string | null;
   readonly parentSessionId?: string | null;
   readonly createdAt?: number;
@@ -321,6 +322,7 @@ export class MachineManager {
             lastResponseTime: (session.lastResponseTime as number) ?? null,
             lastFileModified: (session.lastFileModified as number) ?? null,
             waitingForInput: (session.waitingForInput as boolean) ?? false,
+            hooksActive: (session.hooksActive as boolean) ?? false,
           };
         }
       }

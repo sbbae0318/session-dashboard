@@ -31,6 +31,7 @@ export interface DashboardSession {
   lastPromptTime: number | null;
 
   source?: "opencode" | "claude-code";
+  hooksActive?: boolean;
 
   // Machine fields — runtime-injected by MachineManager (not in JSONL)
   machineId: string;

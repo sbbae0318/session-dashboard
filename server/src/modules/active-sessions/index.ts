@@ -23,6 +23,7 @@ interface DashboardSession {
   lastPromptTime: number | null;
 
   source?: "opencode" | "claude-code";
+  hooksActive?: boolean;
 
   // Machine fields — runtime-injected by MachineManager (not in JSONL)
   machineId: string;
@@ -227,6 +228,7 @@ export class ActiveSessionsModule implements BackendModule {
           ? (s.lastPromptTime as number | null) ?? null
           : cached?.lastPromptTime ?? null,
         source: isClaudeCode ? 'claude-code' : 'opencode',
+        ...(isClaudeCode ? { hooksActive: cached?.hooksActive ?? false } : {}),
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
         machineAlias: (s.machineAlias as string) ?? '',

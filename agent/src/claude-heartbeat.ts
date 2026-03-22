@@ -26,6 +26,7 @@ export interface ClaudeSessionInfo {
   // Hook-sourced fields (real-time updates from Claude Code hooks)
   readonly currentTool: string | null;
   readonly waitingForInput: boolean;
+  readonly hooksActive: boolean;
 }
 
 interface ConversationData {
@@ -102,7 +103,7 @@ export class ClaudeHeartbeat {
   handleToolEvent(sessionId: string, toolName: string | null): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    this.sessions.set(sessionId, { ...session, currentTool: toolName });
+    this.sessions.set(sessionId, { ...session, currentTool: toolName, hooksActive: true });
   }
 
   /** Update status from UserPromptSubmit/Stop hook events */
@@ -112,6 +113,7 @@ export class ClaudeHeartbeat {
     this.sessions.set(sessionId, {
       ...session,
       status,
+      hooksActive: true,
       // Clear tool and waitingForInput on idle
       ...(status === 'idle' ? { currentTool: null, waitingForInput: false } : {}),
     });
@@ -121,7 +123,7 @@ export class ClaudeHeartbeat {
   handleWaitingEvent(sessionId: string, waiting: boolean): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    this.sessions.set(sessionId, { ...session, waitingForInput: waiting });
+    this.sessions.set(sessionId, { ...session, waitingForInput: waiting, hooksActive: true });
   }
 
   /** Update lastPrompt from UserPromptSubmit hook events */
@@ -137,6 +139,9 @@ export class ClaudeHeartbeat {
       lastPrompt,
       lastPromptTime: timestamp,
       waitingForInput: false,
+      hooksActive: true,
+      // 첫 prompt를 title로 설정 (JSONL 파싱 전에도 즉시 title 확보)
+      title: session.title ?? lastPrompt.slice(0, MAX_TITLE_LENGTH),
     });
   }
 
@@ -242,6 +247,7 @@ export class ClaudeHeartbeat {
         // Preserve hook-sourced fields only when busy — reset on idle
         currentTool: status === 'idle' ? null : (this.sessions.get(sessionId)?.currentTool ?? null),
         waitingForInput: status === 'idle' ? false : (this.sessions.get(sessionId)?.waitingForInput ?? false),
+        hooksActive: this.sessions.get(sessionId)?.hooksActive ?? false,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -485,6 +491,7 @@ export class ClaudeHeartbeat {
                 lastPrompt,
                 currentTool: null,
                 waitingForInput: false,
+                hooksActive: false,
               });
             } catch {
               continue;
