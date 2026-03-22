@@ -103,7 +103,13 @@ export class ClaudeHeartbeat {
   handleToolEvent(sessionId: string, toolName: string | null): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    this.sessions.set(sessionId, { ...session, currentTool: toolName, hooksActive: true });
+    // PreToolUse means permission was granted → clear waitingForInput
+    this.sessions.set(sessionId, {
+      ...session,
+      currentTool: toolName,
+      hooksActive: true,
+      ...(toolName ? { waitingForInput: false, status: 'busy' as const } : {}),
+    });
   }
 
   /** Update status from UserPromptSubmit/Stop hook events */
@@ -244,9 +250,11 @@ export class ClaudeHeartbeat {
         lastFileModified,
         lastResponseTime,
         lastPrompt,
-        // Preserve hook-sourced fields only when busy — reset on idle
+        // JSONL re-scan: always reset waitingForInput.
+        // If waitingForInput is truly active, the next Notification hook will re-set it.
+        // This prevents stale WAITING state after permission grant or crash.
         currentTool: status === 'idle' ? null : (this.sessions.get(sessionId)?.currentTool ?? null),
-        waitingForInput: status === 'idle' ? false : (this.sessions.get(sessionId)?.waitingForInput ?? false),
+        waitingForInput: false,
         hooksActive: this.sessions.get(sessionId)?.hooksActive ?? false,
       };
 

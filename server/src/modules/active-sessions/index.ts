@@ -3,33 +3,7 @@ import type { BackendModule } from "../types.js";
 import { MachineManager } from "../../machines/machine-manager.js";
 import type { CachedSessionDetail } from "../../machines/machine-manager.js";
 import type { QueryEntry } from "../recent-prompts/queries-reader.js";
-
-// DashboardSession type (matches frontend/src/types.ts)
-interface DashboardSession {
-  sessionId: string;
-  parentSessionId: string | null;
-  childSessionIds: string[];
-  title: string | null;
-  projectCwd: string | null;
-  status: "active" | "idle";
-  waitingForInput: boolean;
-  startTime: number;
-  lastActivityTime: number;
-  currentTool: string | null;
-  duration: string | null;
-  summary: string | null;
-  apiStatus: "idle" | "busy" | "retry" | null;
-  lastPrompt: string | null;
-  lastPromptTime: number | null;
-
-  source?: "opencode" | "claude-code";
-  hooksActive?: boolean;
-
-  // Machine fields — runtime-injected by MachineManager (not in JSONL)
-  machineId: string;
-  machineHost: string;
-  machineAlias: string;
-}
+import type { DashboardSession, SessionsResponse } from '../../shared/api-contract.js';
 
 const SESSION_MEMORY_TTL_MS = 300_000; // 5 minutes
 
@@ -49,7 +23,7 @@ export class ActiveSessionsModule implements BackendModule {
   }
 
   registerRoutes(app: FastifyInstance): void {
-    app.get("/api/sessions", async () => {
+    app.get("/api/sessions", async (): Promise<SessionsResponse> => {
       return { sessions: this.cachedSessions };
     });
   }

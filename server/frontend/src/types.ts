@@ -1,53 +1,26 @@
-export interface QueryEntry {
-  sessionId: string;
-  sessionTitle: string | null;
-  timestamp: number;
-  query: string;
-  isBackground: boolean;
-  source?: "opencode" | "claude-code";
-  completedAt: number | null;
+/**
+ * 프론트엔드 타입 — shared/api-contract.ts에서 공유 타입을 re-export하고,
+ * 프론트엔드 전용 타입(Memo 등)만 여기서 정의합니다.
+ */
 
-  // Machine fields — runtime-injected by MachineManager (not in JSONL)
-  machineId: string;
-  machineHost: string;
-  machineAlias: string;
-}
+// 공유 타입 re-export (백엔드 ↔ 프론트엔드 계약)
+export type {
+  DashboardSession,
+  QueryEntry,
+  MachineInfo,
+  SessionSource,
+  ApiStatus,
+  SessionStatus,
+  DisplayStatusLabel,
+  HealthResponse,
+  SessionsResponse,
+  QueriesResponse,
+  MachinesResponse,
+  SSEEventMap,
+  SSEEventName,
+} from '../../src/shared/api-contract.js';
 
-export interface DashboardSession {
-  sessionId: string;
-  parentSessionId: string | null;
-  childSessionIds: string[];
-  title: string | null;
-  projectCwd: string | null;
-  status: "active" | "idle";
-  waitingForInput?: boolean;
-  startTime: number;
-  lastActivityTime: number;
-  currentTool: string | null;
-  duration: string | null;
-  summary: string | null;
-  apiStatus: "idle" | "busy" | "retry" | null;
-  lastPrompt: string | null;
-  lastPromptTime: number | null;
-
-  source?: "opencode" | "claude-code";
-  hooksActive?: boolean;
-
-  // Machine fields — runtime-injected by MachineManager (not in JSONL)
-  machineId: string;
-  machineHost: string;
-  machineAlias: string;
-}
-
-export interface MachineInfo {
-  id: string;
-  alias: string;
-  host: string;
-  status: 'connected' | 'disconnected';
-  lastSeen: number | null;
-  error: string | null;
-  source?: "opencode" | "claude-code" | "both";
-}
+// ── 프론트엔드 전용 타입 (Memo 등) ──
 
 export interface Memo {
   id: string;

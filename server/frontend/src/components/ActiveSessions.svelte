@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DashboardSession } from "../types";
   import { getSessions } from "../lib/stores/sessions.svelte";
-  import { getSelectedSessionId, selectSession, getSourceFilter } from "../lib/stores/filter.svelte";
+  import { getSelectedSessionId, selectSession, getSourceFilter, getTimeRangeCutoff } from "../lib/stores/filter.svelte";
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail } from '../lib/stores/navigation.svelte';
@@ -63,6 +63,12 @@
         if (sourceFilter === "all") return true;
         if (sourceFilter === "opencode") return !s.source || s.source === "opencode";
         return s.source === sourceFilter;
+      })
+      .filter(s => {
+        // Active sessions always pass time filter
+        if (s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.waitingForInput) return true;
+        const cutoff = getTimeRangeCutoff();
+        return cutoff === 0 || s.lastActivityTime >= cutoff;
       })
       .filter(s => !s.parentSessionId)
   );

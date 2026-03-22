@@ -160,6 +160,10 @@ export class SessionCache {
   // -------------------------------------------------------------------------
 
   start(): void {
+    // Seed from opencode.db immediately so session data is available
+    // even before SSE connects (or if oc-serve is completely absent).
+    this.bootstrapFromDb();
+
     this.connectSse();
     this.evictionTimer = setInterval(() => this.evict(), EVICTION_INTERVAL_MS);
     this.deletionCheckTimer = setInterval(() => { void this.checkDeletedSessions(); }, 60_000);

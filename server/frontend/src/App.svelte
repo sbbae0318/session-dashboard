@@ -5,7 +5,7 @@
   import type { QueryEntry, DashboardSession, MachineInfo } from "./types";
   import { fetchSessions, getSessions, setSessions } from "./lib/stores/sessions.svelte";
   import { fetchQueries, addQuery } from "./lib/stores/queries.svelte";
-  import { getSelectedSessionId, clearFilter, getSourceFilter, setSourceFilter } from "./lib/stores/filter.svelte";
+  import { getSelectedSessionId, clearFilter, getSourceFilter, setSourceFilter, getTimeRange, setTimeRange, type TimeRange } from "./lib/stores/filter.svelte";
   import MachineSelector from './components/MachineSelector.svelte';
   import { fetchMachines, setMachines } from './lib/stores/machine.svelte';
   import { createSSEClient } from "./lib/sse-client";
@@ -29,6 +29,14 @@
   let isDetail = $derived(isDetailView());
   let detailId = $derived(getDetailSessionId());
   let sourceFilter = $derived(getSourceFilter());
+  let timeRange = $derived(getTimeRange());
+  const timeRangeOptions: { value: TimeRange; label: string }[] = [
+    { value: "1h", label: "1h" },
+    { value: "6h", label: "6h" },
+    { value: "1d", label: "1d" },
+    { value: "7d", label: "7d" },
+    { value: "all", label: "All" },
+  ];
   let currentView = $derived(getCurrentView());
   let showBackground = $state(false);
   let backgroundCount = $state(0);
@@ -153,6 +161,15 @@
     {connected ? "●" : "○"}
   </span>
   <MachineSelector />
+  <div class="time-filter">
+    {#each timeRangeOptions as opt (opt.value)}
+      <button
+        class="source-filter-btn"
+        class:active={timeRange === opt.value}
+        onclick={() => setTimeRange(opt.value)}
+      >{opt.label}</button>
+    {/each}
+  </div>
   <div class="source-filter">
     <button
       class="source-filter-btn"
@@ -277,12 +294,19 @@
     flex-shrink: 0;
   }
 
-  .source-filter {
+  .time-filter {
     display: flex;
     gap: 0.25rem;
     padding: 0;
     margin-bottom: 0;
     margin-left: auto;
+  }
+
+  .source-filter {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0;
+    margin-bottom: 0;
   }
 
   .source-filter-btn {

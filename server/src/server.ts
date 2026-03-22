@@ -18,6 +18,7 @@ import type { BackendModule } from "./modules/types.js";
 import type { SSEManager } from "./sse/event-stream.js";
 import type { MachineManager } from './machines/machine-manager.js';
 import type { EnrichmentModule } from './modules/enrichment/index.js';
+import type { HealthResponse, MachinesResponse } from './shared/api-contract.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -45,7 +46,7 @@ export async function createServer(
   });
 
   // ── Health check ──
-  app.get("/health", async () => {
+  app.get("/health", async (): Promise<HealthResponse> => {
     const statuses = options.machineManager.getMachineStatuses();
     return {
       status: "ok",
@@ -57,17 +58,16 @@ export async function createServer(
   });
 
   // ── Machine statuses ──
-  app.get("/api/machines", async () => {
+  app.get("/api/machines", async (): Promise<MachinesResponse> => {
     const statuses = options.machineManager.getMachineStatuses();
     return {
       machines: statuses.map(s => ({
         id: s.machineId,
         alias: s.machineAlias,
         host: s.machineHost,
-        status: s.connected ? 'connected' : 'disconnected',
+        status: s.connected ? 'connected' as const : 'disconnected' as const,
         lastSeen: s.lastSeen,
         error: s.error,
-        // NOTE: apiKey is NOT exposed (security)
       })),
     };
   });

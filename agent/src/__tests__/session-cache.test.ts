@@ -1479,4 +1479,39 @@ describe('SessionCache', () => {
     expect(Object.keys(cache.getSessionDetails().sessions)).toHaveLength(0);
   });
 
+  // ── 46. DB fallback seeds sessions even when SSE never connects (oc-serve down) ──
+
+  it('seeds sessions from DB at start() even when SSE connection fails', async () => {
+    mockHttpGet.mockImplementation(
+      (_url: string, _callback: unknown) => {
+        const req = { on: vi.fn((event: string, handler: (err: Error) => void) => {
+          if (event === 'error') handler(new Error('connect ECONNREFUSED'));
+        }) };
+        return req;
+      },
+    );
+
+    const mockDbReader = {
+      isAvailable: () => true,
+      getRecentSessionMetas: () => [
+        { id: 'sess-db-1', title: 'DB Session 1', parentId: null, directory: '/project/a', timeCreated: 1000, timeUpdated: 2000 },
+        { id: 'sess-db-2', title: 'DB Session 2', parentId: 'sess-db-1', directory: '/project/a', timeCreated: 1100, timeUpdated: 1800 },
+      ],
+    };
+
+    cache = new SessionCache(4096, ':memory:');
+    cache.setDbReader(mockDbReader as any);
+    cache.start();
+    await flushPromises();
+
+    const sessions = cache.getSessionDetails().sessions;
+    expect(sessions['sess-db-1']).toBeDefined();
+    expect(sessions['sess-db-1'].title).toBe('DB Session 1');
+    expect(sessions['sess-db-1'].status).toBe('idle');
+    expect(sessions['sess-db-2']).toBeDefined();
+    expect(sessions['sess-db-2'].parentSessionId).toBe('sess-db-1');
+
+    expect(cache.getConnectionState()).not.toBe('connected');
+  });
+
 });
