@@ -559,6 +559,7 @@ export class MachineManager {
         reject(error);
       });
 
+      req.write('{}');
       req.end();
     });
   }
