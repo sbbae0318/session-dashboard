@@ -205,6 +205,32 @@ describe('ClaudeHeartbeat — hook handler 상태 전이', () => {
       expect(s.status).toBe('idle');
     });
 
+    // ── idle_prompt vs permission_prompt ──
+
+    it('🐛 idle_prompt → status=idle, waitingForInput=false (WAITING 아님)', () => {
+      // idle_prompt는 "작업 완료 후 다음 입력 대기" — IDLE로 표시해야 함
+      // server.ts에서 handleStatusEvent(idle)로 호출하므로 여기서 시뮬레이션
+      hb.handleStatusEvent(SID, 'idle');
+      const s = hb.getActiveSessions().find(s => s.sessionId === SID)!;
+      expect(s.status).toBe('idle');
+      expect(s.waitingForInput).toBe(false);
+      expect(s.currentTool).toBeNull();
+    });
+
+    it('permission_prompt → waitingForInput=true (WAITING)', () => {
+      hb.handleWaitingEvent(SID, true);
+      const s = hb.getActiveSessions().find(s => s.sessionId === SID)!;
+      expect(s.waitingForInput).toBe(true);
+    });
+
+    it('🐛 idle_prompt 후 재접근 시 WAITING 아닌 IDLE', () => {
+      // 시나리오: 작업 완료 → idle_prompt → 사용자 방치 → 대시보드에 IDLE 표시
+      hb.handleStatusEvent(SID, 'idle'); // idle_prompt equivalent
+      const s = hb.getActiveSessions().find(s => s.sessionId === SID)!;
+      expect(s.waitingForInput).toBe(false);
+      expect(s.status).toBe('idle');
+    });
+
     // ── 연속 Notification ──
 
     it('연속 Notification은 마지막 상태 유지', () => {

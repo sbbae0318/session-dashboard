@@ -366,8 +366,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       }
       case 'Notification': {
         const notifType = String(body.notification_type ?? '');
-        if (notifType === 'permission_prompt' || notifType === 'idle_prompt') {
+        if (notifType === 'permission_prompt') {
+          // permission_prompt: tool 실행 허가 대기 → WAITING
           claudeHeartbeat.handleWaitingEvent(sessionId, true);
+        } else if (notifType === 'idle_prompt') {
+          // idle_prompt: 작업 완료 후 다음 입력 대기 → IDLE (not WAITING)
+          claudeHeartbeat.handleStatusEvent(sessionId, 'idle');
         }
         break;
       }
