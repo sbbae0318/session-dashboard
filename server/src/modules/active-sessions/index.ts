@@ -189,7 +189,11 @@ export class ActiveSessionsModule implements BackendModule {
           ? (s.startTime as number) ?? Date.now()
           : (s.time as { created?: number })?.created ?? Date.now(),
         lastActivityTime: isClaudeCode
-          ? (s.lastResponseTime as number) ?? (s.lastFileModified as number) ?? Date.now()
+          ? Math.max(
+              (s.lastResponseTime as number) ?? 0,
+              (s.lastFileModified as number) ?? 0,
+              (s.lastPromptTime as number) ?? 0,
+            ) || Date.now()
           : (s.time as { updated?: number })?.updated ?? Date.now(),
         currentTool: isClaudeCode
           ? (cached?.currentTool ?? null)

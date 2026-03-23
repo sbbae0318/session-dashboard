@@ -440,7 +440,7 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
       expect(sessions[0].lastPromptTime).toBeNull();
     });
 
-    it('should use lastResponseTime for lastActivityTime when available', async () => {
+    it('should use max of lastResponseTime, lastFileModified, lastPromptTime for lastActivityTime', async () => {
       setupUrlRouter({
         'http://10.0.0.2:3100/api/claude/sessions': JSON.stringify({
           sessions: [{
@@ -457,8 +457,8 @@ describe('ActiveSessionsModule — Claude Code integration', () => {
       const sessions = await pollAndCapture([makeClaudeMachine()]);
 
       expect(sessions).toHaveLength(1);
-      // lastResponseTime should win over lastFileModified and lastHeartbeat
-      expect(sessions[0].lastActivityTime).toBe(1800000);
+      // Math.max of all timestamps — lastFileModified (2000000) is newest
+      expect(sessions[0].lastActivityTime).toBe(2000000);
     });
 
     it('should fall back to lastFileModified when lastResponseTime is absent', async () => {
