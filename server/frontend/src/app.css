@@ -161,6 +161,7 @@ main {
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
+  min-height: 1.75rem;
 }
 
 .sessions-panel-head h2 {
