@@ -152,45 +152,56 @@ main {
   overflow: hidden;
 }
 
-/* ── Session Detail View ── */
+/* ── Session Detail Bar (inside sidebar) ── */
 
-.detail-header {
+.sessions-panel-head {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
 
-.back-btn {
+.sessions-panel-head h2 {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.detail-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.detail-bar-btn {
   background: none;
   border: 1px solid var(--border);
-  color: var(--accent);
-  font-size: 0.85rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.2s ease, background 0.2s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.back-btn:hover {
-  border-color: var(--accent);
-  background: rgba(88, 166, 255, 0.1);
-}
-
-.detail-session-id {
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 0.75rem;
   color: var(--text-secondary);
+  padding: 0.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-bar-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.detail-bar-id {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.62rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  max-width: 5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
 .panel h2 {
@@ -307,13 +318,8 @@ main {
     flex: 1;
     min-height: 0;
   }
-  .detail-header {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
-  .detail-session-id {
-    font-size: 0.7rem;
+  .detail-bar-id {
+    display: none;
   }
   .source-filter {
     padding: 0;
@@ -353,9 +359,8 @@ main {
 }
 
 @media (pointer: coarse) {
-  .back-btn {
+  .detail-bar-btn {
     min-height: 44px;
-    display: inline-flex;
-    align-items: center;
+    min-width: 44px;
   }
 }

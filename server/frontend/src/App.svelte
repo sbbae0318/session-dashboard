@@ -207,17 +207,23 @@
   {:else if currentView === 'memos'}
     <MemosPage />
   {:else}
-    {#if isDetail}
-      <div class="detail-header view-transition">
-        <button class="back-btn" onclick={popToOverview}>← 돌아가기</button>
-        <span class="detail-session-id">{detailId}</span>
-        <button class="dismiss-btn" onclick={handleDismissFromDetail}>숨기기</button>
-      </div>
-    {/if}
     <div class="dashboard-layout">
       <aside class="sidebar">
         <div class="panel">
-          <h2>Sessions</h2>
+          <div class="sessions-panel-head">
+            <h2>Sessions</h2>
+            {#if isDetail}
+              <div class="detail-bar">
+                <button class="detail-bar-btn" onclick={popToOverview} title="돌아가기">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span class="detail-bar-id" title={detailId}>{detailId?.slice(0, 12)}</span>
+                <button class="detail-bar-btn" onclick={handleDismissFromDetail} title="숨기기">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            {/if}
+          </div>
           <ActiveSessions />
         </div>
       </aside>
