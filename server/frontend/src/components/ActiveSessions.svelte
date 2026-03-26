@@ -4,7 +4,7 @@
   import { getSelectedSessionId, selectSession, getSourceFilter, getTimeRangeCutoff, getProjectFilter, setProjectFilter } from "../lib/stores/filter.svelte";
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
-  import { pushSessionDetail } from '../lib/stores/navigation.svelte';
+  import { pushSessionDetail, popToOverview } from '../lib/stores/navigation.svelte';
   import { relativeTime, formatDuration, formatRss, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
@@ -71,9 +71,14 @@
   }
 
   function handleSessionClick(session: DashboardSession): void {
-    selectSession(session.sessionId);
-    copySessionCommand(session);
-    pushSessionDetail(session.sessionId);
+    if (selectedSessionId === session.sessionId) {
+      selectSession(session.sessionId);
+      popToOverview();
+    } else {
+      selectSession(session.sessionId);
+      copySessionCommand(session);
+      pushSessionDetail(session.sessionId);
+    }
   }
 
   // Top-level sessions: no parent, or parent not in active set
