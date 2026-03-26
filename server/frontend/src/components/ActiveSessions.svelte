@@ -159,20 +159,7 @@
               </div>
               <!-- Row 2: time · machine · source -->
               <div class="session-header-meta">
-                {#if session.lastPromptTime}
-                  {@const isBusy = ds.cssClass === 'status-working'}
-                  {#if isBusy}
-                    <span class="session-time-working"><span class="dot-loader-session"><span></span><span></span><span></span></span></span>
-                  {:else}
-                    <span class="session-activity-time" title="Last completed">{(tick, relativeTime(session.lastActivityTime))}</span>
-                  {/if}
-                {:else}
-                  <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
-                {/if}
-                {#if (ds.cssClass === 'status-working' || ds.cssClass === 'status-waiting') && session.startTime > 0}
-                  <span class="meta-sep">·</span>
-                  <span class="session-duration-meta">{(tick, formatDuration(Date.now() - session.startTime))}</span>
-                {/if}
+                <span class="session-activity-time" title="Last activity">{(tick, relativeTime(session.lastActivityTime))}</span>
                 {#if session.machineAlias}
                   <span class="meta-sep">·</span>
                   <span class="machine-meta">{session.machineAlias}</span>
