@@ -180,7 +180,7 @@ export class ActiveSessionsModule implements BackendModule {
         parentSessionId: (s.parentID as string) ?? null,
         childSessionIds: [],
         title: (s.title as string) ?? null,
-        projectCwd: (s.directory as string) ?? null,
+        projectCwd: (s.directory as string) || null,
         status: isActive ? 'active' : 'idle',
         waitingForInput: isClaudeCode
           ? (cached?.waitingForInput ?? false)

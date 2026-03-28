@@ -2,7 +2,7 @@
 import { extractUserPrompt } from './prompt-extractor.js';
 import { watch, type FSWatcher } from 'node:fs';
 import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import type { ProcessScanner, ProcessMetrics } from './process-scanner.js';
 
@@ -222,7 +222,8 @@ export class ClaudeHeartbeat {
       const sessionId = String(data['sessionId'] ?? '');
       if (!sessionId) return null;
 
-      const cwd = String(data['cwd'] ?? '');
+      const rawCwd = String(data['cwd'] ?? '');
+      const cwd = (!rawCwd || rawCwd === '.') ? '' : (isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd));
 
       // single-pass conversation file parsing
       const encodedCwd = cwd.replace(/\//g, '-');
