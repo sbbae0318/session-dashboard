@@ -338,7 +338,7 @@ export class MachineManager {
         const sessionId = String(session.sessionId ?? '');
         if (sessionId && !seenIds.has(sessionId)) {
           seenIds.add(sessionId);
-          sessions.push({ ...session, id: sessionId, source: 'claude-code' });
+          sessions.push({ ...session, id: sessionId, source: 'claude-code', directory: (session.cwd as string) || null });
           const sessionStatus = String(session.status ?? 'busy');
           statuses[sessionId] = { type: sessionStatus === 'idle' ? 'idle' : 'busy' };
           cachedDetails[sessionId] = {
