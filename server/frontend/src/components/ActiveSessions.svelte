@@ -156,7 +156,7 @@
             <div class="session-header">
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
-                <span class="status-badge {ds.cssClass}">{ds.label}</span>
+                <span class="status-badge {ds.cssClass}">{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader-session"><span></span><span></span><span></span></span>{/if}</span>
                 <span class="session-title">{session.title || session.lastPrompt?.slice(0, 60) || session.sessionId.slice(0, 8)}</span>
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
                   <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
