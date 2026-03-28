@@ -84,6 +84,8 @@ const PROJECTS_CACHE_TTL_MS = 300_000; // 5 minutes
 const SSE_BUFFER_MAX_BYTES = 1_048_576; // 1 MB
 const SSE_DATA_LINES_MAX = 1_000;
 
+const FULL_SYNC_INTERVAL_MS = 300_000; // 5 minutes
+
 const SYSTEM_PROMPT_PREFIXES = [
   '[SYSTEM DIRECTIVE:',
   '<command-instruction>',
@@ -133,6 +135,7 @@ export class SessionCache {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private evictionTimer: NodeJS.Timeout | null = null;
   private deletionCheckTimer: NodeJS.Timeout | null = null;
+  private fullSyncTimer: NodeJS.Timeout | null = null;
   private reconnectDelay: number = INITIAL_RECONNECT_DELAY;
   private sseBuffer = '';
   private sseDataLines: string[] = [];
@@ -167,6 +170,7 @@ export class SessionCache {
     this.connectSse();
     this.evictionTimer = setInterval(() => this.evict(), EVICTION_INTERVAL_MS);
     this.deletionCheckTimer = setInterval(() => { void this.checkDeletedSessions(); }, 60_000);
+    this.fullSyncTimer = setInterval(() => { void this.fullSync(); }, FULL_SYNC_INTERVAL_MS);
   }
 
   stop(): void {
@@ -186,6 +190,10 @@ export class SessionCache {
     if (this.deletionCheckTimer) {
       clearInterval(this.deletionCheckTimer);
       this.deletionCheckTimer = null;
+    }
+    if (this.fullSyncTimer) {
+      clearInterval(this.fullSyncTimer);
+      this.fullSyncTimer = null;
     }
     this.connectionState = 'disconnected';
     this.store.close();
@@ -891,30 +899,125 @@ export class SessionCache {
     try {
       const recentMetas = this.dbReader.getRecentSessionMetas(TTL_MS);
       let seeded = 0;
+      let enriched = 0;
       for (const meta of recentMetas) {
-        if (this.store.get(meta.id)) continue;
-
-        this.store.upsert(meta.id, {
-          status: 'idle',
-          lastPrompt: null,
-          lastPromptTime: 0,
-          currentTool: null,
-          directory: meta.directory,
-          waitingForInput: false,
-          updatedAt: meta.timeUpdated,
-          title: meta.title,
-          parentSessionId: meta.parentId,
-          createdAt: meta.timeCreated,
-          lastActiveAt: meta.timeUpdated,
-        });
-        seeded++;
+        const existing = this.store.get(meta.id);
+        if (!existing) {
+          this.store.upsert(meta.id, {
+            status: 'idle',
+            lastPrompt: null,
+            lastPromptTime: 0,
+            currentTool: null,
+            directory: meta.directory,
+            waitingForInput: false,
+            updatedAt: meta.timeUpdated,
+            title: meta.title,
+            parentSessionId: meta.parentId,
+            createdAt: meta.timeCreated,
+            lastActiveAt: meta.timeUpdated,
+          });
+          seeded++;
+          continue;
+        }
+        // Enrich existing sessions: fill missing metadata without overwriting live status
+        const titleMissing = !existing.title || existing.title.startsWith('New session');
+        const needsEnrich = titleMissing || !existing.createdAt || !existing.directory;
+        if (needsEnrich) {
+          this.store.upsert(meta.id, {
+            ...existing,
+            title: titleMissing ? (meta.title ?? existing.title) : existing.title,
+            parentSessionId: existing.parentSessionId ?? meta.parentId,
+            createdAt: existing.createdAt || meta.timeCreated,
+            lastActiveAt: Math.max(existing.lastActiveAt, meta.timeUpdated),
+            directory: existing.directory ?? meta.directory,
+          });
+          enriched++;
+        }
       }
-      if (seeded > 0) {
-        console.log(`[SessionCache] DB fallback: seeded ${seeded} session(s) from opencode.db`);
+      if (seeded > 0 || enriched > 0) {
+        console.log(`[SessionCache] DB fallback: seeded ${seeded}, enriched ${enriched} session(s) from opencode.db`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[SessionCache] DB fallback failed:', msg);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Periodic Full Sync — reconcile with oc-serve REST every 5 minutes
+  // -------------------------------------------------------------------------
+
+  private async fullSync(): Promise<void> {
+    try {
+      const baseUrl = `http://127.0.0.1:${this.ocServePort}`;
+      const projects = (await fetchJson(`${baseUrl}/project`, {}, 3000)) as OcServeProject[];
+      if (!Array.isArray(projects)) return;
+
+      this.projectsCache = { projects, updatedAt: Date.now() };
+      const validProjects = projects.filter((p) => p.worktree && p.worktree !== '/');
+
+      let added = 0;
+      let updated = 0;
+
+      for (const project of validProjects) {
+        const encodedDir = encodeURIComponent(project.worktree);
+        let sessionList: OcServeSessionMeta[];
+        try {
+          const data = await fetchJson(`${baseUrl}/session?directory=${encodedDir}&limit=2000`, {}, 10000);
+          sessionList = (Array.isArray(data) ? data : []) as OcServeSessionMeta[];
+        } catch {
+          continue;
+        }
+
+        for (const meta of sessionList) {
+          if (!meta.id) continue;
+          const timeObj = meta.time;
+          const createdAt = typeof timeObj === 'object' ? timeObj?.created ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+          const lastActiveAt = typeof timeObj === 'object' ? timeObj?.updated ?? 0 : (typeof timeObj === 'number' ? timeObj : 0);
+
+          const existing = this.store.get(meta.id);
+          if (!existing) {
+            this.store.upsert(meta.id, {
+              status: 'idle',
+              lastPrompt: null,
+              lastPromptTime: 0,
+              currentTool: null,
+              directory: meta.directory ?? project.worktree,
+              waitingForInput: false,
+              updatedAt: Date.now(),
+              title: meta.title ?? null,
+              parentSessionId: meta.parentID ?? null,
+              createdAt,
+              lastActiveAt,
+            });
+            added++;
+            continue;
+          }
+          // Enrich metadata without overwriting live status
+          const titleMissing = !existing.title || existing.title.startsWith('New session');
+          if (titleMissing || !existing.createdAt || !existing.directory) {
+            this.store.upsert(meta.id, {
+              ...existing,
+              title: titleMissing ? (meta.title ?? existing.title) : existing.title,
+              parentSessionId: existing.parentSessionId ?? meta.parentID ?? null,
+              createdAt: existing.createdAt || createdAt,
+              lastActiveAt: Math.max(existing.lastActiveAt, lastActiveAt),
+              directory: existing.directory ?? meta.directory ?? project.worktree,
+            });
+            updated++;
+          }
+        }
+      }
+
+      // Also refresh from opencode.db
+      this.bootstrapFromDb();
+
+      if (added > 0 || updated > 0) {
+        console.log(`[SessionCache] Full sync: added ${added}, updated ${updated} — total ${this.store.count()} sessions`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[SessionCache] Full sync failed:', msg);
     }
   }
 
