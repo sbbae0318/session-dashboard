@@ -1,6 +1,6 @@
 
 import { extractUserPrompt } from './prompt-extractor.js';
-import { watch, type FSWatcher } from 'node:fs';
+import { watch, type FSWatcher, statSync } from 'node:fs';
 import { readdir, readFile, mkdir, stat as statFile } from 'node:fs/promises';
 import { join, resolve, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
@@ -681,9 +681,75 @@ export class ClaudeHeartbeat {
     }
   }
 
-  /** -Users-john-project-foo → /Users/john/project/foo (best-effort) */
+  /**
+   * -Users-sbbae-project-session-dashboard → /Users/sbbae/project/session-dashboard
+   *
+   * Claude encodes paths by replacing / with -.
+   * Path segments themselves may contain hyphens (e.g. "session-dashboard").
+   * DFS: at each `-`, try treating it as `/` or as literal `-`, with filesystem pruning.
+   */
+  private decodePathCache = new Map<string, string>();
+
   private decodePath(encodedDir: string): string {
-    return encodedDir.replace(/^-/, '/').replace(/-/g, '/');
+    const cached = this.decodePathCache.get(encodedDir);
+    if (cached) return cached;
+
+    const raw = encodedDir.startsWith('-') ? encodedDir.slice(1) : encodedDir;
+    const dashes = this.findDashPositions(raw);
+    const result = this.decodePathDfs(raw, dashes, 0, '') ?? ('/' + raw.replace(/-/g, '/'));
+    this.decodePathCache.set(encodedDir, result);
+    return result;
+  }
+
+  private findDashPositions(s: string): number[] {
+    const positions: number[] = [];
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '-') positions.push(i);
+    }
+    return positions;
+  }
+
+  /**
+   * At each dash position, choose `/` or `-`.
+   * `dirEnd` tracks where the last `/` was placed, so we know the current directory prefix for pruning.
+   */
+  private decodePathDfs(raw: string, dashes: number[], dashIdx: number, dirPrefix: string): string | null {
+    if (dashIdx >= dashes.length) {
+      // No more dashes — the remaining chars form the last segment
+      const finalPath = dirPrefix + '/' + raw;
+      try { statSync(finalPath); return finalPath; } catch { return null; }
+    }
+
+    const pos = dashes[dashIdx];
+
+    // Option 1: treat dash at `pos` as `/`
+    // dirPrefix + '/' + raw[0..pos-1] becomes the new directory
+    const segment = raw.slice(0, pos);
+    const newDir = dirPrefix + '/' + segment;
+    const remaining = raw.slice(pos + 1);
+    if (this.isDirSafe(newDir)) {
+      const newDashes = this.findDashPositions(remaining);
+      const r1 = this.decodePathDfs(remaining, newDashes, 0, newDir);
+      if (r1) return r1;
+    }
+
+    // Option 2: treat dash at `pos` as literal `-`, try next dash
+    return this.decodePathDfs(raw, dashes, dashIdx + 1, dirPrefix);
+  }
+
+  private isDirCache = new Map<string, boolean>();
+
+  private isDirSafe(p: string): boolean {
+    const cached = this.isDirCache.get(p);
+    if (cached !== undefined) return cached;
+    try {
+      const result = statSync(p).isDirectory();
+      this.isDirCache.set(p, result);
+      return result;
+    } catch {
+      this.isDirCache.set(p, false);
+      return false;
+    }
   }
 
   private startProjectsWatcher(): void {
