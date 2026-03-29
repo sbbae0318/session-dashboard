@@ -280,13 +280,13 @@
                 >⎘</button>
               </div>
             </div>
-            <p class="prompt-text">
+            <div class="prompt-text">
               {#if isExpanded}
                 {entry.query}
               {:else}
                 {truncate(entry.query, 200)}
               {/if}
-            </p>
+            </div>
           </div>
 
           <!-- Response area (inline, shown when expanded) -->
