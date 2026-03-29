@@ -1,11 +1,12 @@
 <script lang="ts">
   import { getQueries } from "../lib/stores/queries.svelte";
-  import PromptDetailModal from "./PromptDetailModal.svelte";
   import { getSelectedSessionId, getSourceFilter, selectSession } from "../lib/stores/filter.svelte";
   import { getSelectedMachineId, shouldShowMachineFilter } from '../lib/stores/machine.svelte';
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { truncate, getQueryResult, getCompletionTime, formatTimestamp, formatDuration, copyToClipboard, isBackgroundQuery } from "../lib/utils";
+  import { renderMarkdown } from "../lib/markdown";
   import type { DashboardSession } from "../types";
+  import { onMount } from "svelte";
 
   let {
     sessionIdFilter = null,
@@ -29,14 +30,13 @@
   let filteredQueries = $derived(
     queries
       .filter(q => showBackground || !isBackgroundQuery(q, sessions))
-      // bg query를 parent 세션으로 리매핑
       .map(q => {
         if (!isBackgroundQuery(q, sessions)) return q;
         const childSession = sessions.find(s => s.sessionId === q.sessionId);
         const parentId = childSession?.parentSessionId;
-        if (!parentId) return q; // orphaned — 원본 유지
+        if (!parentId) return q;
         const parentSession = sessions.find(s => s.sessionId === parentId);
-        if (!parentSession) return q; // parent not in store — 원본 유지
+        if (!parentSession) return q;
         return { ...q, sessionId: parentId, sessionTitle: parentSession.title ?? parentId.slice(0, 8) };
       })
       .filter(q => !machineFilter || q.machineId === machineFilter)
@@ -52,7 +52,6 @@
       .toSorted((a, b) => b.timestamp - a.timestamp)
   );
 
-  // 세션별 최신 프롬프트 인덱스 (filteredQueries는 timestamp desc 정렬이므로 첫 등장이 최신)
   let latestIndexBySession = $derived(
     filteredQueries.reduce((acc, q, idx) => {
       if (!(q.sessionId in acc)) acc[q.sessionId] = idx;
@@ -73,7 +72,6 @@
         const sid = sessionIdFilter ?? selectedSessionId;
         if (!sid) return true;
         if (q.sessionId === sid) return true;
-        // bg query의 parent가 선택된 세션인 경우도 포함
         const childSession = sessions.find(s => s.sessionId === q.sessionId);
         return childSession?.parentSessionId === sid;
       })
@@ -82,12 +80,93 @@
 
   $effect(() => { onBackgroundCountChange?.(backgroundCount); });
 
-  // --- Clipboard copy ---
+  // --- Expand/collapse state ---
+  let expandedKeys = $state<Set<string>>(new Set());
+  let multiExpandMode = $state(false);
+  let responseCache = $state<Map<string, { text: string | null; loading: boolean; error: string | null }>>(new Map());
+
+  function entryKey(entry: { sessionId: string; timestamp: number }): string {
+    return `${entry.sessionId}:${entry.timestamp}`;
+  }
+
+  function toggleExpand(entry: typeof filteredQueries[number]): void {
+    const key = entryKey(entry);
+    if (expandedKeys.has(key)) {
+      const next = new Set(expandedKeys);
+      next.delete(key);
+      expandedKeys = next;
+    } else {
+      if (multiExpandMode) {
+        expandedKeys = new Set([...expandedKeys, key]);
+      } else {
+        expandedKeys = new Set([key]);
+      }
+      if (!responseCache.has(key)) {
+        void fetchResponse(entry, key);
+      }
+    }
+  }
+
+  async function fetchResponse(entry: typeof filteredQueries[number], key: string): Promise<void> {
+    responseCache = new Map(responseCache).set(key, { text: null, loading: true, error: null });
+    try {
+      const params = new URLSearchParams({
+        sessionId: entry.sessionId,
+        timestamp: String(entry.timestamp),
+        source: entry.source ?? '',
+        ...(entry.machineId ? { machineId: entry.machineId } : {}),
+      });
+      const res = await fetch(`/api/prompt-response?${params}`);
+      const data = await res.json() as { response: string | null; error?: string };
+      responseCache = new Map(responseCache).set(key, {
+        text: data.response,
+        loading: false,
+        error: data.error ?? null,
+      });
+    } catch {
+      responseCache = new Map(responseCache).set(key, {
+        text: null,
+        loading: false,
+        error: '응답을 불러올 수 없습니다',
+      });
+    }
+  }
+
+  // --- Keyboard shortcut: Cmd+Shift+E → toggle multi-expand mode ---
+  function handleGlobalKeydown(e: KeyboardEvent): void {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
+      e.preventDefault();
+      multiExpandMode = !multiExpandMode;
+      if (!multiExpandMode && expandedKeys.size > 1) {
+        // Switch to single mode: keep only the last expanded
+        const arr = [...expandedKeys];
+        expandedKeys = new Set([arr[arr.length - 1]]);
+      }
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('keydown', handleGlobalKeydown);
+    return () => document.removeEventListener('keydown', handleGlobalKeydown);
+  });
+
+  // --- Session filter (click session name) ---
+  function handleSessionClick(sessionId: string, event: Event): void {
+    event.stopPropagation();
+    selectSession(sessionId);
+  }
+
+  // --- Clipboard ---
   let toastMessage = $state<string | null>(null);
-  let modalEntry = $state<{ sessionId: string; source?: string; query: string; sessionTitle?: string; timestamp: number; machineId?: string; machineHost?: string } | null>(null);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  function buildCommandFromQuery(entry: { sessionId: string; source?: string }): string {
+  function showToast(msg: string): void {
+    toastMessage = msg;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
+  }
+
+  function buildResumeCommand(entry: { sessionId: string; source?: string }): string {
     const session = sessions.find((s: DashboardSession) => s.sessionId === entry.sessionId);
     const cwd = session?.projectCwd ?? '~';
     const source = entry.source ?? session?.source;
@@ -97,28 +176,34 @@
     return `cd ${cwd} && opencode --session ${entry.sessionId}`;
   }
 
-  function handlePromptClick(entry: typeof filteredQueries[number]): void {
-    selectSession(entry.sessionId);
-  }
-
-  function handleDetailClick(entry: typeof filteredQueries[number], event: Event): void {
+  async function handleCopyCommand(entry: typeof filteredQueries[number], event: Event): Promise<void> {
     event.stopPropagation();
-    modalEntry = entry;
+    const cmd = buildResumeCommand(entry);
+    const ok = await copyToClipboard(cmd);
+    showToast(ok ? 'Copied!' : 'Copy failed');
   }
 
-  function showToast(msg: string): void {
-    toastMessage = msg;
-    if (toastTimeout) clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
+  // --- Scroll into view after expand ---
+  function scrollIntoViewIfNeeded(node: HTMLElement): { destroy: () => void } {
+    requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    return { destroy() {} };
   }
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
+  {#if multiExpandMode}
+    <div class="mode-indicator">
+      <span class="mode-badge">Multi</span>
+      <span class="mode-hint">⌘⇧E로 해제</span>
+    </div>
+  {/if}
+
   {#if filteredQueries.length === 0}
     <div class="empty-state">{selectedSessionId ? '선택된 세션의 프롬프트 없음' : '최근 프롬프트 없음'}</div>
   {:else}
     <div class="prompts-list">
-
       {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp)}
         {@const matchedSession = sessions.find(s => s.sessionId === entry.sessionId)}
         {@const resolvedTitle = entry.sessionTitle || matchedSession?.title || matchedSession?.projectCwd?.split('/').pop() || entry.sessionId.slice(0, 8)}
@@ -128,78 +213,109 @@
         {@const isSessionBusy = session?.apiStatus === 'busy' || session?.status === 'active'}
         {@const isLatestForSession = i === latestIndexBySession[entry.sessionId]}
         {@const isWorking = isSessionBusy && isLatestForSession}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        {@const key = entryKey(entry)}
+        {@const isExpanded = expandedKeys.has(key)}
+        {@const cached = responseCache.get(key)}
+
         <div
-          class="prompt-item" class:in-progress={isWorking}
+          class="prompt-item" class:in-progress={isWorking} class:expanded={isExpanded}
           class:background={entry.isBackground}
-          class:clickable={true}
-          onclick={() => handlePromptClick(entry)}
-          role="button"
-          tabindex="0"
-          onkeydown={(e) => e.key === 'Enter' && handlePromptClick(entry)}
         >
-          <div class="prompt-header">
-            <span class="prompt-session">{resolvedTitle}</span>
-            <div class="prompt-meta">
-              <span class="prompt-time">
-                {formatTimestamp(entry.timestamp)}
-                {#if isWorking}
-                  <span class="time-arrow">→</span>
-                  <span class="dot-loader"><span></span><span></span><span></span></span>
-                {:else if completionTs}
-                  <span class="prompt-duration">({formatDuration(completionTs - entry.timestamp)})</span>
+          <!-- Prompt area (clickable) -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="prompt-clickable"
+            onclick={() => toggleExpand(entry)}
+            onkeydown={(e) => e.key === 'Enter' && toggleExpand(entry)}
+            tabindex="0"
+            role="button"
+          >
+            <div class="prompt-header">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <span
+                class="prompt-session"
+                onclick={(e) => handleSessionClick(entry.sessionId, e)}
+                onkeydown={(e) => e.key === 'Enter' && handleSessionClick(entry.sessionId, e)}
+                role="button"
+                tabindex="0"
+                title="세션 필터"
+              >{resolvedTitle}</span>
+              <div class="prompt-meta">
+                <span class="prompt-time">
+                  {formatTimestamp(entry.timestamp)}
+                  {#if isWorking}
+                    <span class="time-arrow">→</span>
+                    <span class="dot-loader"><span></span><span></span><span></span></span>
+                  {:else if completionTs}
+                    <span class="prompt-duration">({formatDuration(completionTs - entry.timestamp)})</span>
+                  {/if}
+                </span>
+                {#if showMachines && entry.machineAlias}
+                  <span class="machine-tag">{entry.machineAlias}</span>
                 {/if}
-              </span>
-              {#if showMachines && entry.machineAlias}
-                <span class="machine-tag">{entry.machineAlias}</span>
-              {/if}
-              {#if result === 'completed'}
-                <span class="result-badge result-completed">✓</span>
-              {:else if result === 'user_exit'}
-                <span class="result-badge result-exit">↩</span>
-              {:else if result === 'error'}
-                <span class="result-badge result-error">⚠</span>
-              {:else if result === 'idle'}
-                <span class="result-badge result-idle">○</span>
-              {:else if result === 'busy' || result === 'active'}
-                {#if isWorking}
-                  <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
+                {#if result === 'completed'}
+                  <span class="result-badge result-completed">✓</span>
+                {:else if result === 'user_exit'}
+                  <span class="result-badge result-exit">↩</span>
+                {:else if result === 'error'}
+                  <span class="result-badge result-error">⚠</span>
+                {:else if result === 'idle'}
+                  <span class="result-badge result-idle">○</span>
+                {:else if result === 'busy' || result === 'active'}
+                  {#if isWorking}
+                    <span class="result-badge result-active"><span class="dot-loader-sm"><span></span><span></span><span></span></span></span>
+                  {:else}
+                    <span class="result-badge result-active">⟳</span>
+                  {/if}
+                {/if}
+                {#if entry.source === "claude-code"}
+                  <span class="source-badge claude">Claude</span>
                 {:else}
-                  <span class="result-badge result-active">⟳</span>
+                  <span class="source-badge opencode">OpenCode</span>
                 {/if}
-              {/if}
-              {#if entry.source === "claude-code"}
-                <span class="source-badge claude">Claude</span>
-              {:else}
-                <span class="source-badge opencode">OpenCode</span>
-              {/if}
-              <button
-                class="prompt-detail-btn"
-                onclick={(e) => handleDetailClick(entry, e)}
-                title="프롬프트 전문 보기"
-              >전문</button>
+                <button
+                  class="copy-cmd-btn"
+                  onclick={(e) => handleCopyCommand(entry, e)}
+                  title="resume 명령어 복사"
+                >⎘</button>
+              </div>
             </div>
+            <p class="prompt-text">
+              {#if isExpanded}
+                {entry.query}
+              {:else}
+                {truncate(entry.query, 200)}
+              {/if}
+            </p>
           </div>
-          <p class="prompt-text" title={entry.query}>
-            {truncate(entry.query, 200)}
-          </p>
+
+          <!-- Response area (inline, shown when expanded) -->
+          {#if isExpanded}
+            <div class="response-area" use:scrollIntoViewIfNeeded>
+              {#if isWorking}
+                <div class="response-status">
+                  <span class="dot-loader"><span></span><span></span><span></span></span>
+                  <span>실행 중...</span>
+                </div>
+              {:else if cached?.loading}
+                <div class="response-status">
+                  <span class="dot-loader"><span></span><span></span><span></span></span>
+                  <span>응답 로딩 중...</span>
+                </div>
+              {:else if cached?.text}
+                <div class="response-rendered">{@html renderMarkdown(cached.text)}</div>
+              {:else if cached?.error}
+                <div class="response-status dim">{cached.error}</div>
+              {:else}
+                <div class="response-status dim">응답 데이터 없음</div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
   {/if}
 </div>
-
-{#if modalEntry}
-  <PromptDetailModal
-    entry={modalEntry}
-    buildCommand={buildCommandFromQuery}
-    onClose={() => { modalEntry = null; }}
-    onCopy={async (cmd) => {
-      const ok = await copyToClipboard(cmd);
-      showToast(ok ? 'Copied!' : 'Copy failed');
-    }}
-  />
-{/if}
 
 {#if toastMessage}
   <div class="copy-toast">{toastMessage}</div>
@@ -212,6 +328,30 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .mode-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+
+  .mode-badge {
+    background: rgba(168, 113, 255, 0.2);
+    color: #a871ff;
+    border: 1px solid rgba(168, 113, 255, 0.3);
+    border-radius: 9999px;
+    padding: 0.05rem 0.4rem;
+    font-weight: 600;
+    font-size: 0.6rem;
+  }
+
+  .mode-hint {
+    color: var(--text-secondary);
+    font-size: 0.65rem;
   }
 
   .prompts-list {
@@ -228,16 +368,16 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 1rem;
     transition: border-color 0.2s ease;
-  }
-
-  .prompt-item.clickable {
-    cursor: pointer;
+    overflow: hidden;
   }
 
   .prompt-item:hover {
     border-color: var(--accent);
+  }
+
+  .prompt-item.expanded {
+    border-color: rgba(88, 166, 255, 0.4);
   }
 
   .prompt-item.background {
@@ -246,12 +386,22 @@
     background: rgba(139, 148, 158, 0.03);
   }
 
+  /* ── Prompt clickable area ── */
+  .prompt-clickable {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+  }
+
+  .prompt-clickable:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
 
   .prompt-header {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.35rem;
   }
 
   .prompt-meta {
@@ -270,6 +420,15 @@
     white-space: nowrap;
     flex-shrink: 1;
     min-width: 0;
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+  }
+
+  .prompt-session:hover {
+    background: rgba(88, 166, 255, 0.12);
+    text-decoration: underline;
   }
 
   .prompt-time {
@@ -282,22 +441,47 @@
     gap: 0.3rem;
   }
 
-  .time-arrow {
-    opacity: 0.4;
-  }
-
+  .time-arrow { opacity: 0.4; }
 
   .prompt-duration {
     font-size: 0.6rem;
     opacity: 0.6;
   }
+
   .prompt-text {
     font-size: 0.9rem;
     color: var(--text-primary);
     line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
+  /* ── Copy command button ── */
+  .copy-cmd-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    border-radius: 9999px;
+    width: 1.3rem;
+    height: 1.3rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    padding: 0;
+    line-height: 1;
+  }
 
+  .copy-cmd-btn:hover {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--accent);
+  }
+
+  /* ── Badges ── */
   .machine-tag {
     font-size: 0.6rem;
     padding: 0.05rem 0.4rem;
@@ -318,31 +502,11 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
-  .result-completed {
-    background: rgba(63, 185, 80, 0.15);
-    color: var(--success);
-    border: 1px solid rgba(63, 185, 80, 0.3);
-  }
-  .result-exit {
-    background: rgba(210, 153, 34, 0.15);
-    color: var(--warning);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-  }
-  .result-error {
-    background: rgba(248, 81, 73, 0.15);
-    color: var(--error);
-    border: 1px solid rgba(248, 81, 73, 0.3);
-  }
-  .result-idle {
-    background: rgba(139, 148, 158, 0.15);
-    color: var(--text-secondary);
-    border: 1px solid rgba(139, 148, 158, 0.3);
-  }
-  .result-active {
-    background: rgba(88, 166, 255, 0.15);
-    color: var(--accent);
-    border: 1px solid rgba(88, 166, 255, 0.3);
-  }
+  .result-completed { background: rgba(63, 185, 80, 0.15); color: var(--success); border: 1px solid rgba(63, 185, 80, 0.3); }
+  .result-exit { background: rgba(210, 153, 34, 0.15); color: var(--warning); border: 1px solid rgba(210, 153, 34, 0.3); }
+  .result-error { background: rgba(248, 81, 73, 0.15); color: var(--error); border: 1px solid rgba(248, 81, 73, 0.3); }
+  .result-idle { background: rgba(139, 148, 158, 0.15); color: var(--text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+  .result-active { background: rgba(88, 166, 255, 0.15); color: var(--accent); border: 1px solid rgba(88, 166, 255, 0.3); }
 
   .source-badge {
     font-size: 0.6rem;
@@ -353,39 +517,149 @@
     font-weight: 600;
     letter-spacing: 0.02em;
   }
+  .source-badge.claude { background: rgba(168, 113, 255, 0.15); color: #a871ff; border: 1px solid rgba(168, 113, 255, 0.3); }
+  .source-badge.opencode { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
 
-  .source-badge.claude {
-    background: rgba(168, 113, 255, 0.15);
-    color: #a871ff;
-    border: 1px solid rgba(168, 113, 255, 0.3);
+  /* ── Response area ── */
+  .response-area {
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    background: rgba(88, 166, 255, 0.03);
+    border-left: 3px solid rgba(88, 166, 255, 0.4);
+    animation: response-fadein 0.2s ease-out;
   }
 
-  .source-badge.opencode {
-    background: rgba(63, 185, 80, 0.15);
-    color: #3fb950;
-    border: 1px solid rgba(63, 185, 80, 0.3);
+  @keyframes response-fadein {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 2000px; }
   }
 
-  .prompt-detail-btn {
-    display: inline-flex;
+  .response-status {
+    display: flex;
     align-items: center;
-    background: none;
-    border: 1px solid rgba(139, 148, 158, 0.3);
-    border-radius: 9999px;
-    padding: 0.05rem 0.4rem;
-    font-size: 0.6rem;
+    gap: 0.5rem;
     color: var(--text-secondary);
-    cursor: pointer;
-    font-family: inherit;
-    flex-shrink: 0;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
   }
 
-  .prompt-detail-btn:hover {
-    background: rgba(88, 166, 255, 0.1);
-    border-color: rgba(88, 166, 255, 0.4);
-    color: var(--accent);
+  .response-status.dim {
+    opacity: 0.6;
+    font-style: italic;
   }
+
+  /* ── Rendered markdown ── */
+  .response-rendered {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    line-height: 1.65;
+  }
+
+  .response-rendered :global(.md-p) { margin: 0.4rem 0; }
+  .response-rendered :global(.md-h) { margin: 0.8rem 0 0.3rem; color: var(--text-primary); font-weight: 600; }
+  .response-rendered :global(h3.md-h) { font-size: 1rem; }
+  .response-rendered :global(h4.md-h) { font-size: 0.92rem; }
+  .response-rendered :global(h5.md-h) { font-size: 0.85rem; }
+  .response-rendered :global(h6.md-h) { font-size: 0.8rem; }
+
+  .response-rendered :global(.md-list) { margin: 0.3rem 0; padding-left: 1.5rem; }
+  .response-rendered :global(.md-list li) { margin: 0.15rem 0; }
+
+  .response-rendered :global(.md-inline-code) {
+    background: rgba(110, 118, 129, 0.2);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.82rem;
+  }
+
+  .response-rendered :global(.md-link) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .response-rendered :global(.md-link:hover) {
+    text-decoration: underline;
+  }
+
+  .response-rendered :global(.md-hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.6rem 0;
+  }
+
+  .response-rendered :global(.md-table-wrap) {
+    overflow-x: auto;
+    margin: 0.5rem 0;
+  }
+
+  .response-rendered :global(.md-table) {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    width: 100%;
+  }
+
+  .response-rendered :global(.md-table th),
+  .response-rendered :global(.md-table td) {
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+  }
+
+  .response-rendered :global(.md-table th) {
+    background: rgba(110, 118, 129, 0.1);
+    font-weight: 600;
+  }
+
+  .response-rendered :global(.code-block-wrap),
+  .response-rendered :global(.code-fold) {
+    margin: 0.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .response-rendered :global(.code-lang) {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    padding: 0.2rem 0.5rem;
+    font-family: "SF Mono", "Fira Code", monospace;
+  }
+
+  .response-rendered :global(.code-block) {
+    margin: 0;
+    padding: 0.6rem 0.8rem;
+    background: rgba(0, 0, 0, 0.25);
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text-primary);
+  }
+
+  .response-rendered :global(.code-fold-summary) {
+    cursor: pointer;
+    padding: 0.35rem 0.6rem;
+    background: rgba(110, 118, 129, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    user-select: none;
+  }
+
+  .response-rendered :global(.code-fold-summary:hover) {
+    background: rgba(110, 118, 129, 0.15);
+  }
+
+  .response-rendered :global(.code-fold-lines) {
+    font-size: 0.7rem;
+    opacity: 0.7;
+  }
+
+  /* ── Empty / toast ── */
   .empty-state {
     display: flex;
     align-items: center;
@@ -396,23 +670,6 @@
     font-style: italic;
   }
 
-  @media (max-width: 599px) {
-    .prompts-list {
-      max-height: 60vh;
-    }
-    .prompt-item {
-      padding: 0.65rem;
-    }
-    .prompt-meta {
-      flex-wrap: wrap;
-    }
-    .prompt-text {
-      overflow-wrap: break-word;
-      font-size: 0.85rem;
-    }
-  }
-
-  /* ===== Copy toast ===== */
   .copy-toast {
     position: fixed;
     bottom: 1.5rem;
@@ -438,7 +695,7 @@
     100% { opacity: 0; }
   }
 
-  /* ===== In-progress prompt item — pulsing glow card ===== */
+  /* ── In-progress pulse ── */
   .prompt-item.in-progress {
     border-left: 3px solid var(--accent);
     background: linear-gradient(90deg, rgba(88, 166, 255, 0.08) 0%, var(--bg-tertiary) 40%);
@@ -446,17 +703,11 @@
   }
 
   @keyframes card-pulse {
-    0%, 100% {
-      border-left-color: rgba(88, 166, 255, 0.3);
-      box-shadow: inset 3px 0 8px rgba(88, 166, 255, 0);
-    }
-    50% {
-      border-left-color: rgba(88, 166, 255, 1);
-      box-shadow: inset 3px 0 12px rgba(88, 166, 255, 0.15);
-    }
+    0%, 100% { border-left-color: rgba(88, 166, 255, 0.3); box-shadow: inset 3px 0 8px rgba(88, 166, 255, 0); }
+    50% { border-left-color: rgba(88, 166, 255, 1); box-shadow: inset 3px 0 12px rgba(88, 166, 255, 0.15); }
   }
 
-  /* ===== 3-dot bounce loader (time display) ===== */
+  /* ── Dot loaders ── */
   .dot-loader {
     display: inline-flex;
     align-items: center;
@@ -466,12 +717,11 @@
   }
 
   .dot-loader span {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     background: var(--accent);
     border-radius: 50%;
     animation: dot-bounce 1.4s ease-in-out infinite;
-    box-shadow: 0 0 4px rgba(88, 166, 255, 0.5);
     will-change: transform, opacity;
     backface-visibility: hidden;
   }
@@ -480,18 +730,10 @@
   .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
 
   @keyframes dot-bounce {
-    0%, 80%, 100% {
-      opacity: 0.25;
-      transform: scale(0.7) translateY(0);
-    }
-    40% {
-      opacity: 1;
-      transform: scale(1.2) translateY(-6px);
-      box-shadow: 0 0 8px rgba(88, 166, 255, 0.8);
-    }
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); }
+    40% { opacity: 1; transform: scale(1.2); }
   }
 
-  /* ===== Small dot loader for result badge ===== */
   .dot-loader-sm {
     display: inline-flex;
     align-items: center;
@@ -514,5 +756,13 @@
   @media (prefers-reduced-motion: reduce) {
     .prompt-item.in-progress { animation: none; border-left-color: var(--accent); box-shadow: none; }
     .dot-loader span, .dot-loader-sm span { animation: none; opacity: 0.7; transform: none; }
+    .response-area { animation: none; }
+  }
+
+  @media (max-width: 599px) {
+    .prompts-list { max-height: 60vh; }
+    .prompt-clickable { padding: 0.65rem; }
+    .prompt-meta { flex-wrap: wrap; }
+    .prompt-text { overflow-wrap: break-word; font-size: 0.85rem; }
   }
 </style>

@@ -1,6 +1,7 @@
 /**
  * Lightweight Markdown → HTML renderer for assistant responses.
- * Supports: code blocks (with fold), inline code, headers, bold, italic, lists, paragraphs.
+ * Supports: code blocks (with fold), inline code, headers, bold, italic,
+ *           unordered/ordered lists, tables, links, horizontal rules.
  * No external dependencies.
  */
 
@@ -12,7 +13,13 @@ export function renderMarkdown(md: string): string {
   const lines = md.split('\n');
   const html: string[] = [];
   let i = 0;
-  let inList = false;
+  let listStack: ('ul' | 'ol')[] = [];
+
+  function closeAllLists(): void {
+    while (listStack.length > 0) {
+      html.push(`</${listStack.pop()}>`);
+    }
+  }
 
   while (i < lines.length) {
     const line = lines[i];
@@ -20,7 +27,7 @@ export function renderMarkdown(md: string): string {
     // Fenced code block
     const fenceMatch = line.match(/^```(\w*)/);
     if (fenceMatch) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeAllLists();
       const lang = fenceMatch[1] || '';
       const codeLines: string[] = [];
       i++;
@@ -43,46 +50,112 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Empty line → close list, add spacing
+    // Table (detect by |...|...|)
+    if (line.includes('|') && line.trim().startsWith('|')) {
+      closeAllLists();
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      html.push(renderTable(tableLines));
+      continue;
+    }
+
+    // Empty line
     if (!line.trim()) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeAllLists();
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}\s*$/.test(line.trim())) {
+      closeAllLists();
+      html.push('<hr class="md-hr" />');
       i++;
       continue;
     }
 
     // Headers
-    const headerMatch = line.match(/^(#{1,3})\s+(.+)/);
+    const headerMatch = line.match(/^(#{1,4})\s+(.+)/);
     if (headerMatch) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeAllLists();
       const level = headerMatch[1].length;
       html.push(`<h${level + 2} class="md-h">${inlineFormat(headerMatch[2])}</h${level + 2}>`);
       i++;
       continue;
     }
 
-    // List items (- or *)
-    const listMatch = line.match(/^[\s]*[-*]\s+(.+)/);
-    if (listMatch) {
-      if (!inList) { html.push('<ul class="md-list">'); inList = true; }
-      html.push(`<li>${inlineFormat(listMatch[1])}</li>`);
+    // Ordered list (1. 2. etc.)
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.+)/);
+    if (olMatch) {
+      if (listStack.length === 0 || listStack[listStack.length - 1] !== 'ol') {
+        closeAllLists();
+        html.push('<ol class="md-list">');
+        listStack.push('ol');
+      }
+      html.push(`<li>${inlineFormat(olMatch[2])}</li>`);
+      i++;
+      continue;
+    }
+
+    // Unordered list (- or *)
+    const ulMatch = line.match(/^(\s*)[-*]\s+(.+)/);
+    if (ulMatch) {
+      if (listStack.length === 0 || listStack[listStack.length - 1] !== 'ul') {
+        closeAllLists();
+        html.push('<ul class="md-list">');
+        listStack.push('ul');
+      }
+      html.push(`<li>${inlineFormat(ulMatch[2])}</li>`);
       i++;
       continue;
     }
 
     // Regular paragraph
-    if (inList) { html.push('</ul>'); inList = false; }
+    closeAllLists();
     html.push(`<p class="md-p">${inlineFormat(line)}</p>`);
     i++;
   }
 
-  if (inList) html.push('</ul>');
+  closeAllLists();
   return html.join('\n');
+}
+
+function renderTable(lines: string[]): string {
+  if (lines.length < 2) return lines.map(l => `<p class="md-p">${inlineFormat(l)}</p>`).join('\n');
+
+  const parseCells = (line: string): string[] =>
+    line.split('|').slice(1, -1).map(c => c.trim());
+
+  const headers = parseCells(lines[0]);
+  // Skip separator line (|---|---|)
+  const startRow = /^[\s|:-]+$/.test(lines[1]) ? 2 : 1;
+  const rows = lines.slice(startRow).map(parseCells);
+
+  let out = '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+  for (const h of headers) {
+    out += `<th>${inlineFormat(h)}</th>`;
+  }
+  out += '</tr></thead><tbody>';
+  for (const row of rows) {
+    out += '<tr>';
+    for (let j = 0; j < headers.length; j++) {
+      out += `<td>${inlineFormat(row[j] ?? '')}</td>`;
+    }
+    out += '</tr>';
+  }
+  out += '</tbody></table></div>';
+  return out;
 }
 
 function inlineFormat(text: string): string {
   let s = escapeHtml(text);
-  // inline code
+  // inline code (must come before bold/italic to avoid conflicts)
   s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+  // links [text](url)
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="md-link" href="$2" target="_blank" rel="noopener">$1</a>');
   // bold
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   // italic
