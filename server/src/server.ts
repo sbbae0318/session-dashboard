@@ -72,6 +72,32 @@ export async function createServer(
     };
   });
 
+  // ── Prompt response fetch (proxy to agent) ──
+  app.get<{ Querystring: { sessionId?: string; timestamp?: string; source?: string; machineId?: string } }>(
+    "/api/prompt-response",
+    async (request) => {
+      const { sessionId, timestamp, source, machineId } = request.query;
+      if (!sessionId || !timestamp) return { response: null, error: 'missing params' };
+
+      const machines = options.machineManager.getMachines();
+      const target = machineId
+        ? machines.find(m => m.id === machineId)
+        : machines[0];
+      if (!target) return { response: null, error: 'no machine' };
+
+      try {
+        const qs = `sessionId=${encodeURIComponent(sessionId)}&timestamp=${timestamp}&source=${source ?? ''}`;
+        const result = await options.machineManager.fetchFromMachine<{ response: string | null }>(
+          target,
+          `/api/prompt-response?${qs}`,
+        );
+        return result;
+      } catch {
+        return { response: null, error: 'agent fetch failed' };
+      }
+    },
+  );
+
   // ── Register module routes ──
   for (const mod of modules) {
     mod.registerRoutes(app);

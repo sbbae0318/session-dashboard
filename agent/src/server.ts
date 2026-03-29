@@ -346,6 +346,65 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     return result;
   });
 
+  // GET /api/prompt-response?sessionId=X&timestamp=Y&source=claude-code|opencode
+  app.get<{ Querystring: { sessionId?: string; timestamp?: string; source?: string } }>(
+    '/api/prompt-response',
+    async (request) => {
+      const { sessionId, timestamp, source } = request.query;
+      if (!sessionId || !timestamp) return { response: null, error: 'missing params' };
+      const ts = parseInt(timestamp, 10);
+      if (Number.isNaN(ts)) return { response: null, error: 'invalid timestamp' };
+
+      // Claude Code: JSONL에서 response 추출
+      if (source === 'claude-code' && claudeHeartbeat) {
+        const response = await claudeHeartbeat.fetchResponse(sessionId, ts);
+        return { response };
+      }
+
+      // OpenCode: oc-serve 메시지 API에서 response 추출
+      if (ocServeEnabled) {
+        try {
+          const data = await fetchJson(
+            `http://127.0.0.1:${config.ocServePort}/session/${sessionId}/message`,
+            {},
+            10_000,
+          );
+          if (!Array.isArray(data)) return { response: null };
+          const messages = data as Array<{ info?: { role?: string; time?: { created?: number } }; parts?: Array<{ type?: string; text?: string }> }>;
+
+          // timestamp에 매칭되는 user 메시지 찾기
+          let userIdx = -1;
+          for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            if (msg.info?.role !== 'user') continue;
+            const msgTs = msg.info?.time?.created ?? 0;
+            if (Math.abs(msgTs - ts) < 2000) { userIdx = i; break; }
+          }
+          if (userIdx < 0) return { response: null };
+
+          // user 이후 첫 assistant 메시지의 text parts 추출
+          const textParts: string[] = [];
+          for (let i = userIdx + 1; i < messages.length; i++) {
+            const msg = messages[i];
+            if (msg.info?.role === 'user') break;
+            if (msg.info?.role !== 'assistant') continue;
+            for (const part of msg.parts ?? []) {
+              if (part.type === 'text' && typeof part.text === 'string') {
+                textParts.push(part.text);
+              }
+            }
+          }
+          const response = textParts.join('\n\n') || null;
+          return { response: response && response.length > 30_000 ? response.slice(0, 30_000) + '\n\n... (truncated)' : response };
+        } catch {
+          return { response: null, error: 'oc-serve fetch failed' };
+        }
+      }
+
+      return { response: null };
+    },
+  );
+
   // POST /hooks/event — Claude Code hooks receiver (always registered)
   app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
     if (!claudeHeartbeat) return { ok: false, error: 'claude not enabled' };

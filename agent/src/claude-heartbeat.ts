@@ -105,6 +105,93 @@ export class ClaudeHeartbeat {
   }
 
   // -------------------------------------------------------------------------
+  // On-demand response fetch (JSONL 역순 파싱)
+  // -------------------------------------------------------------------------
+
+  private responseCache = new Map<string, { response: string; cachedAt: number }>();
+  private static readonly RESPONSE_CACHE_MAX = 50;
+
+  async fetchResponse(sessionId: string, promptTimestamp: number): Promise<string | null> {
+    const cacheKey = `${sessionId}:${promptTimestamp}`;
+
+    // 캐시 히트 (idle 세션만 캐시됨)
+    const cached = this.responseCache.get(cacheKey);
+    if (cached) return cached.response;
+
+    // 세션의 JSONL 파일 찾기
+    const session = this.sessions.get(sessionId);
+    const cwd = session?.cwd ?? '';
+    const encodedCwd = cwd.replace(/\//g, '-');
+    const conversationPath = join(this.claudeProjectsDir, encodedCwd, `${sessionId}.jsonl`);
+
+    let content: string;
+    try {
+      content = await readFile(conversationPath, 'utf-8');
+    } catch {
+      return null;
+    }
+
+    const lines = content.trimEnd().split('\n');
+    const targetMs = promptTimestamp;
+
+    // 역순으로 해당 user 메시지를 찾고, 그 이후의 assistant text를 수집
+    let userLineIndex = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].trim()) continue;
+      try {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        if (entry.type !== 'user') continue;
+        const ts = typeof entry.timestamp === 'string' ? new Date(entry.timestamp).getTime() : 0;
+        // timestamp 매칭: ±2초 허용 (폴링 지연)
+        if (Math.abs(ts - targetMs) < 2000) {
+          userLineIndex = i;
+          break;
+        }
+      } catch { continue; }
+    }
+    if (userLineIndex < 0) return null;
+
+    // user 이후의 assistant text 엔트리들을 수집 (다음 user 전까지)
+    const textParts: string[] = [];
+    for (let i = userLineIndex + 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      try {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        if (entry.type === 'user') break; // 다음 user 메시지에서 중단
+        if (entry.type !== 'assistant') continue;
+        const msg = entry.message as Record<string, unknown> | undefined;
+        const contentArr = msg?.content;
+        if (!Array.isArray(contentArr)) continue;
+        for (const part of contentArr) {
+          const p = part as Record<string, unknown>;
+          if (p.type === 'text' && typeof p.text === 'string') {
+            textParts.push(p.text);
+          }
+          // thinking, tool_use 는 스킵
+        }
+      } catch { continue; }
+    }
+
+    if (textParts.length === 0) return null;
+
+    const response = textParts.join('\n\n');
+    const truncated = response.length > 30_000
+      ? response.slice(0, 30_000) + '\n\n... (truncated)'
+      : response;
+
+    // idle 세션만 캐시
+    if (session?.status === 'idle') {
+      if (this.responseCache.size >= ClaudeHeartbeat.RESPONSE_CACHE_MAX) {
+        const oldest = this.responseCache.keys().next().value;
+        if (oldest) this.responseCache.delete(oldest);
+      }
+      this.responseCache.set(cacheKey, { response: truncated, cachedAt: Date.now() });
+    }
+
+    return truncated;
+  }
+
+  // -------------------------------------------------------------------------
   // Hook event handlers (real-time updates from Claude Code hooks)
   // -------------------------------------------------------------------------
 

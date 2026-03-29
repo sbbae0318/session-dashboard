@@ -84,7 +84,7 @@
 
   // --- Clipboard copy ---
   let toastMessage = $state<string | null>(null);
-  let modalEntry = $state<{ sessionId: string; source?: string; query: string; sessionTitle?: string; timestamp: number } | null>(null);
+  let modalEntry = $state<{ sessionId: string; source?: string; query: string; sessionTitle?: string; timestamp: number; machineId?: string; machineHost?: string } | null>(null);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function buildCommandFromQuery(entry: { sessionId: string; source?: string }): string {
