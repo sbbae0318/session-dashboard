@@ -364,6 +364,7 @@
     border-radius: var(--radius-sm);
     transition: border-color 0.2s ease;
     overflow: hidden;
+    flex-shrink: 0;
   }
 
   .prompt-item:hover {
