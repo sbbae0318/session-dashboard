@@ -48,6 +48,11 @@ const EVICTION_INTERVAL_MS = 30_000;
 const MAX_TITLE_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 200;
 
+/** Background agent sessions run in temp dirs — skip these */
+function isTempDir(p: string): boolean {
+  return /^\/(private\/)?(tmp|var\/folders)/.test(p);
+}
+
 // ---------------------------------------------------------------------------
 // ClaudeHeartbeat
 // ---------------------------------------------------------------------------
@@ -224,6 +229,9 @@ export class ClaudeHeartbeat {
 
       const rawCwd = String(data['cwd'] ?? '');
       const cwd = (!rawCwd || rawCwd === '.') ? '' : (isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd));
+
+      // Skip background agent sessions (temp directory)
+      if (cwd && isTempDir(cwd)) return null;
 
       // single-pass conversation file parsing
       const encodedCwd = cwd.replace(/\//g, '-');
@@ -493,6 +501,10 @@ export class ClaudeHeartbeat {
       const activeSessionIds = new Set<string>();
 
       for (const encodedDir of projectDirs) {
+        // Skip background agent sessions (temp directory)
+        const decodedDir = this.decodePath(encodedDir);
+        if (isTempDir(decodedDir)) continue;
+
         const dirPath = join(this.claudeProjectsDir, encodedDir);
         try {
           const files = await readdir(dirPath);
@@ -519,7 +531,7 @@ export class ClaudeHeartbeat {
               this.sessions.set(sessionId, {
                 sessionId,
                 pid: 0,
-                cwd: this.decodePath(encodedDir),
+                cwd: decodedDir,
                 project: encodedDir,
                 startTime: fileStat.birthtimeMs,
                 lastHeartbeat: fileStat.mtimeMs,
@@ -533,7 +545,7 @@ export class ClaudeHeartbeat {
                 currentTool: null,
                 waitingForInput: false,
                 hooksActive: false,
-                processMetrics: this.processScanner?.getMetricsByCwd(this.decodePath(encodedDir), 'claude') ?? null,
+                processMetrics: this.processScanner?.getMetricsByCwd(decodedDir, 'claude') ?? null,
               });
             } catch {
               continue;
