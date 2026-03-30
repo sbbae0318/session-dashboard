@@ -132,16 +132,143 @@
     }
   }
 
-  // --- Keyboard shortcut: Cmd+Shift+E → toggle multi-expand mode ---
-  function handleGlobalKeydown(e: KeyboardEvent): void {
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
-      e.preventDefault();
-      multiExpandMode = !multiExpandMode;
-      if (!multiExpandMode && expandedKeys.size > 1) {
-        // Switch to single mode: keep only the last expanded
-        const arr = [...expandedKeys];
-        expandedKeys = new Set([arr[arr.length - 1]]);
+  // --- Keyboard navigation (vim-style TUI) ---
+  let focusedIndex = $state(-1);
+  let lastGTime = 0;
+  let showHelp = $state(false);
+
+  function isInputFocused(): boolean {
+    const tag = document.activeElement?.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  function isPaletteOpen(): boolean {
+    return !!document.querySelector('[data-testid="command-palette"]');
+  }
+
+  function scrollToFocused(): void {
+    requestAnimationFrame(() => {
+      const items = document.querySelectorAll<HTMLElement>('[data-prompt-index]');
+      items[focusedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  // --- Expand all / collapse all with concurrency limit ---
+  async function toggleExpandAll(): Promise<void> {
+    const allKeys = filteredQueries.map(entryKey);
+    const allExpanded = allKeys.length > 0 && allKeys.every(k => expandedKeys.has(k));
+
+    if (allExpanded) {
+      // Collapse all
+      expandedKeys = new Set();
+      return;
+    }
+
+    // Expand all — set keys first, then fetch responses with concurrency limit
+    multiExpandMode = true;
+    expandedKeys = new Set(allKeys);
+
+    const toFetch = filteredQueries.filter(e => !responseCache.has(entryKey(e)));
+    const CONCURRENCY = 3;
+    let i = 0;
+    async function next(): Promise<void> {
+      while (i < toFetch.length) {
+        const entry = toFetch[i++];
+        await fetchResponse(entry, entryKey(entry));
       }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, toFetch.length) }, () => next()));
+  }
+
+  function handleGlobalKeydown(e: KeyboardEvent): void {
+    if (isInputFocused() || isPaletteOpen()) return;
+
+    const ctrl = e.metaKey || e.ctrlKey;
+    const shift = e.shiftKey;
+
+    // Ctrl+Shift combos
+    if (ctrl && shift) {
+      if (e.key === 'A' || e.key === 'a') {
+        e.preventDefault();
+        void toggleExpandAll();
+        return;
+      }
+      if (e.key === 'E' || e.key === 'e') {
+        e.preventDefault();
+        multiExpandMode = !multiExpandMode;
+        if (!multiExpandMode && expandedKeys.size > 1) {
+          const arr = [...expandedKeys];
+          expandedKeys = new Set([arr[arr.length - 1]]);
+        }
+        return;
+      }
+    }
+
+    // Single-key vim bindings (no modifiers)
+    if (ctrl || e.altKey) return;
+
+    const len = filteredQueries.length;
+    if (len === 0) return;
+
+    switch (e.key) {
+      case 'j':
+      case 'ArrowDown':
+        e.preventDefault();
+        focusedIndex = Math.min(focusedIndex + 1, len - 1);
+        scrollToFocused();
+        break;
+
+      case 'k':
+      case 'ArrowUp':
+        e.preventDefault();
+        focusedIndex = Math.max(focusedIndex - 1, 0);
+        scrollToFocused();
+        break;
+
+      case 'Enter':
+      case ' ':
+      case 'e':
+        if (focusedIndex >= 0 && focusedIndex < len) {
+          e.preventDefault();
+          toggleExpand(filteredQueries[focusedIndex]);
+        }
+        break;
+
+      case 'c':
+        if (focusedIndex >= 0 && focusedIndex < len) {
+          void handleCopyCommand(filteredQueries[focusedIndex], e);
+        }
+        break;
+
+      case 'g':
+        if (shift) {
+          // G → go to bottom
+          e.preventDefault();
+          focusedIndex = len - 1;
+          scrollToFocused();
+        } else {
+          // g g → go to top (double tap within 300ms)
+          const now = Date.now();
+          if (now - lastGTime < 300) {
+            e.preventDefault();
+            focusedIndex = 0;
+            scrollToFocused();
+            lastGTime = 0;
+          } else {
+            lastGTime = now;
+          }
+        }
+        break;
+
+      case 'Escape':
+        expandedKeys = new Set();
+        focusedIndex = -1;
+        showHelp = false;
+        break;
+
+      case '?':
+        showHelp = !showHelp;
+        break;
     }
   }
 
@@ -196,7 +323,7 @@
   {#if multiExpandMode}
     <div class="mode-indicator">
       <span class="mode-badge">Multi</span>
-      <span class="mode-hint">⌘⇧E로 해제</span>
+      <span class="mode-hint">Ctrl+Shift+E로 해제</span>
     </div>
   {/if}
 
@@ -219,7 +346,8 @@
 
         <div
           class="prompt-item" class:in-progress={isWorking} class:expanded={isExpanded}
-          class:background={entry.isBackground}
+          class:background={entry.isBackground} class:focused={focusedIndex === i}
+          data-prompt-index={i}
         >
           <!-- Prompt area (clickable) -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -315,6 +443,27 @@
   <div class="copy-toast">{toastMessage}</div>
 {/if}
 
+{#if showHelp}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="help-overlay" onclick={() => { showHelp = false; }}>
+    <div class="help-panel">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="help-grid">
+        <span class="help-key">j / ↓</span><span>다음 프롬프트</span>
+        <span class="help-key">k / ↑</span><span>이전 프롬프트</span>
+        <span class="help-key">Enter / e</span><span>펼침 / 접힘</span>
+        <span class="help-key">Ctrl+Shift+A</span><span>전체 펼치기 / 접기</span>
+        <span class="help-key">Ctrl+Shift+E</span><span>단일 / 복수 모드</span>
+        <span class="help-key">c</span><span>resume 명령어 복사</span>
+        <span class="help-key">g g</span><span>목록 최상단</span>
+        <span class="help-key">G</span><span>목록 최하단</span>
+        <span class="help-key">Esc</span><span>모두 접기 + 포커스 해제</span>
+        <span class="help-key">?</span><span>이 도움말 토글</span>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .recent-prompts {
     display: flex;
@@ -373,6 +522,11 @@
 
   .prompt-item.expanded {
     border-color: rgba(88, 166, 255, 0.4);
+  }
+
+  .prompt-item.focused {
+    outline: 2px solid rgba(88, 166, 255, 0.6);
+    outline-offset: -1px;
   }
 
   .prompt-item.background {
@@ -747,6 +901,52 @@
 
   .dot-loader-sm span:nth-child(2) { animation-delay: 0.2s; }
   .dot-loader-sm span:nth-child(3) { animation-delay: 0.4s; }
+
+  /* ── Help overlay ── */
+  .help-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+
+  .help-panel {
+    background: var(--bg-secondary, #161b22);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 1.2rem 1.5rem;
+    min-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .help-panel h3 {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: 0.8rem;
+    font-weight: 600;
+  }
+
+  .help-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .help-key {
+    font-family: "SF Mono", "Fira Code", monospace;
+    background: rgba(110, 118, 129, 0.2);
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .prompt-item.in-progress { animation: none; border-left-color: var(--accent); box-shadow: none; }
