@@ -80,9 +80,8 @@
 
   $effect(() => { onBackgroundCountChange?.(backgroundCount); });
 
-  // --- Expand/collapse state ---
+  // --- Expand/collapse state (always multi-expand) ---
   let expandedKeys = $state<Set<string>>(new Set());
-  let multiExpandMode = $state(false);
   let responseCache = $state<Map<string, { text: string | null; loading: boolean; error: string | null }>>(new Map());
 
   function entryKey(entry: { sessionId: string; timestamp: number }): string {
@@ -96,11 +95,7 @@
       next.delete(key);
       expandedKeys = next;
     } else {
-      if (multiExpandMode) {
-        expandedKeys = new Set([...expandedKeys, key]);
-      } else {
-        expandedKeys = new Set([key]);
-      }
+      expandedKeys = new Set([...expandedKeys, key]);
       if (!responseCache.has(key)) {
         void fetchResponse(entry, key);
       }
@@ -165,7 +160,6 @@
     }
 
     // Expand all — set keys first, then fetch responses with concurrency limit
-    multiExpandMode = true;
     expandedKeys = new Set(allKeys);
 
     const toFetch = filteredQueries.filter(e => !responseCache.has(entryKey(e)));
@@ -191,15 +185,6 @@
       if (e.key === 'A' || e.key === 'a') {
         e.preventDefault();
         void toggleExpandAll();
-        return;
-      }
-      if (e.key === 'E' || e.key === 'e') {
-        e.preventDefault();
-        multiExpandMode = !multiExpandMode;
-        if (!multiExpandMode && expandedKeys.size > 1) {
-          const arr = [...expandedKeys];
-          expandedKeys = new Set([arr[arr.length - 1]]);
-        }
         return;
       }
     }
@@ -310,23 +295,9 @@
     showToast(ok ? 'Copied!' : 'Copy failed');
   }
 
-  // --- Scroll into view after expand ---
-  function scrollIntoViewIfNeeded(node: HTMLElement): { destroy: () => void } {
-    requestAnimationFrame(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-    return { destroy() {} };
-  }
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
-  {#if multiExpandMode}
-    <div class="mode-indicator">
-      <span class="mode-badge">Multi</span>
-      <span class="mode-hint">Ctrl+Shift+E로 해제</span>
-    </div>
-  {/if}
-
   {#if filteredQueries.length === 0}
     <div class="empty-state">{selectedSessionId ? '선택된 세션의 프롬프트 없음' : '최근 프롬프트 없음'}</div>
   {:else}
@@ -413,7 +384,7 @@
 
           <!-- Response area (inline, shown when expanded) -->
           {#if isExpanded}
-            <div class="response-area" use:scrollIntoViewIfNeeded>
+            <div class="response-area">
               {#if isWorking}
                 <div class="response-status">
                   <span class="dot-loader"><span></span><span></span><span></span></span>
@@ -453,7 +424,6 @@
         <span class="help-key">k / ↑</span><span>이전 프롬프트</span>
         <span class="help-key">Enter / e</span><span>펼침 / 접힘</span>
         <span class="help-key">Ctrl+Shift+A</span><span>전체 펼치기 / 접기</span>
-        <span class="help-key">Ctrl+Shift+E</span><span>단일 / 복수 모드</span>
         <span class="help-key">c</span><span>resume 명령어 복사</span>
         <span class="help-key">g g</span><span>목록 최상단</span>
         <span class="help-key">G</span><span>목록 최하단</span>
@@ -471,30 +441,6 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
-  }
-
-  .mode-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.7rem;
-    flex-shrink: 0;
-  }
-
-  .mode-badge {
-    background: rgba(168, 113, 255, 0.2);
-    color: #a871ff;
-    border: 1px solid rgba(168, 113, 255, 0.3);
-    border-radius: 9999px;
-    padding: 0.05rem 0.4rem;
-    font-weight: 600;
-    font-size: 0.6rem;
-  }
-
-  .mode-hint {
-    color: var(--text-secondary);
-    font-size: 0.65rem;
   }
 
   .prompts-list {
