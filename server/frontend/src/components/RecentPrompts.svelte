@@ -219,6 +219,11 @@
         }
         break;
 
+      case 'a':
+        e.preventDefault();
+        void toggleExpandAll();
+        break;
+
       case 'c':
         if (focusedIndex >= 0 && focusedIndex < len) {
           void handleCopyCommand(filteredQueries[focusedIndex], e);
@@ -423,7 +428,7 @@
         <span class="help-key">j / ↓</span><span>다음 프롬프트</span>
         <span class="help-key">k / ↑</span><span>이전 프롬프트</span>
         <span class="help-key">Enter / e</span><span>펼침 / 접힘</span>
-        <span class="help-key">Ctrl+Shift+A</span><span>전체 펼치기 / 접기</span>
+        <span class="help-key">a</span><span>전체 펼치기 / 접기</span>
         <span class="help-key">c</span><span>resume 명령어 복사</span>
         <span class="help-key">g g</span><span>목록 최상단</span>
         <span class="help-key">G</span><span>목록 최하단</span>
