@@ -12,10 +12,12 @@
     sessionIdFilter = null,
     showBackground = $bindable(false),
     onBackgroundCountChange,
+    paneActive = true,
   }: {
     sessionIdFilter?: string | null;
     showBackground?: boolean;
     onBackgroundCountChange?: (count: number) => void;
+    paneActive?: boolean;
   } = $props();
 
   let queries = $derived(getQueries());
@@ -53,11 +55,36 @@
   );
 
   let latestIndexBySession = $derived(
-    filteredQueries.reduce((acc, q, idx) => {
+    sortedQueries.reduce((acc, q, idx) => {
       if (!(q.sessionId in acc)) acc[q.sessionId] = idx;
       return acc;
     }, {} as Record<string, number>)
   );
+
+  // in-progress (busy 세션의 최신 프롬프트)를 목록 맨 위로
+  let sortedQueries = $derived.by(() => {
+    const busySessions = new Set(
+      sessions
+        .filter(s => s.apiStatus === 'busy' || s.status === 'active')
+        .map(s => s.sessionId)
+    );
+    // latestTimestamp per session
+    const latestTs: Record<string, number> = {};
+    for (const q of filteredQueries) {
+      if (!(q.sessionId in latestTs) || q.timestamp > latestTs[q.sessionId]) {
+        latestTs[q.sessionId] = q.timestamp;
+      }
+    }
+    const isInProgress = (q: typeof filteredQueries[number]) =>
+      busySessions.has(q.sessionId) && q.timestamp === latestTs[q.sessionId];
+
+    return filteredQueries.toSorted((a, b) => {
+      const aP = isInProgress(a) ? 1 : 0;
+      const bP = isInProgress(b) ? 1 : 0;
+      if (aP !== bP) return bP - aP;
+      return b.timestamp - a.timestamp;
+    });
+  });
 
   let backgroundCount = $derived(
     queries
@@ -130,7 +157,6 @@
   // --- Keyboard navigation (vim-style TUI) ---
   let focusedIndex = $state(-1);
   let lastGTime = 0;
-  let showHelp = $state(false);
 
   function isInputFocused(): boolean {
     const tag = document.activeElement?.tagName;
@@ -150,7 +176,7 @@
 
   // --- Expand all / collapse all with concurrency limit ---
   async function toggleExpandAll(): Promise<void> {
-    const allKeys = filteredQueries.map(entryKey);
+    const allKeys = sortedQueries.map(entryKey);
     const allExpanded = allKeys.length > 0 && allKeys.every(k => expandedKeys.has(k));
 
     if (allExpanded) {
@@ -162,7 +188,7 @@
     // Expand all — set keys first, then fetch responses with concurrency limit
     expandedKeys = new Set(allKeys);
 
-    const toFetch = filteredQueries.filter(e => !responseCache.has(entryKey(e)));
+    const toFetch = sortedQueries.filter(e => !responseCache.has(entryKey(e)));
     const CONCURRENCY = 3;
     let i = 0;
     async function next(): Promise<void> {
@@ -175,6 +201,7 @@
   }
 
   function handleGlobalKeydown(e: KeyboardEvent): void {
+    if (!paneActive) return;
     if (isInputFocused() || isPaletteOpen()) return;
 
     const ctrl = e.metaKey || e.ctrlKey;
@@ -192,7 +219,7 @@
     // Single-key vim bindings (no modifiers)
     if (ctrl || e.altKey) return;
 
-    const len = filteredQueries.length;
+    const len = sortedQueries.length;
     if (len === 0) return;
 
     switch (e.key) {
@@ -215,7 +242,7 @@
       case 'e':
         if (focusedIndex >= 0 && focusedIndex < len) {
           e.preventDefault();
-          toggleExpand(filteredQueries[focusedIndex]);
+          toggleExpand(sortedQueries[focusedIndex]);
         }
         break;
 
@@ -226,7 +253,7 @@
 
       case 'c':
         if (focusedIndex >= 0 && focusedIndex < len) {
-          void handleCopyCommand(filteredQueries[focusedIndex], e);
+          void handleCopyCommand(sortedQueries[focusedIndex], e);
         }
         break;
 
@@ -253,11 +280,6 @@
       case 'Escape':
         expandedKeys = new Set();
         focusedIndex = -1;
-        showHelp = false;
-        break;
-
-      case '?':
-        showHelp = !showHelp;
         break;
     }
   }
@@ -303,11 +325,11 @@
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
-  {#if filteredQueries.length === 0}
+  {#if sortedQueries.length === 0}
     <div class="empty-state">{selectedSessionId ? '선택된 세션의 프롬프트 없음' : '최근 프롬프트 없음'}</div>
   {:else}
     <div class="prompts-list">
-      {#each filteredQueries as entry, i (entry.sessionId + '-' + entry.timestamp)}
+      {#each sortedQueries as entry, i (entry.sessionId + '-' + entry.timestamp)}
         {@const matchedSession = sessions.find(s => s.sessionId === entry.sessionId)}
         {@const resolvedTitle = entry.sessionTitle || matchedSession?.title || matchedSession?.projectCwd?.split('/').pop() || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
@@ -419,25 +441,6 @@
   <div class="copy-toast">{toastMessage}</div>
 {/if}
 
-{#if showHelp}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="help-overlay" onclick={() => { showHelp = false; }}>
-    <div class="help-panel">
-      <h3>Keyboard Shortcuts</h3>
-      <div class="help-grid">
-        <span class="help-key">j / ↓</span><span>다음 프롬프트</span>
-        <span class="help-key">k / ↑</span><span>이전 프롬프트</span>
-        <span class="help-key">Enter / e</span><span>펼침 / 접힘</span>
-        <span class="help-key">a</span><span>전체 펼치기 / 접기</span>
-        <span class="help-key">c</span><span>resume 명령어 복사</span>
-        <span class="help-key">g g</span><span>목록 최상단</span>
-        <span class="help-key">G</span><span>목록 최하단</span>
-        <span class="help-key">Esc</span><span>모두 접기 + 포커스 해제</span>
-        <span class="help-key">?</span><span>이 도움말 토글</span>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .recent-prompts {
@@ -853,51 +856,6 @@
   .dot-loader-sm span:nth-child(2) { animation-delay: 0.2s; }
   .dot-loader-sm span:nth-child(3) { animation-delay: 0.4s; }
 
-  /* ── Help overlay ── */
-  .help-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-  }
-
-  .help-panel {
-    background: var(--bg-secondary, #161b22);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    padding: 1.2rem 1.5rem;
-    min-width: 320px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-
-  .help-panel h3 {
-    font-size: 0.9rem;
-    color: var(--text-primary);
-    margin-bottom: 0.8rem;
-    font-weight: 600;
-  }
-
-  .help-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.3rem 1rem;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    line-height: 1.6;
-  }
-
-  .help-key {
-    font-family: "SF Mono", "Fira Code", monospace;
-    background: rgba(110, 118, 129, 0.2);
-    padding: 0.05rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    color: var(--text-primary);
-    white-space: nowrap;
-  }
 
   @media (prefers-reduced-motion: reduce) {
     .prompt-item.in-progress { animation: none; border-left-color: var(--accent); box-shadow: none; }

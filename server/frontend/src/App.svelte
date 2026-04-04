@@ -13,6 +13,7 @@
   import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
   import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
+  import ShortcutCheatsheet from './components/ShortcutCheatsheet.svelte';
   import TopNav from './components/TopNav.svelte';
   import TokenCostPage from './components/pages/TokenCostPage.svelte';
   import CodeImpactPage from './components/pages/CodeImpactPage.svelte';
@@ -25,6 +26,8 @@
   let connected = $state(false);
   let loading = $state(true);
   let paletteOpen = $state(false);
+  let cheatsheetOpen = $state(false);
+  let focusPane = $state<'sessions' | 'prompts'>('prompts');
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   let selectedSessionId = $derived(getSelectedSessionId());
   let isDetail = $derived(isDetailView());
@@ -118,8 +121,15 @@
     }
 
     if (paletteOpen) return;
+    if (cheatsheetOpen) return;
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.key === '?') {
+      e.preventDefault();
+      cheatsheetOpen = true;
+      return;
+    }
 
     if (e.key === 'Escape' && isDetail) {
       e.preventDefault();
@@ -127,21 +137,16 @@
       return;
     }
 
-    if (e.key === 'j' || e.key === 'k') {
-      const list = document.querySelector('.prompts-list');
-      if (!list) return;
-      const items = list.querySelectorAll('.prompt-item');
-      if (items.length === 0) return;
-
-      const focused = list.querySelector('.prompt-item:focus') as HTMLElement;
-      let idx = focused ? Array.from(items).indexOf(focused) : -1;
-
-      if (e.key === 'j') idx = Math.min(idx + 1, items.length - 1);
-      if (e.key === 'k') idx = Math.max(idx - 1, 0);
-
-      const target = items[idx] as HTMLElement;
-      target.focus();
-      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // h/l: pane 전환
+    if (e.key === 'h') {
+      e.preventDefault();
+      focusPane = 'sessions';
+      return;
+    }
+    if (e.key === 'l') {
+      e.preventDefault();
+      focusPane = 'prompts';
+      return;
     }
   }
 </script>
@@ -208,7 +213,7 @@
     <MemosPage />
   {:else}
     <div class="dashboard-layout">
-      <aside class="sidebar">
+      <aside class="sidebar" class:pane-active={focusPane === 'sessions'}>
         <div class="panel">
           <div class="sessions-panel-head">
             <h2>Sessions</h2>
@@ -224,14 +229,14 @@
               </div>
             {/if}
           </div>
-          <ActiveSessions />
+          <ActiveSessions paneActive={focusPane === 'sessions'} />
         </div>
       </aside>
-      <section class="main-content">
+      <section class="main-content" class:pane-active={focusPane === 'prompts'}>
         {#if isDetail}
           <div class="panel prompts-panel view-transition">
             <h2>세션 프롬프트</h2>
-            <RecentPrompts sessionIdFilter={detailId} bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} />
+            <RecentPrompts sessionIdFilter={detailId} bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} paneActive={focusPane === 'prompts'} />
           </div>
         {:else}
           <div class="panel prompts-panel view-transition">
@@ -249,7 +254,7 @@
                 </button>
               {/if}
             </div>
-            <RecentPrompts bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} />
+            <RecentPrompts bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} paneActive={focusPane === 'prompts'} />
           </div>
         {/if}
       </section>
@@ -265,9 +270,14 @@
         <kbd>Ctrl</kbd><kbd>K</kbd>
       {/if}
       <span>검색</span>
+      <span class="hint-divider">│</span>
+      <kbd>?</kbd>
+      <span>단축키</span>
     </div>
   {/if}
 </main>
+
+<ShortcutCheatsheet open={cheatsheetOpen} onClose={() => { cheatsheetOpen = false; }} />
 
 <CommandPalette
   open={paletteOpen}
@@ -407,5 +417,17 @@
     font-size: 0.6rem;
     color: var(--text-secondary);
     margin-left: 0.15rem;
+  }
+
+  .hint-divider {
+    margin: 0 0.15rem;
+    opacity: 0.4;
+  }
+
+  :global(.pane-active) > .panel > h2,
+  :global(.pane-active) > .panel > .sessions-panel-head > h2,
+  :global(.pane-active) > .panel > .panel-header-row > h2 {
+    color: var(--accent);
+    transition: color 0.15s ease;
   }
 </style>

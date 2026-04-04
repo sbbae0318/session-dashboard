@@ -8,7 +8,11 @@
   import { relativeTime, formatDuration, formatRss, copyToClipboard } from "../lib/utils";
   import { onMount } from "svelte";
 
+  let { paneActive = false }: { paneActive?: boolean } = $props();
+
   let tick = $state(0);
+  let focusedSessionIndex = $state(-1);
+
   onMount(() => {
     const id = setInterval(() => tick++, 60_000);
     return () => clearInterval(id);
@@ -69,6 +73,67 @@
     if (toastTimeout) clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
   }
+
+  // pane 활성화 시 focus 초기화
+  $effect(() => {
+    if (paneActive && focusedSessionIndex < 0 && topLevelSessions.length > 0) {
+      focusedSessionIndex = 0;
+    }
+  });
+
+  function scrollToFocusedSession(): void {
+    requestAnimationFrame(() => {
+      const items = document.querySelectorAll<HTMLElement>('[data-session-index]');
+      items[focusedSessionIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  function handleSessionKeydown(e: KeyboardEvent): void {
+    if (!paneActive) return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    const len = topLevelSessions.length;
+    if (len === 0) return;
+
+    switch (e.key) {
+      case 'j':
+      case 'ArrowDown':
+        e.preventDefault();
+        focusedSessionIndex = Math.min(focusedSessionIndex + 1, len - 1);
+        scrollToFocusedSession();
+        break;
+
+      case 'k':
+      case 'ArrowUp':
+        e.preventDefault();
+        focusedSessionIndex = Math.max(focusedSessionIndex - 1, 0);
+        scrollToFocusedSession();
+        break;
+
+      case 'e':
+      case 'Enter': {
+        if (focusedSessionIndex >= 0 && focusedSessionIndex < len) {
+          e.preventDefault();
+          const s = topLevelSessions[focusedSessionIndex];
+          // 이미 선택된 세션이면 필터 해제
+          if (selectedSessionId === s.sessionId) {
+            selectSession(s.sessionId); // toggles off
+            popToOverview();
+          } else {
+            selectSession(s.sessionId);
+            pushSessionDetail(s.sessionId);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('keydown', handleSessionKeydown);
+    return () => document.removeEventListener('keydown', handleSessionKeydown);
+  });
 
   function handleSessionClick(session: DashboardSession): void {
     if (selectedSessionId === session.sessionId) {
@@ -141,13 +206,15 @@
     <div class="empty-state">세션 없음</div>
   {:else}
     <div class="sessions-list">
-      {#each topLevelSessions as session (session.sessionId)}
+      {#each topLevelSessions as session, si (session.sessionId)}
         {@const ds = getDisplayStatus(session)}
         <div class="session-group">
           <!-- Parent / standalone session -->
           <div
             class="session-item"
             class:selected={selectedSessionId === session.sessionId}
+            class:focused={paneActive && focusedSessionIndex === si}
+            data-session-index={si}
             onclick={() => handleSessionClick(session)}
             role="button"
             tabindex="0"
@@ -272,6 +339,11 @@
     border-color: var(--accent);
     background: rgba(88, 166, 255, 0.08);
     box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .session-item.focused {
+    outline: 2px solid rgba(88, 166, 255, 0.6);
+    outline-offset: -2px;
   }
 
   .session-header {
