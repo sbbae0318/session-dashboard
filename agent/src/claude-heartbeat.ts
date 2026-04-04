@@ -53,14 +53,41 @@ function isTempDir(p: string): boolean {
   return /^\/(private\/)?(tmp|var\/folders)/.test(p);
 }
 
-/** user 엔트리가 tool_result만 포함하는지 판별 (실제 프롬프트가 아님) */
-function isToolResultUser(entry: Record<string, unknown>): boolean {
+/**
+ * 비-대화 user 엔트리 판별 (실제 프롬프트가 아닌 것들)
+ * - tool_result: Claude Code tool 실행 결과
+ * - 슬래시 명령: /compact, /exit 등
+ * - 로컬 명령 결과: <local-command-caveat>, <local-command-stdout/stderr>
+ */
+function isNonConversationUser(entry: Record<string, unknown>): boolean {
   const msg = entry.message as Record<string, unknown> | undefined;
   const content = msg?.content;
-  if (!Array.isArray(content)) return false;
-  return content.length > 0 && content.every(
-    (c: Record<string, unknown>) => c.type === 'tool_result',
-  );
+
+  // array content → tool_result 전용
+  if (Array.isArray(content)) {
+    return content.length > 0 && content.every(
+      (c: Record<string, unknown>) => c.type === 'tool_result',
+    );
+  }
+
+  // string content → 슬래시 명령 / 로컬 명령 결과
+  if (typeof content === 'string') {
+    const trimmed = content.trimStart();
+    if (trimmed.startsWith('<command-name>')) return true;
+    if (trimmed.startsWith('<local-command-')) return true;
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * assistant 엔트리가 interrupt(Esc/Ctrl+C)로 중단되었는지 판별
+ * stop_reason === "stop_sequence" → interrupt
+ */
+function isInterruptedAssistant(entry: Record<string, unknown>): boolean {
+  const msg = entry.message as Record<string, unknown> | undefined;
+  return msg?.stop_reason === 'stop_sequence';
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +194,7 @@ export class ClaudeHeartbeat {
       try {
         const entry = JSON.parse(lines[i]) as Record<string, unknown>;
         if (entry.type === 'user') {
-          if (isToolResultUser(entry)) continue; // tool_result → skip
+          if (isNonConversationUser(entry)) continue; // tool_result → skip
           break; // 실제 user 프롬프트 → 중단
         }
         if (entry.type !== 'assistant') continue;
@@ -442,8 +469,8 @@ export class ClaudeHeartbeat {
 
     const lines = content.trimEnd().split('\n');
 
-    // Defaults for empty file
-    let status: 'busy' | 'idle' = 'busy';
+    // Defaults: 대화 엔트리가 없으면 idle (비-대화 엔트리만 있는 경우 포함)
+    let status: 'busy' | 'idle' = 'idle';
     let title: string | null = null;
     let lastPrompt: string | null = null;
     let lastPromptTime: number | null = null;
@@ -498,31 +525,43 @@ export class ClaudeHeartbeat {
       try {
         const entry = JSON.parse(lines[i]) as Record<string, unknown>;
 
-        // Status: determined by the very first real user/assistant encountered from end
-        // tool_result user 엔트리는 skip (실제 user 프롬프트가 아님)
+        // Status: 역순으로 첫 번째 대화 엔트리 기준
+        // - 비-대화 user (tool_result, 슬래시 명령, 로컬 명령 결과) → skip
+        // - interrupt된 assistant (stop_sequence) → idle
+        // - tool_use assistant → busy
+        // - text-only assistant → idle
+        // - real user → busy
         if (!foundStatus) {
-          if (entry.type === 'user' && !isToolResultUser(entry)) {
-            status = 'busy';
-            foundStatus = true;
-          } else if (entry.type === 'assistant') {
-            const msg = entry.message as Record<string, unknown> | undefined;
-            const msgContent = msg?.content;
-            if (
-              Array.isArray(msgContent) &&
-              msgContent.some(
-                (c: Record<string, unknown>) => c.type === 'tool_use',
-              )
-            ) {
-              status = 'busy';
+          if (entry.type === 'user') {
+            if (isNonConversationUser(entry)) {
+              // skip — 비-대화 엔트리
             } else {
+              status = 'busy';
+              foundStatus = true;
+            }
+          } else if (entry.type === 'assistant') {
+            if (isInterruptedAssistant(entry)) {
               status = 'idle';
+            } else {
+              const msg = entry.message as Record<string, unknown> | undefined;
+              const msgContent = msg?.content;
+              if (
+                Array.isArray(msgContent) &&
+                msgContent.some(
+                  (c: Record<string, unknown>) => c.type === 'tool_use',
+                )
+              ) {
+                status = 'busy';
+              } else {
+                status = 'idle';
+              }
             }
             foundStatus = true;
           }
         }
 
         // Last real user entry → lastPromptTime + lastPrompt (tool_result skip)
-        if (!foundLastUser && entry.type === 'user' && !isToolResultUser(entry)) {
+        if (!foundLastUser && entry.type === 'user' && !isNonConversationUser(entry)) {
           foundLastUser = true;
           const ts = entry.timestamp;
           if (typeof ts === 'string') {
@@ -589,15 +628,16 @@ export class ClaudeHeartbeat {
       const content = await readFile(conversationPath, 'utf-8');
       const lines = content.trimEnd().split('\n');
 
-      // Scan from end, find last real user or assistant entry (skip tool_result users)
+      // Scan from end: skip 비-대화 user, interrupt assistant → idle
       for (let i = lines.length - 1; i >= 0; i--) {
         try {
           const entry = JSON.parse(lines[i]) as Record<string, unknown>;
           if (entry.type === 'user') {
-            if (isToolResultUser(entry)) continue;
+            if (isNonConversationUser(entry)) continue;
             return 'busy';
           }
           if (entry.type === 'assistant') {
+            if (isInterruptedAssistant(entry)) return 'idle';
             const msg = entry.message as Record<string, unknown> | undefined;
             const msgContent = msg?.content;
             if (
@@ -614,9 +654,9 @@ export class ClaudeHeartbeat {
           continue;
         }
       }
-      return 'busy';
+      return 'idle'; // 대화 엔트리 없음
     } catch {
-      return 'busy';
+      return 'busy'; // 파일 읽기 실패 → 안전하게 busy
     }
   }
 
@@ -707,10 +747,11 @@ export class ClaudeHeartbeat {
         try {
           const entry = JSON.parse(lines[i]) as Record<string, unknown>;
           if (entry.type === 'user') {
-            if (isToolResultUser(entry)) continue;
+            if (isNonConversationUser(entry)) continue;
             return 'busy';
           }
           if (entry.type === 'assistant') {
+            if (isInterruptedAssistant(entry)) return 'idle';
             const msg = entry.message as Record<string, unknown> | undefined;
             const msgContent = msg?.content;
             if (
@@ -727,9 +768,9 @@ export class ClaudeHeartbeat {
           continue;
         }
       }
-      return 'busy';
+      return 'idle'; // 대화 엔트리 없음
     } catch {
-      return 'busy';
+      return 'busy'; // 파일 읽기 실패 → 안전하게 busy
     }
   }
 

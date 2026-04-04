@@ -6,6 +6,8 @@ import type { QueryEntry } from "../recent-prompts/queries-reader.js";
 import type { DashboardSession, SessionsResponse } from '../../shared/api-contract.js';
 
 const SESSION_MEMORY_TTL_MS = 300_000; // 5 minutes
+/** hooks 미연결 busy 세션이 이 시간 이상 비활성이면 idle로 강제 전환 */
+const STALE_BUSY_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 export class ActiveSessionsModule implements BackendModule {
   readonly id = "active-sessions";
@@ -175,38 +177,48 @@ export class ActiveSessionsModule implements BackendModule {
         }
       }
 
+      const lastActivityTime = isClaudeCode
+        ? Math.max(
+            (s.lastResponseTime as number) ?? 0,
+            (s.lastFileModified as number) ?? 0,
+            (s.lastPromptTime as number) ?? 0,
+          ) || Date.now()
+        : (s.time as { updated?: number })?.updated ?? Date.now();
+
+      const hooksActive = isClaudeCode ? (cached?.hooksActive ?? false) : false;
+
+      // Gap 5: hooks 미연결 + busy + 오래된 세션 → idle 강제 전환
+      const isStaleBusy = isClaudeCode && isActive && !hooksActive
+        && (Date.now() - lastActivityTime > STALE_BUSY_TTL_MS);
+      const effectiveActive = isActive && !isStaleBusy;
+      const effectiveApiStatus = isStaleBusy ? null : apiStatus;
+
       sessionMap.set(id, {
         sessionId: id,
         parentSessionId: (s.parentID as string) ?? null,
         childSessionIds: [],
         title: (s.title as string) ?? null,
         projectCwd: (s.directory as string) || null,
-        status: isActive ? 'active' : 'idle',
+        status: effectiveActive ? 'active' : 'idle',
         waitingForInput: isClaudeCode
           ? (cached?.waitingForInput ?? false)
           : (cached && cached.sseConnected !== false) ? (cached.waitingForInput ?? false) : false,
         startTime: isClaudeCode
           ? (s.startTime as number) ?? Date.now()
           : (s.time as { created?: number })?.created ?? Date.now(),
-        lastActivityTime: isClaudeCode
-          ? Math.max(
-              (s.lastResponseTime as number) ?? 0,
-              (s.lastFileModified as number) ?? 0,
-              (s.lastPromptTime as number) ?? 0,
-            ) || Date.now()
-          : (s.time as { updated?: number })?.updated ?? Date.now(),
+        lastActivityTime,
         currentTool: isClaudeCode
           ? (cached?.currentTool ?? null)
           : (cached?.currentTool ?? (allStatuses[id]?.type === 'busy' ? 'working' : null)),
         duration: null,
         summary: null,
-        apiStatus,
+        apiStatus: effectiveApiStatus,
         lastPrompt: cached?.lastPrompt ?? null,
         lastPromptTime: isClaudeCode
           ? (s.lastPromptTime as number | null) ?? null
           : cached?.lastPromptTime ?? null,
         source: isClaudeCode ? 'claude-code' : 'opencode',
-        ...(isClaudeCode ? { hooksActive: cached?.hooksActive ?? false } : {}),
+        ...(isClaudeCode ? { hooksActive } : {}),
         processMetrics: cached?.processMetrics ?? null,
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
