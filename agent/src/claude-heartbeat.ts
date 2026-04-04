@@ -53,6 +53,16 @@ function isTempDir(p: string): boolean {
   return /^\/(private\/)?(tmp|var\/folders)/.test(p);
 }
 
+/** user 엔트리가 tool_result만 포함하는지 판별 (실제 프롬프트가 아님) */
+function isToolResultUser(entry: Record<string, unknown>): boolean {
+  const msg = entry.message as Record<string, unknown> | undefined;
+  const content = msg?.content;
+  if (!Array.isArray(content)) return false;
+  return content.length > 0 && content.every(
+    (c: Record<string, unknown>) => c.type === 'tool_result',
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ClaudeHeartbeat
 // ---------------------------------------------------------------------------
@@ -119,10 +129,8 @@ export class ClaudeHeartbeat {
     if (cached) return cached.response;
 
     // 세션의 JSONL 파일 찾기
-    const session = this.sessions.get(sessionId);
-    const cwd = session?.cwd ?? '';
-    const encodedCwd = cwd.replace(/\//g, '-');
-    const conversationPath = join(this.claudeProjectsDir, encodedCwd, `${sessionId}.jsonl`);
+    const conversationPath = await this.findConversationFile(sessionId);
+    if (!conversationPath) return null;
 
     let content: string;
     try {
@@ -151,13 +159,17 @@ export class ClaudeHeartbeat {
     }
     if (userLineIndex < 0) return null;
 
-    // user 이후의 assistant text 엔트리들을 수집 (다음 user 전까지)
+    // user 이후의 assistant text 엔트리들을 수집 (다음 real user 전까지)
+    // tool_result만 포함된 user 엔트리는 skip (Claude Code의 tool 결과 반환)
     const textParts: string[] = [];
     for (let i = userLineIndex + 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       try {
         const entry = JSON.parse(lines[i]) as Record<string, unknown>;
-        if (entry.type === 'user') break; // 다음 user 메시지에서 중단
+        if (entry.type === 'user') {
+          if (isToolResultUser(entry)) continue; // tool_result → skip
+          break; // 실제 user 프롬프트 → 중단
+        }
         if (entry.type !== 'assistant') continue;
         const msg = entry.message as Record<string, unknown> | undefined;
         const contentArr = msg?.content;
@@ -180,6 +192,7 @@ export class ClaudeHeartbeat {
       : response;
 
     // idle 세션만 캐시
+    const session = this.sessions.get(sessionId);
     if (session?.status === 'idle') {
       if (this.responseCache.size >= ClaudeHeartbeat.RESPONSE_CACHE_MAX) {
         const oldest = this.responseCache.keys().next().value;
@@ -189,6 +202,32 @@ export class ClaudeHeartbeat {
     }
 
     return truncated;
+  }
+
+  // -------------------------------------------------------------------------
+  // JSONL file lookup
+  // -------------------------------------------------------------------------
+
+  /** 세션 맵 → 프로젝트 디렉토리 스캔 순으로 JSONL 경로 탐색 */
+  private async findConversationFile(sessionId: string): Promise<string | null> {
+    // 1) 세션 맵에서 cwd 기반 경로
+    const session = this.sessions.get(sessionId);
+    if (session?.cwd) {
+      const encodedCwd = session.cwd.replace(/\//g, '-');
+      const path = join(this.claudeProjectsDir, encodedCwd, `${sessionId}.jsonl`);
+      try { await statFile(path); return path; } catch { /* fall through */ }
+    }
+
+    // 2) 프로젝트 디렉토리 스캔 (history.jsonl에만 있는 세션)
+    try {
+      const dirs = await readdir(this.claudeProjectsDir);
+      for (const dir of dirs) {
+        const path = join(this.claudeProjectsDir, dir, `${sessionId}.jsonl`);
+        try { await statFile(path); return path; } catch { continue; }
+      }
+    } catch { /* claudeProjectsDir 없음 */ }
+
+    return null;
   }
 
   // -------------------------------------------------------------------------
@@ -459,9 +498,10 @@ export class ClaudeHeartbeat {
       try {
         const entry = JSON.parse(lines[i]) as Record<string, unknown>;
 
-        // Status: determined by the very first user/assistant encountered from end
+        // Status: determined by the very first real user/assistant encountered from end
+        // tool_result user 엔트리는 skip (실제 user 프롬프트가 아님)
         if (!foundStatus) {
-          if (entry.type === 'user') {
+          if (entry.type === 'user' && !isToolResultUser(entry)) {
             status = 'busy';
             foundStatus = true;
           } else if (entry.type === 'assistant') {
@@ -481,8 +521,8 @@ export class ClaudeHeartbeat {
           }
         }
 
-        // Last user entry → lastPromptTime + lastPrompt
-        if (!foundLastUser && entry.type === 'user') {
+        // Last real user entry → lastPromptTime + lastPrompt (tool_result skip)
+        if (!foundLastUser && entry.type === 'user' && !isToolResultUser(entry)) {
           foundLastUser = true;
           const ts = entry.timestamp;
           if (typeof ts === 'string') {
@@ -549,11 +589,14 @@ export class ClaudeHeartbeat {
       const content = await readFile(conversationPath, 'utf-8');
       const lines = content.trimEnd().split('\n');
 
-      // Scan from end, find last user or assistant entry
+      // Scan from end, find last real user or assistant entry (skip tool_result users)
       for (let i = lines.length - 1; i >= 0; i--) {
         try {
           const entry = JSON.parse(lines[i]) as Record<string, unknown>;
-          if (entry.type === 'user') return 'busy';
+          if (entry.type === 'user') {
+            if (isToolResultUser(entry)) continue;
+            return 'busy';
+          }
           if (entry.type === 'assistant') {
             const msg = entry.message as Record<string, unknown> | undefined;
             const msgContent = msg?.content;
@@ -663,7 +706,10 @@ export class ClaudeHeartbeat {
       for (let i = lines.length - 1; i >= 0; i--) {
         try {
           const entry = JSON.parse(lines[i]) as Record<string, unknown>;
-          if (entry.type === 'user') return 'busy';
+          if (entry.type === 'user') {
+            if (isToolResultUser(entry)) continue;
+            return 'busy';
+          }
           if (entry.type === 'assistant') {
             const msg = entry.message as Record<string, unknown> | undefined;
             const msgContent = msg?.content;
