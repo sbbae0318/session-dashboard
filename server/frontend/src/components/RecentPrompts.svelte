@@ -54,13 +54,6 @@
       .toSorted((a, b) => b.timestamp - a.timestamp)
   );
 
-  let latestIndexBySession = $derived(
-    sortedQueries.reduce((acc, q, idx) => {
-      if (!(q.sessionId in acc)) acc[q.sessionId] = idx;
-      return acc;
-    }, {} as Record<string, number>)
-  );
-
   // in-progress (busy 세션의 최신 프롬프트)를 목록 맨 위로
   let sortedQueries = $derived.by(() => {
     const busySessions = new Set(
@@ -85,6 +78,13 @@
       return b.timestamp - a.timestamp;
     });
   });
+
+  let latestIndexBySession = $derived(
+    sortedQueries.reduce((acc, q, idx) => {
+      if (!(q.sessionId in acc)) acc[q.sessionId] = idx;
+      return acc;
+    }, {} as Record<string, number>)
+  );
 
   let backgroundCount = $derived(
     queries
