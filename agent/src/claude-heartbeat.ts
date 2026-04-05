@@ -661,6 +661,45 @@ export class ClaudeHeartbeat {
   }
 
   /**
+   * 특정 JSONL 파일 변경을 받아 대상 세션의 title만 refresh.
+   * 기존 tracked 세션은 live 필드(status/tool/waitingForInput/hooksActive/metrics)를
+   * 보존하고 title만 업데이트. 신규 세션은 full scan으로 위임.
+   *
+   * filename: claudeProjectsDir 기준 상대 경로 (예: "-Users-user-project-foo/ses123.jsonl")
+   */
+  private async refreshSessionFromFile(filename: string): Promise<void> {
+    if (!filename.endsWith('.jsonl')) return;
+
+    // Parse "encodedDir/sessionId.jsonl"
+    const lastSep = filename.lastIndexOf('/');
+    if (lastSep < 0) return;
+    const encodedDir = filename.slice(0, lastSep);
+    const fileBase = filename.slice(lastSep + 1);
+    const sessionId = fileBase.slice(0, -'.jsonl'.length);
+    if (!sessionId) return;
+
+    // Skip temp dirs (background agent sessions)
+    const decodedDir = this.decodePath(encodedDir);
+    if (isTempDir(decodedDir)) return;
+
+    const existing = this.sessions.get(sessionId);
+    if (!existing) {
+      // 신규 세션: full scan으로 위임 (초기화 로직 재사용)
+      await this.scanProjectsForActiveSessions();
+      return;
+    }
+
+    // 기존 tracked 세션: title만 refresh
+    const filePath = join(this.claudeProjectsDir, encodedDir, fileBase);
+    const parsed = await this.parseConversationFile(filePath);
+    if (!parsed) return;
+    const newTitle = parsed.title;
+    if (newTitle && newTitle !== existing.title) {
+      this.sessions.set(sessionId, { ...existing, title: newTitle });
+    }
+  }
+
+  /**
    * ~/.claude/projects/ 디렉토리를 스캔하여 최근 수정된 JSONL 파일로 활성 세션 감지.
    * heartbeats 디렉토리가 비어있을 때 폴백으로 동작.
    */
@@ -943,8 +982,14 @@ export class ClaudeHeartbeat {
       this.projectsWatcher = watch(
         this.claudeProjectsDir,
         { recursive: true },
-        (_eventType, _filename) => {
-          void this.scanProjectsForActiveSessions();
+        (_eventType, filename) => {
+          // filename이 있으면 변경된 파일만 타깃팅 (O(1) title refresh),
+          // 없거나 .jsonl이 아니면 full scan으로 폴백.
+          if (typeof filename === 'string' && filename.endsWith('.jsonl')) {
+            void this.refreshSessionFromFile(filename);
+          } else {
+            void this.scanProjectsForActiveSessions();
+          }
         },
       );
       this.projectsWatcher.on('error', () => {

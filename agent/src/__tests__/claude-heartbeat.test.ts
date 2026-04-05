@@ -572,6 +572,115 @@ describe('ClaudeHeartbeat — title extraction', () => {
   });
 });
 
+describe('ClaudeHeartbeat — rename detection (custom-title)', () => {
+  let tmpDir: string;
+  let projectsDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    projectsDir = join(tmpDir, 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should update title when custom-title entry is appended to tracked session JSONL', async () => {
+    const sessionId = 'rename-test-001';
+    const projectDir = join(projectsDir, '-Users-user-project-rename');
+    mkdirSync(projectDir, { recursive: true });
+    const jsonlPath = join(projectDir, `${sessionId}.jsonl`);
+
+    const initial = [
+      JSON.stringify({ type: 'user', message: { content: 'Initial question about auth' } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'OK' }] } }),
+    ].join('\n') + '\n';
+    writeFileSync(jsonlPath, initial, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()[0]?.title).toBe('Initial question about auth');
+    }, { timeout: 3000 });
+
+    // Simulate rename: append custom-title entry (as Claude Code does)
+    const renamed = initial + JSON.stringify({ type: 'custom-title', customTitle: 'Auth Flow Refactor' }) + '\n';
+    writeFileSync(jsonlPath, renamed, 'utf-8');
+
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()[0]?.title).toBe('Auth Flow Refactor');
+    }, { timeout: 3000 });
+    hb.stop();
+  });
+
+  it('should preserve live fields (currentTool, waitingForInput, hooksActive) when refreshing title', async () => {
+    const sessionId = 'rename-live-002';
+    const projectDir = join(projectsDir, '-Users-user-project-live');
+    mkdirSync(projectDir, { recursive: true });
+    const jsonlPath = join(projectDir, `${sessionId}.jsonl`);
+
+    const initial = [
+      JSON.stringify({ type: 'user', message: { content: 'Original prompt' } }),
+    ].join('\n') + '\n';
+    writeFileSync(jsonlPath, initial, 'utf-8');
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()).toHaveLength(1);
+    }, { timeout: 3000 });
+
+    // Hook handler로 live 필드 설정 (실제 PreToolUse + Notification hook 경로)
+    hb.handleToolEvent(sessionId, 'Bash');
+    hb.handleWaitingEvent(sessionId, true);
+
+    const beforeRename = hb.getActiveSessions()[0]!;
+    expect(beforeRename.currentTool).toBe('Bash');
+    expect(beforeRename.waitingForInput).toBe(true);
+    expect(beforeRename.hooksActive).toBe(true);
+
+    // Rename: custom-title 추가
+    const renamed = initial + JSON.stringify({ type: 'custom-title', customTitle: 'New Name' }) + '\n';
+    writeFileSync(jsonlPath, renamed, 'utf-8');
+
+    await vi.waitFor(() => {
+      expect(hb.getActiveSessions()[0]?.title).toBe('New Name');
+    }, { timeout: 3000 });
+
+    // Live 필드 보존 확인
+    const afterRename = hb.getActiveSessions()[0]!;
+    expect(afterRename.currentTool).toBe('Bash');
+    expect(afterRename.waitingForInput).toBe(true);
+    expect(afterRename.hooksActive).toBe(true);
+    hb.stop();
+  });
+
+  it('should still detect and add a brand-new session when its JSONL is created', async () => {
+    // tracked 세션 없음 → 새 JSONL 생성 → full scan fallback으로 추가되어야 함
+    const projectDir = join(projectsDir, '-Users-user-project-new');
+    mkdirSync(projectDir, { recursive: true });
+
+    const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);
+    hb.start();
+
+    // Watcher 안정화 후 파일 생성
+    await new Promise((r) => setTimeout(r, 100));
+
+    const sessionId = 'new-session-003';
+    const conversation = JSON.stringify({ type: 'user', message: { content: 'Brand new session' } }) + '\n';
+    writeFileSync(join(projectDir, `${sessionId}.jsonl`), conversation, 'utf-8');
+
+    await vi.waitFor(() => {
+      const session = hb.getActiveSessions().find((s) => s.sessionId === sessionId);
+      expect(session?.title).toBe('Brand new session');
+    }, { timeout: 3000 });
+    hb.stop();
+  });
+});
+
 describe('ClaudeHeartbeat — lastPromptTime extraction', () => {
   let tmpDir: string;
   let projectsDir: string;
