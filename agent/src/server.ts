@@ -33,7 +33,8 @@ import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ProcessScanner } from './process-scanner.js';
 import { ClaudeSource } from './claude-source.js';
 import { spawn } from 'node:child_process';
-import { OpenCodeDBReader, type EnrichmentResponse, type TokensData, type SearchResult } from './opencode-db-reader.js';
+import { OpenCodeDBReader, DEFAULT_OPENCODE_DB_PATH, type EnrichmentResponse, type TokensData, type SearchResult } from './opencode-db-reader.js';
+import { OpenCodeDbSource } from './opencode-db-source.js';
 import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -104,11 +105,13 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   }
 
   // Conditionally create OcQueryCollector (depends on oc-serve)
+  // SSE 연결 시: SessionCache가 authoritative
+  // SSE 미연결 시: DbSource 데이터로 보충 (server.ts에서 wire 후 callback이 dbSource 참조)
   let ocQueryCollector: OcQueryCollector | null = null;
   if (ocServeEnabled) {
     ocQueryCollector = new OcQueryCollector(
       ocServePort,
-      // SessionCache의 모든 세션 데이터 전달
+      // SessionCache + dbSource merged supplement data
       // lastPrompt가 있는 세션은 oc-serve message fetch 없이 직접 QueryEntry로 변환됨
       () => sessionCache!.getSessionDetails().sessions,
     );
@@ -369,7 +372,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
             {},
             10_000,
           );
-          if (!Array.isArray(data)) return { response: null };
+          if (!Array.isArray(data)) throw new Error('oc-serve invalid response');
           const messages = data as Array<{ info?: { role?: string; time?: { created?: number } }; parts?: Array<{ type?: string; text?: string }> }>;
 
           // timestamp에 매칭되는 user 메시지 찾기
@@ -380,7 +383,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
             const msgTs = msg.info?.time?.created ?? 0;
             if (Math.abs(msgTs - ts) < 2000) { userIdx = i; break; }
           }
-          if (userIdx < 0) return { response: null };
+          if (userIdx < 0) throw new Error('user message not found in oc-serve');
 
           // user 이후 첫 assistant 메시지의 text parts 추출
           const textParts: string[] = [];
@@ -394,11 +397,23 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
               }
             }
           }
-          const response = textParts.join('\n\n') || null;
-          return { response: response && response.length > 30_000 ? response.slice(0, 30_000) + '\n\n... (truncated)' : response };
+          if (textParts.length === 0) throw new Error('no assistant text parts');
+          const response = textParts.join('\n\n');
+          return { response: response.length > 30_000 ? response.slice(0, 30_000) + '\n\n... (truncated)' : response };
         } catch {
+          // oc-serve 실패 → DB 직접 조회 fallback
+          if (ocDbReader && ocDbReader.isAvailable()) {
+            const response = ocDbReader.getPromptResponseFromDb(sessionId, ts);
+            if (response !== null) return { response };
+          }
           return { response: null, error: 'oc-serve fetch failed' };
         }
+      }
+
+      // oc-serve 비활성 + DB만 사용 가능한 경우
+      if (ocDbReader && ocDbReader.isAvailable()) {
+        const response = ocDbReader.getPromptResponseFromDb(sessionId, ts);
+        return { response };
       }
 
       return { response: null };
@@ -467,6 +482,19 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 
   if (sessionCache && ocDbReader) {
     sessionCache.setDbReader(ocDbReader);
+  }
+
+  // DB-direct session monitoring fallback (oc-serve 없이 opencode.db 폴링)
+  let dbSource: OpenCodeDbSource | null = null;
+  if (ocServeEnabled && ocDbReader && ocDbReader.isAvailable()) {
+    dbSource = new OpenCodeDbSource(ocDbReader, {
+      dbPath: config.openCodeDbPath ?? DEFAULT_OPENCODE_DB_PATH,
+    });
+    dbSource.start();
+    // Duck-typed check: tests may inject mock sessionCache without setDbSource
+    if (sessionCache && typeof sessionCache.setDbSource === 'function') {
+      sessionCache.setDbSource(dbSource);
+    }
   }
 
   function enrichResponse<T>(fn: () => T): EnrichmentResponse<T> {
@@ -765,6 +793,7 @@ ${formatted}`;
     clearInterval(summaryCacheEvictionTimer);
     if (promptStore) promptStore.close();
     if (sessionCache) sessionCache.stop();
+    if (dbSource) dbSource.stop();
     claudeHeartbeat.stop();
     if (claudeSource) claudeSource.stop();
     if (ocDbReader) ocDbReader.close();

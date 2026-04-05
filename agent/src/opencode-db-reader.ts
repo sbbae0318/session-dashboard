@@ -3,8 +3,13 @@ import type { Statement } from 'better-sqlite3';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getModelPrice } from './model-pricing.js';
+import type {
+  DbMessageFinish,
+  DbMessageRole,
+} from './contracts/opencode-db-contracts.js';
 
-const DEFAULT_DB_PATH = join(homedir(), '.local/share/opencode/opencode.db');
+export const DEFAULT_OPENCODE_DB_PATH = join(homedir(), '.local/share/opencode/opencode.db');
+const DEFAULT_DB_PATH = DEFAULT_OPENCODE_DB_PATH;
 
 const REQUIRED_TABLES = ['session', 'message', 'part', 'project', 'todo'] as const;
 
@@ -217,6 +222,12 @@ export class OpenCodeDBReader {
   private stmtSearchMessagesCount!: Statement;
   private stmtRecentSessionMetas!: Statement;
   private stmtActivitySegments!: Statement;
+  // DB-direct session monitoring (no oc-serve)
+  private stmtActiveSessionsWithStatus!: Statement;
+  private stmtSessionLastUserPromptText!: Statement;
+  private stmtSessionCurrentToolPart!: Statement;
+  private stmtFindUserMessageByTime!: Statement;
+  private stmtAssistantTextPartsAfterMessage!: Statement;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -268,6 +279,12 @@ export class OpenCodeDBReader {
     this.stmtSearchMessagesCount = this.prepareSearchMessagesCountStmt(db);
     this.stmtRecentSessionMetas = this.prepareRecentSessionMetasStmt(db);
     this.stmtActivitySegments = this.prepareActivitySegmentsStmt(db);
+    // DB-direct session monitoring
+    this.stmtActiveSessionsWithStatus = this.prepareActiveSessionsWithStatusStmt(db);
+    this.stmtSessionLastUserPromptText = this.prepareSessionLastUserPromptTextStmt(db);
+    this.stmtSessionCurrentToolPart = this.prepareSessionCurrentToolPartStmt(db);
+    this.stmtFindUserMessageByTime = this.prepareFindUserMessageByTimeStmt(db);
+    this.stmtAssistantTextPartsAfterMessage = this.prepareAssistantTextPartsAfterMessageStmt(db);
   }
 
   isAvailable(): boolean {
@@ -1098,5 +1115,249 @@ export class OpenCodeDBReader {
         AND json_extract(data, '$.time.created') IS NOT NULL
       ORDER BY seg_start ASC
     `);
+  }
+
+  // =========================================================================
+  // DB-direct session monitoring (no oc-serve) — prepared statements
+  // =========================================================================
+
+  /**
+   * 최근 N분 내 업데이트된 세션 + 마지막 메시지의 role/finish를 1회 쿼리로 조회.
+   *
+   * LEFT JOIN subquery는 각 세션별로 time_created가 가장 큰 message를 선택.
+   * index(message_session_time_created_id_idx)가 MAX 스캔을 커버.
+   */
+  private prepareActiveSessionsWithStatusStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT
+        s.id, s.project_id, s.parent_id, s.title,
+        COALESCE(p.worktree, s.directory, s.project_id) AS directory,
+        s.time_created, s.time_updated,
+        lm.role AS last_role,
+        lm.finish AS last_finish,
+        lm.time_created AS last_msg_time_created,
+        lm.time_completed AS last_msg_time_completed,
+        lm.time_updated AS last_msg_time_updated
+      FROM session s
+      LEFT JOIN project p ON s.project_id = p.id
+      LEFT JOIN (
+        SELECT m.session_id,
+          json_extract(m.data, '$.role') AS role,
+          json_extract(m.data, '$.finish') AS finish,
+          json_extract(m.data, '$.time.created') AS time_created,
+          json_extract(m.data, '$.time.completed') AS time_completed,
+          m.time_updated
+        FROM message m
+        INNER JOIN (
+          SELECT session_id, MAX(time_created) AS max_tc
+          FROM message GROUP BY session_id
+        ) latest ON m.session_id = latest.session_id AND m.time_created = latest.max_tc
+      ) lm ON lm.session_id = s.id
+      WHERE s.time_updated >= ?
+      ORDER BY s.time_updated DESC
+      LIMIT ?
+    `);
+  }
+
+  /**
+   * 세션의 최근 user 메시지 텍스트 파트를 조회.
+   * 시스템 프롬프트 필터링은 호출자에서 `extractUserPrompt()`로 수행.
+   */
+  private prepareSessionLastUserPromptTextStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT
+        m.id AS message_id,
+        m.time_created AS message_time_created,
+        json_extract(p.data, '$.text') AS text
+      FROM message m
+      JOIN part p ON p.message_id = m.id
+      WHERE m.session_id = ?
+        AND json_extract(m.data, '$.role') = 'user'
+        AND json_extract(p.data, '$.type') = 'text'
+        AND json_extract(p.data, '$.text') IS NOT NULL
+      ORDER BY m.time_created DESC, p.time_created DESC
+      LIMIT 5
+    `);
+  }
+
+  /**
+   * 세션의 가장 최근 tool part를 조회.
+   * busy 세션의 currentTool 표시용.
+   */
+  private prepareSessionCurrentToolPartStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT
+        json_extract(p.data, '$.tool') AS tool_name,
+        json_extract(p.data, '$.state.status') AS status
+      FROM part p
+      WHERE p.session_id = ?
+        AND json_extract(p.data, '$.type') = 'tool'
+      ORDER BY p.time_updated DESC
+      LIMIT 1
+    `);
+  }
+
+  /**
+   * 특정 timestamp (±2초) 내의 user 메시지 찾기.
+   * prompt-response 매칭용.
+   */
+  private prepareFindUserMessageByTimeStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT m.id, m.time_created
+      FROM message m
+      WHERE m.session_id = ?
+        AND json_extract(m.data, '$.role') = 'user'
+        AND ABS(COALESCE(json_extract(m.data, '$.time.created'), m.time_created) - ?) < 2000
+      ORDER BY m.time_created DESC
+      LIMIT 1
+    `);
+  }
+
+  /**
+   * 주어진 message 이후의 assistant text parts를 순서대로 수집 (다음 user 메시지 전까지).
+   *
+   * 다음 user 메시지까지의 윈도우 계산:
+   *   - session_id/time_created 이후 첫 user 메시지의 time_created를 서브쿼리로 구함
+   *   - 없으면 무한대 (모든 이후 assistant 수집)
+   */
+  private prepareAssistantTextPartsAfterMessageStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT json_extract(p.data, '$.text') AS text
+      FROM part p
+      JOIN message m ON p.message_id = m.id
+      WHERE m.session_id = ?
+        AND m.time_created > ?
+        AND m.time_created < COALESCE((
+          SELECT MIN(m2.time_created) FROM message m2
+          WHERE m2.session_id = ?
+            AND m2.time_created > ?
+            AND json_extract(m2.data, '$.role') = 'user'
+        ), 9999999999999)
+        AND json_extract(m.data, '$.role') = 'assistant'
+        AND json_extract(p.data, '$.type') = 'text'
+        AND json_extract(p.data, '$.text') IS NOT NULL
+      ORDER BY m.time_created ASC, p.time_created ASC
+    `);
+  }
+
+  // =========================================================================
+  // DB-direct session monitoring — public methods
+  // =========================================================================
+
+  /**
+   * 최근 활성 세션 + 마지막 메시지 상태 조회.
+   *
+   * @param sinceMs - 이 시간 이후 업데이트된 세션만 조회 (epoch ms)
+   * @param limit - 최대 반환 세션 수
+   */
+  getActiveSessionsWithStatus(sinceMs: number, limit: number = 500): Array<{
+    id: string;
+    projectId: string;
+    parentId: string | null;
+    title: string;
+    directory: string;
+    timeCreated: number;
+    timeUpdated: number;
+    lastRole: DbMessageRole | null;
+    lastFinish: DbMessageFinish | null;
+    lastMsgTimeCreated: number | null;
+    lastMsgTimeCompleted: number | null;
+    lastMsgTimeUpdated: number | null;
+  }> {
+    const rows = this.stmtActiveSessionsWithStatus.all(sinceMs, limit) as Array<{
+      id: string; project_id: string; parent_id: string | null;
+      title: string; directory: string;
+      time_created: number; time_updated: number;
+      last_role: string | null; last_finish: string | null;
+      last_msg_time_created: number | null;
+      last_msg_time_completed: number | null;
+      last_msg_time_updated: number | null;
+    }>;
+
+    return rows.map(r => ({
+      id: r.id,
+      projectId: r.project_id,
+      parentId: r.parent_id,
+      title: r.title,
+      directory: r.directory,
+      timeCreated: r.time_created,
+      timeUpdated: r.time_updated,
+      lastRole: (r.last_role as DbMessageRole | null) ?? null,
+      lastFinish: (r.last_finish as DbMessageFinish | null) ?? null,
+      lastMsgTimeCreated: r.last_msg_time_created,
+      lastMsgTimeCompleted: r.last_msg_time_completed,
+      lastMsgTimeUpdated: r.last_msg_time_updated,
+    }));
+  }
+
+  /**
+   * 세션의 가장 최근 user 프롬프트 텍스트 + 타임스탬프 조회.
+   * 시스템 프롬프트(<command-name>, <local-command-*> 등)는 호출자에서 필터링.
+   *
+   * @returns 최대 5개의 user 메시지 텍스트 후보 (최신순)
+   */
+  getSessionLastUserPromptText(sessionId: string): Array<{
+    messageId: string;
+    messageTimeCreated: number;
+    text: string;
+  }> {
+    const rows = this.stmtSessionLastUserPromptText.all(sessionId) as Array<{
+      message_id: string;
+      message_time_created: number;
+      text: string | null;
+    }>;
+
+    return rows
+      .filter(r => r.text !== null)
+      .map(r => ({
+        messageId: r.message_id,
+        messageTimeCreated: r.message_time_created,
+        text: r.text as string,
+      }));
+  }
+
+  /**
+   * 세션의 현재 실행 중인 tool 이름 조회.
+   * @returns tool 이름 (없으면 null)
+   */
+  getSessionCurrentTool(sessionId: string): string | null {
+    const row = this.stmtSessionCurrentToolPart.get(sessionId) as
+      | { tool_name: string | null; status: string | null }
+      | undefined;
+    return row?.tool_name ?? null;
+  }
+
+  /**
+   * DB 직접 조회로 prompt-response 응답 텍스트 추출.
+   *
+   * @param sessionId - 세션 ID
+   * @param promptTimestamp - user 프롬프트의 timestamp (ms)
+   * @returns 30KB까지 truncate된 응답 텍스트, 없으면 null
+   */
+  getPromptResponseFromDb(sessionId: string, promptTimestamp: number): string | null {
+    // 1) user 메시지 찾기 (±2초 윈도우)
+    const userMsg = this.stmtFindUserMessageByTime.get(sessionId, promptTimestamp) as
+      | { id: string; time_created: number }
+      | undefined;
+    if (!userMsg) return null;
+
+    // 2) 이후의 assistant text parts 수집 (다음 user 메시지 전까지)
+    const parts = this.stmtAssistantTextPartsAfterMessage.all(
+      sessionId,
+      userMsg.time_created,
+      sessionId,
+      userMsg.time_created,
+    ) as Array<{ text: string | null }>;
+
+    const textParts = parts
+      .map(p => p.text)
+      .filter((t): t is string => typeof t === 'string' && t.length > 0);
+
+    if (textParts.length === 0) return null;
+
+    const response = textParts.join('\n\n');
+    return response.length > 30_000
+      ? response.slice(0, 30_000) + '\n\n... (truncated)'
+      : response;
   }
 }

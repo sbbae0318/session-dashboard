@@ -145,6 +145,7 @@ export class SessionCache {
   private pendingMetadataFetches = new Set<string>();
   private onSessionBusyCallback: (() => void) | null = null;
   private dbReader: OpenCodeDBReader | null = null;
+  private dbSource: { getSessionDetails: () => { sessions: Record<string, SessionDetail> } } | null = null;
 
   constructor(private ocServePort: number = 4096, dbPath?: string) {
     this.store = new SessionStore(dbPath);
@@ -152,6 +153,16 @@ export class SessionCache {
 
   setDbReader(reader: OpenCodeDBReader | null): void {
     this.dbReader = reader;
+  }
+
+  /**
+   * DB source 등록. SSE 연결이 끊긴 경우 이 source 데이터로 보충.
+   * 인터페이스만 요구하여 OpenCodeDbSource와의 import 순환 방지.
+   */
+  setDbSource(
+    source: { getSessionDetails: () => { sessions: Record<string, SessionDetail> } } | null,
+  ): void {
+    this.dbSource = source;
   }
 
   onSessionBusy(cb: () => void): void {
@@ -200,13 +211,31 @@ export class SessionCache {
   }
 
   getSessionDetails(): { meta: SessionDetailsMeta; sessions: Record<string, SessionDetail> } {
+    const sseConnected = this.connectionState === 'connected';
+    const baseSessions = this.store.getAll();
+
+    // SSE 연결 시 SSE가 authoritative — DB source 불필요
+    if (sseConnected || !this.dbSource) {
+      return {
+        meta: { sseConnected, lastSseEventAt: this.lastSseEventAt, sseConnectedAt: this.sseConnectedAt },
+        sessions: baseSessions,
+      };
+    }
+
+    // SSE 미연결: DB source로 보충 (SSE 캐시에 없는 세션만 추가)
+    const merged: Record<string, SessionDetail> = { ...baseSessions };
+    const dbSessions = this.dbSource.getSessionDetails().sessions;
+    for (const [id, detail] of Object.entries(dbSessions)) {
+      if (!merged[id]) {
+        merged[id] = detail;
+      } else if (detail.lastActiveAt > merged[id].lastActiveAt) {
+        // DB가 더 최신 데이터 → status만 갱신 (메타데이터는 보존)
+        merged[id] = { ...merged[id], status: detail.status, lastActiveAt: detail.lastActiveAt };
+      }
+    }
     return {
-      meta: {
-        sseConnected: this.connectionState === 'connected',
-        lastSseEventAt: this.lastSseEventAt,
-        sseConnectedAt: this.sseConnectedAt,
-      },
-      sessions: this.store.getAll(),
+      meta: { sseConnected, lastSseEventAt: this.lastSseEventAt, sseConnectedAt: this.sseConnectedAt },
+      sessions: merged,
     };
   }
 

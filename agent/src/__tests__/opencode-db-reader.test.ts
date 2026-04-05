@@ -795,3 +795,236 @@ describe('getSessionActivitySegments', () => {
     expect(segments).toEqual([]);
   });
 });
+
+// =============================================================================
+// DB-direct session monitoring (OpenCodeDbSource fallback)
+// =============================================================================
+
+describe('OpenCodeDBReader — getActiveSessionsWithStatus', () => {
+  let db: Database.Database;
+  let reader: OpenCodeDBReader;
+
+  beforeEach(() => {
+    db = createTestDb();
+    // Seed: 3 sessions with different statuses
+    db.exec(`
+      INSERT INTO project VALUES ('p1', '/home/user/proj', 1700000000000, 1700000000000, NULL, NULL);
+      INSERT INTO session VALUES ('s1', 'p1', NULL, '/home/user/proj', 'Active Task', 'v1', 'active', 0, 0, 0, 1700000000000, 1700099990000);
+      INSERT INTO session VALUES ('s2', 'p1', NULL, '/home/user/proj', 'Done Task', 'v1', 'done', 10, 5, 2, 1700000000000, 1700099980000);
+      INSERT INTO session VALUES ('s3', 'p1', NULL, '/home/user/proj', 'Old Task', 'v1', 'old', 0, 0, 0, 1600000000000, 1600099900000);
+    `);
+    // Messages
+    const insertMsg = db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    // s1: last message is assistant tool-calls → busy
+    insertMsg.run('m1_1', 's1', 1700099990000, 1700099990000,
+      JSON.stringify({ role: 'assistant', finish: 'tool-calls', time: { created: 1700099990000, completed: 1700099991000 } }));
+    // s2: last message is assistant stop → idle
+    insertMsg.run('m2_1', 's2', 1700099980000, 1700099980000,
+      JSON.stringify({ role: 'assistant', finish: 'stop', time: { created: 1700099980000, completed: 1700099981000 } }));
+    // s3: old session — should be filtered by time_updated cutoff
+
+    reader = OpenCodeDBReader.fromDatabase(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('returns recent sessions only (filtered by time_updated)', () => {
+    const sinceMs = 1700000000000;
+    const rows = reader.getActiveSessionsWithStatus(sinceMs, 100);
+    expect(rows.length).toBe(2);  // s1 and s2 only, s3 is too old
+    expect(rows.map(r => r.id).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('includes last message role and finish', () => {
+    const rows = reader.getActiveSessionsWithStatus(1700000000000, 100);
+    const s1 = rows.find(r => r.id === 's1')!;
+    expect(s1.lastRole).toBe('assistant');
+    expect(s1.lastFinish).toBe('tool-calls');
+    const s2 = rows.find(r => r.id === 's2')!;
+    expect(s2.lastRole).toBe('assistant');
+    expect(s2.lastFinish).toBe('stop');
+  });
+
+  it('resolves directory from project.worktree', () => {
+    const rows = reader.getActiveSessionsWithStatus(1700000000000, 100);
+    expect(rows[0].directory).toBe('/home/user/proj');
+  });
+
+  it('respects limit parameter', () => {
+    const rows = reader.getActiveSessionsWithStatus(1700000000000, 1);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('handles sessions with no messages', () => {
+    db.exec(`INSERT INTO session VALUES ('s_empty', 'p1', NULL, '/home/user/proj', 'Empty', 'v1', 'e', 0, 0, 0, 1700000000000, 1700099985000)`);
+    const rows = reader.getActiveSessionsWithStatus(1700000000000, 100);
+    const empty = rows.find(r => r.id === 's_empty')!;
+    expect(empty).toBeDefined();
+    expect(empty.lastRole).toBeNull();
+    expect(empty.lastFinish).toBeNull();
+  });
+});
+
+describe('OpenCodeDBReader — getSessionLastUserPromptText', () => {
+  let db: Database.Database;
+  let reader: OpenCodeDBReader;
+
+  beforeEach(() => {
+    db = createTestDb();
+    db.exec(`
+      INSERT INTO project VALUES ('p1', '/home/user/proj', 1700000000000, 1700000000000, NULL, NULL);
+      INSERT INTO session VALUES ('s1', 'p1', NULL, '/home/user/proj', 'Task', 'v1', 'task', 0, 0, 0, 1700000000000, 1700099990000);
+    `);
+    const insertMsg = db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    const insertPart = db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)');
+
+    // user message 1 (earliest)
+    insertMsg.run('m_u1', 's1', 1700000001000, 1700000001000, JSON.stringify({ role: 'user' }));
+    insertPart.run('p_u1', 'm_u1', 's1', 1700000001000, 1700000001000,
+      JSON.stringify({ type: 'text', text: 'First prompt' }));
+    // assistant response
+    insertMsg.run('m_a1', 's1', 1700000002000, 1700000002000, JSON.stringify({ role: 'assistant', finish: 'stop' }));
+    insertPart.run('p_a1', 'm_a1', 's1', 1700000002000, 1700000002000,
+      JSON.stringify({ type: 'text', text: 'Response 1' }));
+    // user message 2 (latest)
+    insertMsg.run('m_u2', 's1', 1700000003000, 1700000003000, JSON.stringify({ role: 'user' }));
+    insertPart.run('p_u2', 'm_u2', 's1', 1700000003000, 1700000003000,
+      JSON.stringify({ type: 'text', text: 'Second prompt' }));
+
+    reader = OpenCodeDBReader.fromDatabase(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('returns latest user prompt first', () => {
+    const rows = reader.getSessionLastUserPromptText('s1');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].text).toBe('Second prompt');
+    expect(rows[0].messageTimeCreated).toBe(1700000003000);
+  });
+
+  it('excludes assistant messages', () => {
+    const rows = reader.getSessionLastUserPromptText('s1');
+    const texts = rows.map(r => r.text);
+    expect(texts).not.toContain('Response 1');
+  });
+
+  it('returns empty array for non-existent session', () => {
+    const rows = reader.getSessionLastUserPromptText('nonexistent');
+    expect(rows).toEqual([]);
+  });
+});
+
+describe('OpenCodeDBReader — getSessionCurrentTool', () => {
+  let db: Database.Database;
+  let reader: OpenCodeDBReader;
+
+  beforeEach(() => {
+    db = createTestDb();
+    db.exec(`
+      INSERT INTO project VALUES ('p1', '/home/user/proj', 1700000000000, 1700000000000, NULL, NULL);
+      INSERT INTO session VALUES ('s1', 'p1', NULL, '/home/user/proj', 'Task', 'v1', 'task', 0, 0, 0, 1700000000000, 1700099990000);
+    `);
+    const insertMsg = db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    const insertPart = db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)');
+
+    insertMsg.run('m1', 's1', 1700000001000, 1700000001000, JSON.stringify({ role: 'assistant' }));
+    insertPart.run('p_text', 'm1', 's1', 1700000001000, 1700000001000,
+      JSON.stringify({ type: 'text', text: 'hello' }));
+    insertPart.run('p_tool1', 'm1', 's1', 1700000002000, 1700000002000,
+      JSON.stringify({ type: 'tool', tool: 'read', state: { status: 'completed' } }));
+    // Latest tool (most recent by time_updated)
+    insertPart.run('p_tool2', 'm1', 's1', 1700000003000, 1700000005000,
+      JSON.stringify({ type: 'tool', tool: 'bash', state: { status: 'running' } }));
+
+    reader = OpenCodeDBReader.fromDatabase(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('returns most recent tool by time_updated', () => {
+    expect(reader.getSessionCurrentTool('s1')).toBe('bash');
+  });
+
+  it('returns null for session without tools', () => {
+    db.exec(`INSERT INTO session VALUES ('s_empty', 'p1', NULL, '/home/user/proj', 'E', 'v1', 'e', 0, 0, 0, 1700000000000, 1700099990000)`);
+    expect(reader.getSessionCurrentTool('s_empty')).toBeNull();
+  });
+});
+
+describe('OpenCodeDBReader — getPromptResponseFromDb', () => {
+  let db: Database.Database;
+  let reader: OpenCodeDBReader;
+
+  beforeEach(() => {
+    db = createTestDb();
+    db.exec(`
+      INSERT INTO project VALUES ('p1', '/home/user/proj', 1700000000000, 1700000000000, NULL, NULL);
+      INSERT INTO session VALUES ('s1', 'p1', NULL, '/home/user/proj', 'Task', 'v1', 'task', 0, 0, 0, 1700000000000, 1700099990000);
+    `);
+    const insertMsg = db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)');
+    const insertPart = db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)');
+
+    // Turn 1: user → assistant text + tool_use
+    insertMsg.run('m_u1', 's1', 1700000001000, 1700000001000,
+      JSON.stringify({ role: 'user', time: { created: 1700000001000 } }));
+    insertPart.run('p_u1', 'm_u1', 's1', 1700000001000, 1700000001000,
+      JSON.stringify({ type: 'text', text: 'First question' }));
+    insertMsg.run('m_a1', 's1', 1700000002000, 1700000002000,
+      JSON.stringify({ role: 'assistant', finish: 'tool-calls' }));
+    insertPart.run('p_a1_text', 'm_a1', 's1', 1700000002000, 1700000002000,
+      JSON.stringify({ type: 'text', text: 'Let me check.' }));
+    insertPart.run('p_a1_tool', 'm_a1', 's1', 1700000002100, 1700000002100,
+      JSON.stringify({ type: 'tool', tool: 'read' }));
+    insertMsg.run('m_a2', 's1', 1700000003000, 1700000003000,
+      JSON.stringify({ role: 'assistant', finish: 'stop' }));
+    insertPart.run('p_a2_text', 'm_a2', 's1', 1700000003000, 1700000003000,
+      JSON.stringify({ type: 'text', text: 'Here is the answer.' }));
+
+    // Turn 2: user → assistant
+    insertMsg.run('m_u2', 's1', 1700000004000, 1700000004000,
+      JSON.stringify({ role: 'user', time: { created: 1700000004000 } }));
+    insertPart.run('p_u2', 'm_u2', 's1', 1700000004000, 1700000004000,
+      JSON.stringify({ type: 'text', text: 'Second question' }));
+    insertMsg.run('m_a3', 's1', 1700000005000, 1700000005000,
+      JSON.stringify({ role: 'assistant', finish: 'stop' }));
+    insertPart.run('p_a3_text', 'm_a3', 's1', 1700000005000, 1700000005000,
+      JSON.stringify({ type: 'text', text: 'Second answer.' }));
+
+    reader = OpenCodeDBReader.fromDatabase(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('returns concatenated assistant text parts for matched prompt', () => {
+    const response = reader.getPromptResponseFromDb('s1', 1700000001000);
+    // Should stop at next user message — only first turn's responses
+    expect(response).toContain('Let me check.');
+    expect(response).toContain('Here is the answer.');
+    expect(response).not.toContain('Second answer.');
+  });
+
+  it('matches timestamp within 2-second window', () => {
+    const response = reader.getPromptResponseFromDb('s1', 1700000001500);
+    expect(response).not.toBeNull();
+  });
+
+  it('returns null when user message not found', () => {
+    const response = reader.getPromptResponseFromDb('s1', 9999999999999);
+    expect(response).toBeNull();
+  });
+
+  it('returns only responses after the matched user message', () => {
+    const response = reader.getPromptResponseFromDb('s1', 1700000004000);
+    expect(response).toBe('Second answer.');
+    expect(response).not.toContain('Here is the answer.');
+  });
+});
