@@ -36,6 +36,7 @@ _이번 세션/최근에 배운 것._
 - **OpenCode SSE에 rename 이벤트 없음** — `session.status`, `session.idle`, `message.updated`, `message.part.updated`, `permission.updated`, `session.deleted` 6종만 emit. rename 감지는 polling 또는 DB 직접 읽기 필수.
 - **`fullSync()`의 titleMissing 가드** (line 1026-1030): 기존 title 있으면 업데이트 안 함 — OpenCode rename 시에도 유사한 게이트 존재 (별도 이슈로 미처리).
 - **hooks vs JSONL 권한 분리 원칙 (F-002, F-003)**: hooks active → hooks가 status/currentTool/waitingForInput 소유. JSONL 파싱은 hooks 미연결 시 fallback. `readHeartbeatFile`, `refreshSessionFromFile` 양쪽에 적용 필수. `refreshSessionFromFile` 확장 시 status 갱신 추가하면 hooks와 race condition 발생 — title/timestamps만 갱신하고 status는 hooks에 위임.
+- **상태 뱃지 flash 구현 패턴**: prevStatusMap(Map<sessionId, cssClass>)으로 이전 상태 추적 → `$effect`에서 topLevelSessions 변경 시 비교 → 변경된 세션에 `status-flash` 클래스 부여 + setTimeout 1.2초 후 해제. CSS animation(brightness+scale 펄스)으로 구현, `prefers-reduced-motion` 존중.
 
 ## Next
 

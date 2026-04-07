@@ -79,6 +79,8 @@ Browser
   IDLE:    그 외
   ```
 
+- **상태 변경 flash 효과**: 세션 상태가 전환될 때 (예: Idle→Working) 뱃지가 1.2초간 brightness+scale 펄스로 반짝임. 이전 상태를 Map으로 추적하여 변경 감지. `prefers-reduced-motion` 존중.
+
 - **필터링 파이프라인** (순서 고정):
   1. dismissed 세션 제외
   2. 선택된 머신 필터
