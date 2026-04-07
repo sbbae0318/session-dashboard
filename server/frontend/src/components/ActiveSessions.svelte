@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail, popToOverview } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatDuration, formatRss, copyToClipboard } from "../lib/utils";
+  import { relativeTime, formatDuration, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges } from "../lib/utils";
   import { onMount } from "svelte";
 
   let { paneActive = false }: { paneActive?: boolean } = $props();
@@ -170,44 +170,17 @@
   );
 
 
-  interface DisplayStatus {
-    label: string;
-    cssClass: string;
-  }
-
-  function getDisplayStatus(session: DashboardSession): DisplayStatus {
-    // 1. Working: busy or retry or currentTool running (unless waitingForInput)
-    if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
-        && !session.waitingForInput) {
-      const label = session.apiStatus === 'retry' ? 'Retry' : 'Working';
-      return { label, cssClass: 'status-working' };
-    }
-    // 2. Waiting: user input/approval pending
-    if (session.waitingForInput) {
-      return { label: 'Waiting', cssClass: 'status-waiting' };
-    }
-    // 3. Idle: everything else
-    return { label: 'Idle', cssClass: 'status-idle' };
-  }
-
   // 상태 변경 감지 → flash 트리거
   $effect(() => {
+    const changed = detectStatusChanges(prevStatusMap, topLevelSessions);
+    // prevStatusMap 갱신
     const current = new Map<string, string>();
     for (const s of topLevelSessions) {
-      const ds = getDisplayStatus(s);
-      current.set(s.sessionId, ds.cssClass);
-    }
-    // 이전 상태와 비교하여 변경된 세션에 flash 부여
-    const newFlashing = new Set<string>();
-    for (const [id, cls] of current) {
-      const prev = prevStatusMap.get(id);
-      if (prev && prev !== cls) {
-        newFlashing.add(id);
-      }
+      current.set(s.sessionId, getDisplayStatus(s).cssClass);
     }
     prevStatusMap = current;
-    if (newFlashing.size > 0) {
-      flashingIds = newFlashing;
+    if (changed.size > 0) {
+      flashingIds = changed;
       setTimeout(() => { flashingIds = new Set(); }, 1200);
     }
   });

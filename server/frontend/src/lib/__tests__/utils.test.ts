@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getQueryResult, getCompletionTime } from "../utils.js";
+import { getQueryResult, getCompletionTime, getDisplayStatus, detectStatusChanges } from "../utils.js";
 
 describe("getQueryResult", () => {
   const sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }> = [];
@@ -44,5 +44,109 @@ describe("getCompletionTime", () => {
 
   it("returns null when completedAt is undefined", () => {
     expect(getCompletionTime({})).toBeNull();
+  });
+});
+
+// ── getDisplayStatus: 상태 판별 regression ──
+
+describe("getDisplayStatus", () => {
+  it("returns Working when apiStatus=busy and not waiting", () => {
+    const ds = getDisplayStatus({ apiStatus: "busy", currentTool: null, waitingForInput: false });
+    expect(ds).toEqual({ label: "Working", cssClass: "status-working" });
+  });
+
+  it("returns Working when currentTool is set and not waiting", () => {
+    const ds = getDisplayStatus({ apiStatus: null, currentTool: "Bash", waitingForInput: false });
+    expect(ds).toEqual({ label: "Working", cssClass: "status-working" });
+  });
+
+  it("returns Retry when apiStatus=retry", () => {
+    const ds = getDisplayStatus({ apiStatus: "retry", currentTool: null, waitingForInput: false });
+    expect(ds).toEqual({ label: "Retry", cssClass: "status-working" });
+  });
+
+  it("returns Waiting when waitingForInput=true (even if apiStatus=busy)", () => {
+    const ds = getDisplayStatus({ apiStatus: "busy", currentTool: null, waitingForInput: true });
+    expect(ds).toEqual({ label: "Waiting", cssClass: "status-waiting" });
+  });
+
+  it("returns Waiting when waitingForInput=true and currentTool set", () => {
+    const ds = getDisplayStatus({ apiStatus: null, currentTool: "Bash", waitingForInput: true });
+    expect(ds).toEqual({ label: "Waiting", cssClass: "status-waiting" });
+  });
+
+  it("returns Idle when no busy/tool/waiting", () => {
+    const ds = getDisplayStatus({ apiStatus: null, currentTool: null, waitingForInput: false });
+    expect(ds).toEqual({ label: "Idle", cssClass: "status-idle" });
+  });
+
+  it("returns Idle when apiStatus=idle", () => {
+    const ds = getDisplayStatus({ apiStatus: "idle", currentTool: null, waitingForInput: false });
+    expect(ds).toEqual({ label: "Idle", cssClass: "status-idle" });
+  });
+});
+
+// ── detectStatusChanges: 상태 전환 flash 감지 regression ──
+
+describe("detectStatusChanges", () => {
+  const mkSession = (id: string, apiStatus: string | null, currentTool: string | null, waitingForInput: boolean) =>
+    ({ sessionId: id, apiStatus, currentTool, waitingForInput });
+
+  it("detects idle → working transition", () => {
+    const prev = new Map([["s1", "status-idle"]]);
+    const sessions = [mkSession("s1", "busy", null, false)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("detects working → idle transition", () => {
+    const prev = new Map([["s1", "status-working"]]);
+    const sessions = [mkSession("s1", null, null, false)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("detects idle → waiting transition", () => {
+    const prev = new Map([["s1", "status-idle"]]);
+    const sessions = [mkSession("s1", null, null, true)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("detects waiting → working transition", () => {
+    const prev = new Map([["s1", "status-waiting"]]);
+    const sessions = [mkSession("s1", "busy", null, false)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("detects working → waiting transition", () => {
+    const prev = new Map([["s1", "status-working"]]);
+    const sessions = [mkSession("s1", "busy", null, true)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("detects waiting → idle transition", () => {
+    const prev = new Map([["s1", "status-waiting"]]);
+    const sessions = [mkSession("s1", null, null, false)];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1"]));
+  });
+
+  it("returns empty set when no status change", () => {
+    const prev = new Map([["s1", "status-working"]]);
+    const sessions = [mkSession("s1", "busy", null, false)];
+    expect(detectStatusChanges(prev, sessions).size).toBe(0);
+  });
+
+  it("ignores new sessions (no previous status)", () => {
+    const prev = new Map<string, string>();
+    const sessions = [mkSession("s1", "busy", null, false)];
+    expect(detectStatusChanges(prev, sessions).size).toBe(0);
+  });
+
+  it("detects multiple simultaneous transitions", () => {
+    const prev = new Map([["s1", "status-idle"], ["s2", "status-working"], ["s3", "status-idle"]]);
+    const sessions = [
+      mkSession("s1", "busy", null, false),   // idle → working
+      mkSession("s2", null, null, false),      // working → idle
+      mkSession("s3", null, null, false),      // idle → idle (no change)
+    ];
+    expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1", "s2"]));
   });
 });

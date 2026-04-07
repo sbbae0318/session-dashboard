@@ -106,6 +106,45 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  * Checks q.isBackground flag first, then cross-references session metadata.
  * Used to filter out explore/librarian subagent queries from the main feed.
  */
+// ── Session display status ──
+
+export interface DisplayStatus {
+  label: string;
+  cssClass: string;
+}
+
+export function getDisplayStatus(session: {
+  apiStatus: string | null;
+  currentTool: string | null;
+  waitingForInput: boolean;
+}): DisplayStatus {
+  if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
+      && !session.waitingForInput) {
+    const label = session.apiStatus === 'retry' ? 'Retry' : 'Working';
+    return { label, cssClass: 'status-working' };
+  }
+  if (session.waitingForInput) {
+    return { label: 'Waiting', cssClass: 'status-waiting' };
+  }
+  return { label: 'Idle', cssClass: 'status-idle' };
+}
+
+/** 이전 상태와 현재 상태를 비교하여 변경된 세션 ID를 반환 */
+export function detectStatusChanges(
+  prevMap: Map<string, string>,
+  sessions: Array<{ sessionId: string; apiStatus: string | null; currentTool: string | null; waitingForInput: boolean }>,
+): Set<string> {
+  const changed = new Set<string>();
+  for (const s of sessions) {
+    const current = getDisplayStatus(s).cssClass;
+    const prev = prevMap.get(s.sessionId);
+    if (prev && prev !== current) {
+      changed.add(s.sessionId);
+    }
+  }
+  return changed;
+}
+
 export function isBackgroundQuery(
   q: { isBackground: boolean; sessionId: string; sessionTitle?: string | null },
   sessions: Array<{ sessionId: string; parentSessionId?: string | null; title?: string | null }>,
