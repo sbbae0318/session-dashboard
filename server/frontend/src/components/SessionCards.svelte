@@ -165,11 +165,9 @@
     }
   }
 
-  onMount(() => {
-    document.addEventListener('keydown', handleKeydown);
-    return () => document.removeEventListener('keydown', handleKeydown);
-  });
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="session-cards-container" data-testid="session-cards">
   {#if uniqueProjects.length > 1}
