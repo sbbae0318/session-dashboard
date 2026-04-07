@@ -485,6 +485,12 @@
     border: 1px solid rgba(63, 185, 80, 0.3);
   }
 
+  .status-rename {
+    background: rgba(255, 180, 50, 0.15);
+    color: #ffb432;
+    border: 1px solid rgba(255, 180, 50, 0.3);
+  }
+
 
   .session-tool {
     display: flex;

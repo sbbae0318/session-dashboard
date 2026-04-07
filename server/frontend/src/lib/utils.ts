@@ -117,7 +117,11 @@ export function getDisplayStatus(session: {
   apiStatus: string | null;
   currentTool: string | null;
   waitingForInput: boolean;
+  recentlyRenamed?: boolean;
 }): DisplayStatus {
+  if (session.recentlyRenamed) {
+    return { label: 'Rename', cssClass: 'status-rename' };
+  }
   if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
       && !session.waitingForInput) {
     const label = session.apiStatus === 'retry' ? 'Retry' : 'Working';
@@ -132,7 +136,7 @@ export function getDisplayStatus(session: {
 /** 이전 상태와 현재 상태를 비교하여 변경된 세션 ID를 반환 */
 export function detectStatusChanges(
   prevMap: Map<string, string>,
-  sessions: Array<{ sessionId: string; apiStatus: string | null; currentTool: string | null; waitingForInput: boolean }>,
+  sessions: Array<{ sessionId: string; apiStatus: string | null; currentTool: string | null; waitingForInput: boolean; recentlyRenamed?: boolean }>,
 ): Set<string> {
   const changed = new Set<string>();
   for (const s of sessions) {

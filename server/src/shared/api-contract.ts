@@ -64,6 +64,8 @@ export interface DashboardSession {
   hooksActive?: boolean;
   /** OS 프로세스 테이블 메트릭. 프로세스 미발견 시 null */
   processMetrics?: { alive: boolean; cpuPercent: number; rssKb: number } | null;
+  /** title 변경 직후 일시적 플래그 (3초 후 자동 해제) */
+  recentlyRenamed?: boolean;
 
   // Machine 식별
   machineId: string;
@@ -166,4 +168,4 @@ export type SSEEventName = keyof SSEEventMap;
  *   WAITING: waitingForInput === true
  *   IDLE:    그 외
  */
-export type DisplayStatusLabel = 'Working' | 'Retry' | 'Waiting' | 'Idle';
+export type DisplayStatusLabel = 'Working' | 'Retry' | 'Waiting' | 'Idle' | 'Rename';
