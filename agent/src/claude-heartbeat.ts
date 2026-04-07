@@ -400,10 +400,14 @@ export class ClaudeHeartbeat {
       const lastResponseTime = parsed?.lastResponseTime ?? null;
 
       // JSONL 파일의 mtime을 실제 활동 시간으로 사용 (lastHeartbeat는 프로세스 생존 확인용)
+      // hook이 업데이트한 lastFileModified가 file mtime보다 최신일 수 있음 (장시간 tool 실행 중)
+      const existing = this.sessions.get(sessionId);
       let lastFileModified: number;
       try {
         const jsonlStat = await statFile(conversationPath);
-        lastFileModified = jsonlStat.mtimeMs;
+        lastFileModified = existing?.hooksActive
+          ? Math.max(jsonlStat.mtimeMs, existing.lastFileModified ?? 0)
+          : jsonlStat.mtimeMs;
       } catch {
         // JSONL 파일이 없으면 lastHeartbeat를 폴백으로 사용
         lastFileModified = Number(data['lastHeartbeat'] ?? 0);
@@ -689,13 +693,69 @@ export class ClaudeHeartbeat {
       return;
     }
 
-    // 기존 tracked 세션: title만 refresh
+    // 기존 tracked 세션: title + status + timestamps refresh
+    // (JSONL 변경 시 즉시 반영 — heartbeat scan 대기 없이)
     const filePath = join(this.claudeProjectsDir, encodedDir, fileBase);
     const parsed = await this.parseConversationFile(filePath);
     if (!parsed) return;
-    const newTitle = parsed.title;
-    if (newTitle && newTitle !== existing.title) {
-      this.sessions.set(sessionId, { ...existing, title: newTitle });
+
+    let changed = false;
+    let newTitle = existing.title;
+    let newStatus = existing.status;
+    let newCurrentTool = existing.currentTool;
+    let newWaitingForInput = existing.waitingForInput;
+    let newLastPromptTime = existing.lastPromptTime;
+    let newLastResponseTime = existing.lastResponseTime;
+    let newLastPrompt = existing.lastPrompt;
+    let newLastFileModified = existing.lastFileModified;
+
+    if (parsed.title && parsed.title !== existing.title) {
+      newTitle = parsed.title;
+      changed = true;
+    }
+    // status 전환 반영 (busy→idle 즉시 감지)
+    if (parsed.status !== existing.status) {
+      newStatus = parsed.status;
+      changed = true;
+      if (parsed.status === 'idle') {
+        newCurrentTool = null;
+        newWaitingForInput = false;
+      }
+    }
+    // timestamps + lastPrompt 갱신
+    if (parsed.lastPromptTime && parsed.lastPromptTime !== existing.lastPromptTime) {
+      newLastPromptTime = parsed.lastPromptTime;
+      changed = true;
+    }
+    if (parsed.lastResponseTime && parsed.lastResponseTime !== existing.lastResponseTime) {
+      newLastResponseTime = parsed.lastResponseTime;
+      changed = true;
+    }
+    if (parsed.lastPrompt && parsed.lastPrompt !== existing.lastPrompt) {
+      newLastPrompt = parsed.lastPrompt;
+      changed = true;
+    }
+    // JSONL mtime으로 lastFileModified 갱신 (hook 값보다 최신이면)
+    try {
+      const jsonlStat = await statFile(filePath);
+      if (jsonlStat.mtimeMs > (existing.lastFileModified ?? 0)) {
+        newLastFileModified = jsonlStat.mtimeMs;
+        changed = true;
+      }
+    } catch { /* keep existing */ }
+
+    if (changed) {
+      this.sessions.set(sessionId, {
+        ...existing,
+        title: newTitle,
+        status: newStatus,
+        currentTool: newCurrentTool,
+        waitingForInput: newWaitingForInput,
+        lastPromptTime: newLastPromptTime,
+        lastResponseTime: newLastResponseTime,
+        lastPrompt: newLastPrompt,
+        lastFileModified: newLastFileModified,
+      });
     }
   }
 

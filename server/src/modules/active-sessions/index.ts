@@ -187,8 +187,10 @@ export class ActiveSessionsModule implements BackendModule {
 
       const hooksActive = isClaudeCode ? (cached?.hooksActive ?? false) : false;
 
-      // Gap 5: hooks 미연결 + busy + 오래된 세션 → idle 강제 전환
-      const isStaleBusy = isClaudeCode && isActive && !hooksActive
+      // Gap 5: busy + 오래된 세션 → idle 강제 전환
+      // hooksActive 여부와 무관하게 lastActivityTime 기준으로 판단
+      // (hooks가 fire됐더라도 Stop/idle_prompt 누락 시 영구 Working 방지)
+      const isStaleBusy = isClaudeCode && isActive
         && (Date.now() - lastActivityTime > STALE_BUSY_TTL_MS);
       const effectiveActive = isActive && !isStaleBusy;
       const effectiveApiStatus = isStaleBusy ? null : apiStatus;
