@@ -20,7 +20,7 @@
 4. Enrichment 분석 (토큰, 코드 임팩트, 타임라인, 프로젝트, 복구, 요약)
 5. 메모 CRUD (프로젝트 스코프)
 6. Vim 스타일 키보드 네비게이션
-7. 실시간 업데이트 (SSE + 폴링 이중 전략)
+7. 실시간 업데이트 (Agent hook SSE push + Server SSE + 폴링 삼중 전략)
 
 **기술 스택**:
 - Svelte 5 (runes) + Vite 5 (빌드/프록시)
@@ -44,7 +44,8 @@ Browser
 **Key Decisions** (ADR 인덱스):
 - ADR-001: Custom SPA Router (SvelteKit 대신) → 경량, SSR 불필요
 - ADR-002: Dark-only 테마 → 개발 도구 특성, 유지보수 최소화
-- ADR-003: SSE + 폴링 이중 전략 → 실시간성 + 안정성
+- ADR-003: SSE + hook push + 폴링 삼중 전략 → 실시간성 + 안정성
+- ADR-007: Agent hook-event SSE push (B') → 상태 전환 즉시 반영
 - ADR-004: Zero-dep Markdown 렌더러 → 번들 최소화, code block folding 커스텀
 - ADR-005: Svelte 5 runes + Svelte 4 store 혼용 → .ts 파일 runes 미지원 제약
 - ADR-006: Session dismiss auto-revive → 재활성 세션 자동 복귀 UX
@@ -60,7 +61,7 @@ Browser
 ### F1.1 세션 목록 (ActiveSessions.svelte)
 
 - 세션 카드에 표시할 정보:
-  - **Status badge**: Working (파란), Waiting (노란), Idle (회색)
+  - **Status badge**: Working (파란), Waiting (보라), Idle (초록), Rename (주황, 3초 TTL)
   - **Title**: 세션 제목 또는 lastPrompt 첫 60자 또는 sessionId 첫 8자 (fallback 순서)
   - **Subagent badge**: childSessionIds.length > 0 일 때 숫자 표시
   - **시간**: lastActivityTime 상대 시간 (방금 전, N분 전, N시간 전, N일 전)
@@ -74,10 +75,13 @@ Browser
 
 - **Status 판별 로직** (프론트엔드):
   ```
+  RENAME:  recentlyRenamed = true (최우선, 3초 후 자동 해제)
   WORKING: (apiStatus ∈ {busy, retry} ∨ currentTool ≠ null) ∧ ¬waitingForInput
   WAITING: waitingForInput = true
   IDLE:    그 외
   ```
+
+- **정렬 우선순위**: 세션 목록은 `lastActivityTime` 내림차순 정렬. 시간차 60초 이내 세션 간에는 상태 우선순위 적용 (WORKING > WAITING > IDLE).
 
 - **상태 변경 flash 효과**: 세션 상태가 전환될 때 (예: Idle→Working) 뱃지가 1.2초간 brightness+scale 펄스로 반짝임. 이전 상태를 Map으로 추적하여 변경 감지. `prefers-reduced-motion` 존중.
 
@@ -307,18 +311,28 @@ Browser
 
 ## Feature 6: Real-time Updates [IMPLEMENTED]
 
-**[OBJECTIVE]**: SSE 기반 실시간 업데이트 + 폴링 fallback
+**[OBJECTIVE]**: 3-tier 실시간 업데이트 (Agent hook push → Server SSE → Frontend)
 
 **[REQUIREMENTS]**:
 
-### F6.1 SSE 클라이언트 (sse-client.ts)
+### F6.1 Agent Hook-Event SSE Push (B')
+
+- **엔드포인트**: Agent `GET /api/claude/events` (text/event-stream)
+- **트리거**: Claude Code hook 이벤트 발생 시 (PreToolUse, PostToolUse, UserPromptSubmit, Stop, Notification, SessionStart)
+- **데이터**: 세션 full snapshot (ClaudeSessionInfo) — Server가 hook 해석 불필요
+- **이벤트**: `hook.sessionUpdate` + 30초 heartbeat
+- **Server 구독**: MachineManager가 claude 소스 머신에 자동 SSE 연결, exponential backoff 재연결 (2초~30초)
+- **캐시 병합**: hookCachedDetails → pollAll 결과에 병합 (updatedAt 기준 최신 우선)
+- **poll 트리거**: hook 이벤트 수신 → 100ms debounce → 즉시 poll → SSE 브로드캐스트
+
+### F6.2 Server→Frontend SSE (sse-client.ts)
 
 - **연결**: `/api/events` (Native EventSource, 자동 재연결)
 - **Heartbeat**: 40초 타임아웃 (서버 heartbeat 주기 초과)
 - **연결 상태**: green/red dot 시각 표시
 - **Builder 패턴**: `createSSEClient({ url }).on(event, handler).onConnectionChange(cb).start()`
 
-### F6.2 이벤트 종류
+### F6.3 이벤트 종류
 
 | Event | Payload | 핸들러 |
 |-------|---------|--------|
@@ -329,10 +343,18 @@ Browser
 | `enrichment.merged.updated` | `{ feature, machineCount, cachedAt }` | merged enrichment re-fetch (머신 미선택 시만) |
 | `enrichment.cache` | `{ machineId, feature, cachedAt }` | No-op (hydration 이벤트) |
 
-### F6.3 폴링 Fallback
+### F6.4 폴링 Fallback
 
-- 30초 간격 세션/쿼리/머신 재조회
+- **Server→Agent**: 1초 간격 (hook SSE push의 fallback)
+- **Frontend**: 30초 간격 세션/쿼리/머신 재조회
 - `visibilitychange`: 탭 복귀 시 즉시 refresh
+
+### F6.5 데이터 흐름
+
+```
+Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) ── SSE ──→ Frontend
+                    └── 1초 폴링 (fallback) ──┘
+```
 
 ---
 
@@ -426,7 +448,8 @@ Browser
 
 ### 핵심 타입
 
-- `DashboardSession`: 20+ 필드 (sessionId, title, status, apiStatus, currentTool, waitingForInput, source, hooksActive, processMetrics, machineId/Host/Alias 등)
+- `DashboardSession`: 20+ 필드 (sessionId, title, status, apiStatus, currentTool, waitingForInput, source, hooksActive, processMetrics, recentlyRenamed, machineId/Host/Alias 등)
+- `DisplayStatusLabel`: `'Working' | 'Retry' | 'Waiting' | 'Idle' | 'Rename'`
 - `QueryEntry`: sessionId, sessionTitle, timestamp, query, isBackground, source, completedAt, machineId/Host/Alias
 - `MachineInfo`: id, alias, host, status, lastSeen, error, source
 - `SSEEventMap`: 6개 이벤트 타입 매핑
