@@ -44,7 +44,7 @@ export class ActiveSessionsModule implements BackendModule {
       this.poll().catch((err: unknown) => {
         console.error("[ActiveSessions] Poll error:", err);
       });
-    }, 2_000);
+    }, 1_000);
   }
 
   async stop(): Promise<void> {
