@@ -13,6 +13,10 @@
   let tick = $state(0);
   let focusedSessionIndex = $state(-1);
 
+  // 상태 변경 flash 추적: sessionId -> 이전 cssClass
+  let prevStatusMap = new Map<string, string>();
+  let flashingIds = $state(new Set<string>());
+
   onMount(() => {
     const id = setInterval(() => tick++, 60_000);
     return () => clearInterval(id);
@@ -185,6 +189,28 @@
     // 3. Idle: everything else
     return { label: 'Idle', cssClass: 'status-idle' };
   }
+
+  // 상태 변경 감지 → flash 트리거
+  $effect(() => {
+    const current = new Map<string, string>();
+    for (const s of topLevelSessions) {
+      const ds = getDisplayStatus(s);
+      current.set(s.sessionId, ds.cssClass);
+    }
+    // 이전 상태와 비교하여 변경된 세션에 flash 부여
+    const newFlashing = new Set<string>();
+    for (const [id, cls] of current) {
+      const prev = prevStatusMap.get(id);
+      if (prev && prev !== cls) {
+        newFlashing.add(id);
+      }
+    }
+    prevStatusMap = current;
+    if (newFlashing.size > 0) {
+      flashingIds = newFlashing;
+      setTimeout(() => { flashingIds = new Set(); }, 1200);
+    }
+  });
 </script>
 
 <div class="active-sessions" data-testid="active-sessions">
@@ -223,7 +249,7 @@
             <div class="session-header">
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
-                <span class="status-badge {ds.cssClass}">{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader-session"><span></span><span></span><span></span></span>{/if}</span>
+                <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader-session"><span></span><span></span><span></span></span>{/if}</span>
                 <span class="session-title">{session.title || session.lastPrompt?.slice(0, 60) || session.sessionId.slice(0, 8)}</span>
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
                   <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
@@ -648,6 +674,23 @@
     pointer-events: none;
     animation: toast-fade 1.8s ease-out forwards;
     white-space: nowrap;
+  }
+
+  .status-flash {
+    animation: badge-flash 1.2s ease-out;
+  }
+
+  @keyframes badge-flash {
+    0%   { filter: brightness(1); transform: scale(1); }
+    15%  { filter: brightness(1.8); transform: scale(1.15); }
+    30%  { filter: brightness(1); transform: scale(1); }
+    45%  { filter: brightness(1.5); transform: scale(1.1); }
+    60%  { filter: brightness(1); transform: scale(1); }
+    100% { filter: brightness(1); transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-flash { animation: none; }
   }
 
   @keyframes toast-fade {
