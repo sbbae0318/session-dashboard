@@ -14,7 +14,21 @@
 cd server && npx vitest run frontend/src/lib/__tests__/utils.test.ts
 ```
 
-**검증 항목** (16개 케이스):
+**검증 항목** (20개 케이스):
+
+### getQueryResult — 프롬프트 결과 판정 (9개, F-004 포함)
+
+| # | 입력 | 기대 결과 |
+|---|------|----------|
+| 1 | completedAt 있음 | completed |
+| 2 | apiStatus=busy | busy |
+| 3 | apiStatus=idle | idle |
+| 4 | 세션 없음 | null |
+| 5 | apiStatus=null, status=active | active |
+| 6 | **currentTool=Bash, apiStatus=null (F-004)** | **busy** |
+| 7 | **apiStatus=retry (F-004)** | **busy** |
+| 8 | **currentTool+waitingForInput=true (F-004)** | **active (not busy)** |
+| 9 | **completedAt + currentTool (F-004)** | **completed (우선)** |
 
 ### getDisplayStatus — 상태 판별 (7개)
 
@@ -82,3 +96,4 @@ cd server && npx vitest run frontend/src/lib/__tests__/utils.test.ts
 - 테스트: `server/frontend/src/lib/__tests__/utils.test.ts`
 - 스펙: `.omc/spec/prd.md` (Feature 1.1 — Status badge)
 - Known failure: F-003 (hooks vs JSONL race condition)
+- Known failure: F-004 (프롬프트 스피너 busy 조건 불일치)

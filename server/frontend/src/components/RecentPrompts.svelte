@@ -58,7 +58,7 @@
   let sortedQueries = $derived.by(() => {
     const busySessions = new Set(
       sessions
-        .filter(s => s.apiStatus === 'busy' || s.status === 'active')
+        .filter(s => (s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool) && !s.waitingForInput)
         .map(s => s.sessionId)
     );
     // latestTimestamp per session
@@ -335,7 +335,7 @@
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
         {@const session = sessions.find(s => s.sessionId === entry.sessionId)}
-        {@const isSessionBusy = session?.apiStatus === 'busy' || session?.status === 'active'}
+        {@const isSessionBusy = (session?.apiStatus === 'busy' || session?.apiStatus === 'retry' || session?.currentTool) && !session?.waitingForInput}
         {@const isLatestForSession = i === latestIndexBySession[entry.sessionId]}
         {@const isWorking = isSessionBusy && isLatestForSession}
         {@const key = entryKey(entry)}

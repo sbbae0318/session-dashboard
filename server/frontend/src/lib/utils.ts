@@ -40,15 +40,16 @@ export function formatRss(kb: number): string {
 
 export function getQueryResult(
   query: { sessionId: string; timestamp: number; completedAt?: number | null },
-  sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }>
+  sessions: Array<{ sessionId: string; status: string; apiStatus: string | null; currentTool?: string | null; waitingForInput?: boolean }>
 ): string | null {
   // completedAt이 있으면 완료된 것
   if (query.completedAt) return 'completed';
 
-  // Fallback to session status
   const session = sessions.find((s) => s.sessionId === query.sessionId);
   if (session) {
-    if (session.apiStatus === 'busy') return 'busy';
+    // getDisplayStatus와 동일 조건: currentTool만 있어도 busy 판정
+    if ((session.apiStatus === 'busy' || session.apiStatus === 'retry' || session.currentTool)
+        && !session.waitingForInput) return 'busy';
     if (session.apiStatus === 'idle') return 'idle';
     return session.status;
   }

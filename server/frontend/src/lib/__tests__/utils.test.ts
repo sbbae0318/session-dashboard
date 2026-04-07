@@ -31,6 +31,33 @@ describe("getQueryResult", () => {
     const sessions = [{ sessionId: "sess-abc", status: "active", apiStatus: null }];
     expect(getQueryResult(query, sessions)).toBe("active");
   });
+
+  // ── F-004 regression: currentTool 기반 busy 판정 ──
+
+  it("returns 'busy' when currentTool set and apiStatus is null (F-004)", () => {
+    const query = { sessionId: "sess-abc", timestamp: 1000, completedAt: null };
+    const sessions = [{ sessionId: "sess-abc", status: "idle" as const, apiStatus: null, currentTool: "Bash", waitingForInput: false }];
+    expect(getQueryResult(query, sessions)).toBe("busy");
+  });
+
+  it("returns 'busy' when apiStatus=retry (F-004)", () => {
+    const query = { sessionId: "sess-abc", timestamp: 1000, completedAt: null };
+    const sessions = [{ sessionId: "sess-abc", status: "active" as const, apiStatus: "retry", currentTool: null, waitingForInput: false }];
+    expect(getQueryResult(query, sessions)).toBe("busy");
+  });
+
+  it("returns idle-fallback when currentTool set but waitingForInput=true (F-004)", () => {
+    const query = { sessionId: "sess-abc", timestamp: 1000, completedAt: null };
+    const sessions = [{ sessionId: "sess-abc", status: "active" as const, apiStatus: null, currentTool: "Bash", waitingForInput: true }];
+    // waitingForInput → not busy, falls through to apiStatus check → idle fallback
+    expect(getQueryResult(query, sessions)).toBe("active");
+  });
+
+  it("returns 'completed' even if currentTool set (completedAt takes priority)", () => {
+    const query = { sessionId: "sess-abc", timestamp: 1000, completedAt: 2000 };
+    const sessions = [{ sessionId: "sess-abc", status: "active" as const, apiStatus: "busy", currentTool: "Bash", waitingForInput: false }];
+    expect(getQueryResult(query, sessions)).toBe("completed");
+  });
 });
 
 describe("getCompletionTime", () => {
