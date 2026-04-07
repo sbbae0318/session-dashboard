@@ -33,6 +33,7 @@ export interface CachedSessionDetail {
   readonly parentSessionId?: string | null;
   readonly createdAt?: number;
   readonly lastActiveAt?: number;
+  readonly recentlyRenamed?: boolean;
 }
 
 interface SessionsAllResponse {
@@ -63,6 +64,8 @@ interface PollAllResult {
 export class MachineManager {
   static readonly DEFAULT_TIMEOUT_MS = 8000;
   static readonly GRACE_THRESHOLD = 3;
+  private static readonly HOOK_SSE_RECONNECT_BASE = 2_000;
+  private static readonly HOOK_SSE_RECONNECT_MAX = 30_000;
 
   private readonly machines: readonly MachineConfig[];
   private readonly defaultTimeout: number;
@@ -70,6 +73,12 @@ export class MachineManager {
   private readonly consecutiveFailures: Map<string, number> = new Map();
   private onStatusChange: ((statuses: readonly MachineStatus[]) => void) | null = null;
   private readonly projectsCache: Map<string, Array<{ id: string; worktree: string }>> = new Map();
+
+  // Hook SSE push (B')
+  private readonly hookSseConnections: Map<string, { destroy: () => void }> = new Map();
+  private readonly hookSseReconnectDelay: Map<string, number> = new Map();
+  private onHookUpdate: (() => void) | null = null;
+  private readonly hookCachedDetails: Map<string, CachedSessionDetail & { machineId: string }> = new Map();
 
   constructor(machines: readonly MachineConfig[], defaultTimeout?: number) {
     this.machines = machines;
@@ -353,6 +362,7 @@ export class MachineManager {
             waitingForInput: (session.waitingForInput as boolean) ?? false,
             hooksActive: (session.hooksActive as boolean) ?? false,
             processMetrics: (session.processMetrics as { alive: boolean; cpuPercent: number; rssKb: number } | null) ?? null,
+            recentlyRenamed: (session.recentlyRenamed as boolean) ?? false,
           };
         }
       }
@@ -716,5 +726,106 @@ export class MachineManager {
     const raw = await this.httpGet(url, headers, machine.timeout);
     const response = JSON.parse(raw) as { queries?: Array<Record<string, unknown>> };
     return response.queries ?? [];
+  }
+
+  // ── Hook SSE push (B') ──
+
+  setHookUpdateCallback(cb: () => void): void {
+    this.onHookUpdate = cb;
+  }
+
+  /** hook SSE 통해 받은 실시간 cachedDetails를 pollAll 결과에 병합 */
+  getHookCachedDetails(): Map<string, CachedSessionDetail & { machineId: string }> {
+    return this.hookCachedDetails;
+  }
+
+  /** Claude 소스가 있는 머신에 대해 hook SSE 구독 시작 */
+  startHookSseSubscriptions(): void {
+    for (const machine of this.machines) {
+      if (machine.source === 'claude-code' || machine.source === 'both') {
+        this.connectHookSse(machine);
+      }
+    }
+  }
+
+  stopHookSseSubscriptions(): void {
+    for (const [id, conn] of this.hookSseConnections) {
+      conn.destroy();
+      this.hookSseConnections.delete(id);
+    }
+  }
+
+  private connectHookSse(machine: MachineConfig): void {
+    const url = `http://${machine.host}:${machine.port}/api/claude/events`;
+    const headers: Record<string, string> = { 'Authorization': `Bearer ${machine.apiKey}` };
+
+    const req = httpGet(url, { headers }, (res: IncomingMessage) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        this.scheduleHookSseReconnect(machine);
+        return;
+      }
+
+      // 연결 성공 → delay 리셋
+      this.hookSseReconnectDelay.delete(machine.id);
+
+      let buffer = '';
+      res.setEncoding('utf-8');
+      res.on('data', (chunk: string) => {
+        buffer += chunk;
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          this.handleHookSseMessage(machine, part);
+        }
+      });
+      res.on('end', () => this.scheduleHookSseReconnect(machine));
+      res.on('error', () => this.scheduleHookSseReconnect(machine));
+    });
+
+    req.on('error', () => this.scheduleHookSseReconnect(machine));
+
+    this.hookSseConnections.set(machine.id, {
+      destroy: () => { try { req.destroy(); } catch { /* ignore */ } },
+    });
+  }
+
+  private scheduleHookSseReconnect(machine: MachineConfig): void {
+    this.hookSseConnections.delete(machine.id);
+    const prev = this.hookSseReconnectDelay.get(machine.id) ?? MachineManager.HOOK_SSE_RECONNECT_BASE;
+    const next = Math.min(prev * 2, MachineManager.HOOK_SSE_RECONNECT_MAX);
+    this.hookSseReconnectDelay.set(machine.id, next);
+    setTimeout(() => this.connectHookSse(machine), prev);
+  }
+
+  private handleHookSseMessage(machine: MachineConfig, raw: string): void {
+    const eventMatch = raw.match(/^event:\s*(.+)$/m);
+    const dataMatch = raw.match(/^data:\s*(.+)$/m);
+    if (!eventMatch || !dataMatch) return;
+    if (eventMatch[1] !== 'hook.sessionUpdate') return;
+
+    try {
+      const session = JSON.parse(dataMatch[1]) as Record<string, unknown>;
+      const sessionId = String(session.sessionId ?? '');
+      if (!sessionId) return;
+
+      const sessionStatus = String(session.status ?? 'busy');
+      const cached: CachedSessionDetail & { machineId: string } = {
+        status: sessionStatus === 'idle' ? 'idle' : 'busy',
+        lastPrompt: (session.lastPrompt as string) ?? null,
+        lastPromptTime: (session.lastPromptTime as number) ?? 0,
+        currentTool: (session.currentTool as string | null) ?? null,
+        directory: (session.cwd as string) ?? null,
+        updatedAt: Date.now(),
+        lastResponseTime: (session.lastResponseTime as number) ?? null,
+        lastFileModified: (session.lastFileModified as number) ?? null,
+        waitingForInput: (session.waitingForInput as boolean) ?? false,
+        hooksActive: (session.hooksActive as boolean) ?? false,
+        processMetrics: (session.processMetrics as { alive: boolean; cpuPercent: number; rssKb: number } | null) ?? null,
+        machineId: machine.id,
+      };
+      this.hookCachedDetails.set(sessionId, cached);
+      this.onHookUpdate?.();
+    } catch { /* ignore parse errors */ }
   }
 }

@@ -232,6 +232,7 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       ocServeConnected,
       sseConnected: sessionCache ? sessionCache.getConnectionState() === 'connected' : false,
       ...(claudeEnabled ? { claudeSourceConnected: true } : {}),
+      ...(hookSseClients.size > 0 ? { hookSseClients: hookSseClients.size } : {}),
     };
     return response;
   });
@@ -420,6 +421,43 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     },
   );
 
+  // ── Hook-event SSE broadcast (B': real-time push to server) ──
+  const hookSseClients = new Map<string, import('fastify').FastifyReply>();
+
+  function broadcastHookUpdate(sid: string): void {
+    if (!claudeHeartbeat || hookSseClients.size === 0) return;
+    const session = claudeHeartbeat.getSession(sid);
+    if (!session) return;
+    const msg = `event: hook.sessionUpdate\ndata: ${JSON.stringify(session)}\n\n`;
+    for (const [id, reply] of hookSseClients) {
+      try { reply.raw.write(msg); }
+      catch { hookSseClients.delete(id); }
+    }
+  }
+
+  // GET /api/claude/events — SSE stream for hook events
+  app.get('/api/claude/events', (request, reply) => {
+    const clientId = randomUUID();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    reply.raw.write(`event: connected\ndata: ${JSON.stringify({ clientId })}\n\n`);
+    hookSseClients.set(clientId, reply);
+    request.raw.on('close', () => hookSseClients.delete(clientId));
+  });
+
+  // Hook SSE heartbeat (30s)
+  const hookSseHeartbeat = setInterval(() => {
+    for (const [id, reply] of hookSseClients) {
+      try { reply.raw.write(':heartbeat\n\n'); }
+      catch { hookSseClients.delete(id); }
+    }
+  }, 30_000);
+  app.addHook('onClose', () => clearInterval(hookSseHeartbeat));
+
   // POST /hooks/event — Claude Code hooks receiver (always registered)
   app.post<{ Body: Record<string, unknown> }>('/hooks/event', async (request) => {
     if (!claudeHeartbeat) return { ok: false, error: 'claude not enabled' };
@@ -432,10 +470,12 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       case 'PreToolUse': {
         const toolName = String(body.tool_name ?? 'unknown');
         claudeHeartbeat.handleToolEvent(sessionId, toolName);
+        broadcastHookUpdate(sessionId);
         break;
       }
       case 'PostToolUse': {
         claudeHeartbeat.handleToolEvent(sessionId, null);
+        broadcastHookUpdate(sessionId);
         break;
       }
       case 'UserPromptSubmit': {
@@ -444,26 +484,29 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
           ?? body.prompt ?? '',
         );
         claudeHeartbeat.handlePromptEvent(sessionId, prompt, Date.now());
+        broadcastHookUpdate(sessionId);
         break;
       }
       case 'Stop':
       case 'SubagentStop': {
         claudeHeartbeat.handleStatusEvent(sessionId, 'idle');
+        broadcastHookUpdate(sessionId);
         break;
       }
       case 'Notification': {
         const notifType = String(body.notification_type ?? '');
         if (notifType === 'permission_prompt') {
-          // permission_prompt: tool 실행 허가 대기 → WAITING
           claudeHeartbeat.handleWaitingEvent(sessionId, true);
+          broadcastHookUpdate(sessionId);
         } else if (notifType === 'idle_prompt') {
-          // idle_prompt: 작업 완료 후 다음 입력 대기 → IDLE (not WAITING)
           claudeHeartbeat.handleStatusEvent(sessionId, 'idle');
+          broadcastHookUpdate(sessionId);
         }
         break;
       }
       case 'SessionStart': {
         claudeHeartbeat.handleStatusEvent(sessionId, 'busy');
+        broadcastHookUpdate(sessionId);
         break;
       }
       default:

@@ -78,6 +78,13 @@ async function main(): Promise<void> {
         })));
       });
 
+      // Hook SSE: Agent의 실시간 hook 이벤트 구독 (B')
+      machineManager.setHookUpdateCallback(() => {
+        // hook 이벤트 수신 → 즉시 poll 트리거 (cachedDetails가 이미 갱신됨)
+        activeSessions.triggerPoll();
+      });
+      machineManager.startHookSseSubscriptions();
+
       // Create and start server
       const startTime = Date.now();
       const app = await createServer(modules, sseManager, { startTime, machineManager });
@@ -92,6 +99,7 @@ async function main(): Promise<void> {
 
       // Setup graceful shutdown
       setupCleanupHandlers(async () => {
+        machineManager.stopHookSseSubscriptions();
         for (const mod of modules) {
           await mod.stop?.();
         }

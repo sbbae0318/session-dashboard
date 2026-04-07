@@ -29,6 +29,7 @@ export interface ClaudeSessionInfo {
   readonly waitingForInput: boolean;
   readonly hooksActive: boolean;
   readonly processMetrics: ProcessMetrics | null;
+  readonly recentlyRenamed: boolean;
 }
 
 interface ConversationData {
@@ -101,6 +102,7 @@ export class ClaudeHeartbeat {
   private watcher: FSWatcher | null = null;
   private projectsWatcher: FSWatcher | null = null;
   private sessions: Map<string, ClaudeSessionInfo> = new Map();
+  private renameTimers: Map<string, NodeJS.Timeout> = new Map();
   private evictionInterval: NodeJS.Timeout | null = null;
 
   constructor(heartbeatsDir?: string, claudeProjectsDir?: string, processScanner?: ProcessScanner) {
@@ -134,11 +136,17 @@ export class ClaudeHeartbeat {
       clearInterval(this.evictionInterval);
       this.evictionInterval = null;
     }
+    for (const timer of this.renameTimers.values()) clearTimeout(timer);
+    this.renameTimers.clear();
     this.sessions.clear();
   }
 
   getActiveSessions(): ClaudeSessionInfo[] {
     return Array.from(this.sessions.values());
+  }
+
+  getSession(sessionId: string): ClaudeSessionInfo | undefined {
+    return this.sessions.get(sessionId);
   }
 
   // -------------------------------------------------------------------------
@@ -452,6 +460,7 @@ export class ClaudeHeartbeat {
           : false,
         hooksActive,
         processMetrics,
+        recentlyRenamed: existing?.recentlyRenamed ?? false,
       };
 
       this.sessions.set(info.sessionId, info);
@@ -715,8 +724,10 @@ export class ClaudeHeartbeat {
     let newLastPrompt = existing.lastPrompt;
     let newLastFileModified = existing.lastFileModified;
 
+    let titleChanged = false;
     if (parsed.title && parsed.title !== existing.title) {
       newTitle = parsed.title;
+      titleChanged = true;
       changed = true;
     }
     // status 전환: hooks가 active이면 hooks가 권한자 → JSONL status 무시
@@ -762,7 +773,21 @@ export class ClaudeHeartbeat {
         lastResponseTime: newLastResponseTime,
         lastPrompt: newLastPrompt,
         lastFileModified: newLastFileModified,
+        ...(titleChanged ? { recentlyRenamed: true } : {}),
       });
+
+      // title 변경 시 3초 후 recentlyRenamed 자동 해제
+      if (titleChanged) {
+        const prev = this.renameTimers.get(sessionId);
+        if (prev) clearTimeout(prev);
+        this.renameTimers.set(sessionId, setTimeout(() => {
+          const cur = this.sessions.get(sessionId);
+          if (cur?.recentlyRenamed) {
+            this.sessions.set(sessionId, { ...cur, recentlyRenamed: false });
+          }
+          this.renameTimers.delete(sessionId);
+        }, 3000));
+      }
     }
   }
 
@@ -822,6 +847,7 @@ export class ClaudeHeartbeat {
                 waitingForInput: false,
                 hooksActive: false,
                 processMetrics: this.processScanner?.getMetricsByCwd(decodedDir, 'claude') ?? null,
+                recentlyRenamed: false,
               });
             } catch {
               continue;

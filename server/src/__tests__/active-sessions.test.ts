@@ -41,6 +41,7 @@ function createMockMachineManager(overrides?: {
     getMachineStatuses: overrides?.getMachineStatuses ?? vi.fn().mockReturnValue([]),
     setStatusChangeCallback: vi.fn(),
     pollAllQueries: vi.fn().mockResolvedValue([]),
+    getHookCachedDetails: vi.fn().mockReturnValue(new Map()),
   } as unknown as MachineManager;
 }
 

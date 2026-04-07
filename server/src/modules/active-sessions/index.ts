@@ -38,6 +38,17 @@ export class ActiveSessionsModule implements BackendModule {
     this.onNewPromptFromSession = cb;
   }
 
+  /** Hook SSE 이벤트 수신 시 즉시 poll 트리거 (debounce 100ms) */
+  triggerPoll(): void {
+    if (this._hookPollPending) return;
+    this._hookPollPending = true;
+    setTimeout(() => {
+      this._hookPollPending = false;
+      this.poll().catch(() => {});
+    }, 100);
+  }
+  private _hookPollPending = false;
+
   async start(): Promise<void> {
     await this.poll();
     this.pollInterval = setInterval(() => {
@@ -60,6 +71,15 @@ export class ActiveSessionsModule implements BackendModule {
     const rawSessions = result.sessions;
     const allStatuses = result.statuses;
     const cachedDetails = result.cachedDetails;
+
+    // Hook SSE 실시간 캐시 병합 (폴링보다 최신)
+    for (const [sessionId, hookCached] of this.machineManager.getHookCachedDetails()) {
+      if (hookCached.updatedAt > (cachedDetails[sessionId]?.updatedAt ?? 0)) {
+        cachedDetails[sessionId] = hookCached;
+        // statuses도 갱신 (apiStatus 결정에 영향)
+        allStatuses[sessionId] = { type: hookCached.status, machineId: hookCached.machineId };
+      }
+    }
 
     const sessionMap = this.buildSessionMap(rawSessions, allStatuses, cachedDetails);
 
@@ -105,7 +125,21 @@ export class ActiveSessionsModule implements BackendModule {
     this.previousSessionMap = sessionMap;
 
     this.cachedSessions = filtered
-      .sort((a, b) => b.lastActivityTime - a.lastActivityTime);
+      .sort((a, b) => {
+        const timeDiff = b.lastActivityTime - a.lastActivityTime;
+        // 시간차 60초 이내이면 상태 우선순위로 정렬 (WORKING > WAITING > IDLE)
+        if (Math.abs(timeDiff) < 60_000) {
+          const statusPriority = (s: DashboardSession): number => {
+            if ((s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool)
+                && !s.waitingForInput) return 0; // WORKING
+            if (s.waitingForInput) return 1;      // WAITING
+            return 2;                              // IDLE
+          };
+          const sp = statusPriority(a) - statusPriority(b);
+          if (sp !== 0) return sp;
+        }
+        return timeDiff;
+      });
     this.onUpdate?.(this.cachedSessions);
 
     if (this.onNewPromptFromSession) {
@@ -222,6 +256,7 @@ export class ActiveSessionsModule implements BackendModule {
         source: isClaudeCode ? 'claude-code' : 'opencode',
         ...(isClaudeCode ? { hooksActive } : {}),
         processMetrics: cached?.processMetrics ?? null,
+        ...(cached?.recentlyRenamed ? { recentlyRenamed: true } : {}),
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
         machineAlias: (s.machineAlias as string) ?? '',
