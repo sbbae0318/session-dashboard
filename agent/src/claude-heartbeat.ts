@@ -425,6 +425,11 @@ export class ClaudeHeartbeat {
           : this.processScanner.getMetricsByCwd(cwd, 'claude');
       }
 
+      // hooks가 active이면 hook-set status/currentTool/waitingForInput 보존
+      // (JSONL 파싱과 hooks 간 race condition 방지)
+      const hooksActive = existing?.hooksActive ?? false;
+      const effectiveStatus = hooksActive ? (existing!.status ?? status) : status;
+
       const info: ClaudeSessionInfo = {
         sessionId,
         pid,
@@ -433,18 +438,19 @@ export class ClaudeHeartbeat {
         startTime: Number(data['startTime'] ?? 0),
         lastHeartbeat: Number(data['lastHeartbeat'] ?? 0),
         source: 'claude-code',
-        status,
+        status: effectiveStatus,
         title,
         lastPromptTime,
         lastFileModified,
         lastResponseTime,
         lastPrompt,
-        // JSONL re-scan: always reset waitingForInput.
-        // If waitingForInput is truly active, the next Notification hook will re-set it.
-        // This prevents stale WAITING state after permission grant or crash.
-        currentTool: status === 'idle' ? null : (this.sessions.get(sessionId)?.currentTool ?? null),
-        waitingForInput: false,
-        hooksActive: this.sessions.get(sessionId)?.hooksActive ?? false,
+        currentTool: hooksActive
+          ? (existing!.currentTool)
+          : (status === 'idle' ? null : (existing?.currentTool ?? null)),
+        waitingForInput: hooksActive
+          ? (existing!.waitingForInput)
+          : false,
+        hooksActive,
         processMetrics,
       };
 
@@ -713,8 +719,9 @@ export class ClaudeHeartbeat {
       newTitle = parsed.title;
       changed = true;
     }
-    // status 전환 반영 (busy→idle 즉시 감지)
-    if (parsed.status !== existing.status) {
+    // status 전환: hooks가 active이면 hooks가 권한자 → JSONL status 무시
+    // (hooks 미연결 시에만 JSONL 파싱으로 status 판단)
+    if (!existing.hooksActive && parsed.status !== existing.status) {
       newStatus = parsed.status;
       changed = true;
       if (parsed.status === 'idle') {
