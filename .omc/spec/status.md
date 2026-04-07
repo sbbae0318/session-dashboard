@@ -25,7 +25,7 @@ _번복하지 않는 결정. ADR로 문서화됨._
 - Claude Hook URL 포트 = **3098** (3101 사용 금지)
 - Workstation Node = nvm v22 (system v18은 동작 안 함)
 - hooks active 세션의 status 권한 = **hooks** (JSONL 파싱은 fallback) — F-003에서 확립
-- (참조: `spec/decisions/`)
+- (참조: `spec/decisions/ADR-001~006`)
 
 ## Learned
 
