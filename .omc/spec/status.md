@@ -45,9 +45,9 @@ _이번 세션/최근에 배운 것._
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **Rename 상태 + 정렬 로직 배포 후 실제 동작 검증** — rename 이벤트 → Rename 배지 표시 → 3초 후 복귀 확인. WORKING/IDLE 동시 최근 시 정렬 확인.
+1. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
 2. **Domain 문서 생성** — `.omc/knowledge/domains/` 비어있음. agent, server, frontend 도메인 문서 작성 필요.
-3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열. main 브랜치에서 이미 실패 중 (16→19개 증가 확인).
+3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
 
 ---
 
@@ -56,4 +56,5 @@ _다음 세션에 할 것 (최대 3개)._
 - PRD: `spec/prd.md`
 - Decisions: `spec/decisions/`
 - Known Failures: `knowledge/known-failures.md`
-- Workflows: `workflows/deploy-dashboard.md`, `workflows/auto-live-test.md`
+- Workflows: `workflows/deploy-dashboard.md`, `workflows/auto-live-test.md`, `workflows/status-transition-regression.md`
+- Plans: `plans/hook-event-sse-push.md` (B' 설계 — 구현 완료)
