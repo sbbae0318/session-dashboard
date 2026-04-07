@@ -35,7 +35,8 @@ Browser
 ├── App.svelte (SSE 연결, 글로벌 단축키, 라우팅)
 ├── Stores (sessions, queries, filter, machine, dismissed, navigation, enrichment, memos)
 ├── Components
-│   ├── Dashboard: ActiveSessions + RecentPrompts + PromptDetailModal
+│   ├── Dashboard (Monitor): ActiveSessions + RecentPrompts + PromptDetailModal
+│   ├── Sessions: SessionCards (카드 그리드 뷰) → session-prompts (RecentPrompts full-width)
 │   ├── Navigation: TopNav + CommandPalette + ShortcutCheatsheet + MachineSelector
 │   └── Pages: TokenCost, CodeImpact, Timeline, Projects, ContextRecovery, Summaries, Memos
 └── Lib: api.ts, sse-client.ts, markdown.ts, utils.ts, timeline-utils.ts
@@ -140,11 +141,21 @@ Browser
 - 푸터: resume 명령 복사 버튼
 - Escape / backdrop 클릭으로 닫기
 
+### F1.4 세션 카드 그리드 (SessionCards.svelte)
+
+- **레이아웃**: `auto-fill, minmax(280px, 1fr)` 그리드 — 화면 폭에 따라 2~4열 자동 배치
+- **카드 정보**: Status badge, 소스, subagent 수, 타이틀, 현재 도구, 시간/머신/프로세스 메트릭, 프로젝트 경로, 마지막 프롬프트 (2줄 clamp)
+- **카드 클릭**: `session-prompts` 뷰로 전환 (full-width RecentPrompts + back 버튼, Escape로 복귀)
+- **필터링 파이프라인**: dismissed → machine → source → time (active 우회) → parent → project (F1.1과 동일)
+- **상태 flash**: F1.1과 동일한 prevStatusMap + 1.2초 animation 패턴
+- **Dismiss/Restore**: F1.1과 동일
+- **키보드**: F7.4 참조
+
 ---
 
 ## Feature 2: Navigation & Routing [IMPLEMENTED]
 
-**[OBJECTIVE]**: SPA 내 9개 뷰를 URL-based로 라우팅하며 브라우저 히스토리 지원
+**[OBJECTIVE]**: SPA 내 11개 뷰를 URL-based로 라우팅하며 브라우저 히스토리 지원
 
 **[REQUIREMENTS]**:
 
@@ -153,8 +164,10 @@ Browser
 - **뷰 목록**:
   | View | URL | 컴포넌트 |
   |------|-----|---------|
-  | overview | `?` (파라미터 없음) | Dashboard 2-column |
-  | session-detail | `?session={id}` | Dashboard + 세션 필터 |
+  | sessions | `?view=sessions` | SessionCards 카드 그리드 |
+  | session-prompts | `?view=session-prompts&session={id}` | 세션별 프롬프트 리스트 (full-width) |
+  | overview | `?` (파라미터 없음) | Monitor 2-column |
+  | session-detail | `?session={id}` | Monitor + 세션 필터 |
   | token-cost | `?view=token-cost` | TokenCostPage |
   | code-impact | `?view=code-impact` | CodeImpactPage |
   | timeline | `?view=timeline` | TimelinePage |
@@ -170,10 +183,11 @@ Browser
 
 ### F2.2 탑 네비게이션 (TopNav.svelte)
 
-- 탭: Dashboard, Summaries, Tokens, Impact, Timeline, Projects, Recovery, Memos
+- 탭: Sessions, Monitor, Summaries, Tokens, Impact, Timeline, Projects, Recovery, Memos
 - 활성 탭 하단 보더 표시
 - `aria-current="page"` 접근성
-- Dashboard 탭: overview + session-detail 양쪽에서 active
+- Sessions 탭: sessions + session-prompts 양쪽에서 active
+- Monitor 탭: overview + session-detail 양쪽에서 active
 
 ---
 
@@ -370,9 +384,9 @@ Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) 
 |----|------|
 | `Cmd/Ctrl+K` | Command Palette 토글 |
 | `?` | 단축키 치트시트 |
-| `h` | 세션 패인 포커스 |
-| `l` | 프롬프트 패인 포커스 |
-| `Escape` | 디테일 뷰 → 오버뷰 복귀 |
+| `h` | 세션 패인 포커스 (Monitor 뷰에서만) |
+| `l` | 프롬프트 패인 포커스 (Monitor 뷰에서만) |
+| `Escape` | 디테일/프롬프트 뷰 → 상위 복귀 |
 
 ### F7.2 세션 패인
 
@@ -396,7 +410,19 @@ Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) 
 | `Escape` | 전체 축소 + 포커스 해제 |
 | `Ctrl+Shift+A` | 전체 확장/축소 (modifier 버전) |
 
-### F7.4 치트시트 (ShortcutCheatsheet.svelte)
+### F7.4 세션 카드 그리드 (Sessions 뷰)
+
+| 키 | 동작 |
+|----|------|
+| `j` / `↓` | 아래 행 이동 (열 수 런타임 감지) |
+| `k` / `↑` | 위 행 이동 |
+| `h` / `←` | 왼쪽 카드 |
+| `l` / `→` | 오른쪽 카드 |
+| `e` / `Enter` | 선택 카드 → 프롬프트 리스트 진입 |
+| `c` | resume 명령어 클립보드 복사 |
+| `Escape` | session-prompts → sessions 복귀 |
+
+### F7.5 치트시트 (ShortcutCheatsheet.svelte)
 
 - 4개 섹션: Global, Session, Prompt, Command Palette
 - 플랫폼 감지: Mac → Cmd 심볼 / 기타 → Ctrl 텍스트

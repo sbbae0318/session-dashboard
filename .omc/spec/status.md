@@ -13,7 +13,7 @@ _프로젝트가 지금 어디에 있고, 무엇을 하고 있는지._
 
 - **Agent**: Claude Code + OpenCode 이중 소스 모니터링 (port 3098). 최근 OpenCode DB 직접 모니터링(oc-serve 없이) 추가됨 (f7f764d).
 - **Server**: Dashboard 서버 (port 3097, Docker on 192.168.0.2). 1초 폴링 + hook SSE push (B') + SSE 브로드캐스트.
-- **Frontend**: Svelte 5 SPA. 세션 목록/필터/프롬프트 뷰어 + 단축키 cheatsheet.
+- **Frontend**: Svelte 5 SPA. Sessions 카드 그리드 뷰 + Monitor(split-pane) + 프롬프트 뷰어 + 단축키.
 - **거버넌스**: `.omc/` 초기화 완료 (GOVERNANCE.md, status/prd/known-failures, workflows 2개).
 
 ## Locked Decisions
@@ -40,13 +40,14 @@ _이번 세션/최근에 배운 것._
 - **recentlyRenamed 플래그 패턴**: agent의 `refreshSessionFromFile()`에서 title 변경 감지 → `recentlyRenamed: true` 설정 + `setTimeout` 3초 후 `false`로 해제. 프론트엔드 `getDisplayStatus()`에서 최우선 체크하여 "Rename" 배지(주황) 표시. `renameTimers` Map으로 세션별 타이머 관리, `stop()` 시 정리.
 - **Hook SSE push (B')**: agent가 `/api/claude/events` SSE 엔드포인트를 제공, hook 이벤트 발생 시 세션 full snapshot을 구독자에게 즉시 브로드캐스트. server가 머신별 SSE 구독 + `cachedDetails` 실시간 병합 + 100ms debounce poll 트리거.
 - **정렬 우선순위 로직**: `lastActivityTime` 시간차 60초 이내 세션 간에는 상태 우선순위 적용 (WORKING=0 > WAITING=1 > IDLE=2). "방금 전" 표시되는 세션들 사이에서 WORKING이 항상 상단에 위치하도록 보장.
+- **Svelte 5 `document.addEventListener` vs `svelte:window`**: `document.addEventListener`로 등록한 핸들러에서 `$state`/`$derived` 변수 접근 시 reactive 업데이트가 동작하지 않을 수 있음. `svelte:window onkeydown`으로 전환하면 Svelte reactive context 내에서 실행되어 정상 동작. (`de44c26`에서 발견)
 
 ## Next
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
-2. **Domain 문서 생성** — `.omc/knowledge/domains/` 비어있음. agent, server, frontend 도메인 문서 작성 필요.
+1. **Sessions 카드 키보드 포커스 검증** — `svelte:window` 전환 후 실제 브라우저에서 j/k/h/l 이동 동작 확인 필요.
+2. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
 3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
 
 ---
