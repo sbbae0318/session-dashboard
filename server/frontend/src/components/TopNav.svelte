@@ -2,7 +2,8 @@
   import { getCurrentView, pushView } from '../lib/stores/navigation.svelte';
 
   const tabs = [
-    { view: 'overview' as const, label: 'Dashboard' },
+    { view: 'sessions' as const, label: 'Sessions' },
+    { view: 'overview' as const, label: 'Monitor' },
     { view: 'summaries' as const, label: 'Summaries' },
     { view: 'token-cost' as const, label: 'Tokens' },
     { view: 'code-impact' as const, label: 'Impact' },
@@ -17,6 +18,9 @@
   function isTabActive(tabView: string): boolean {
     if (tabView === 'overview') {
       return currentView === 'overview' || currentView === 'session-detail';
+    }
+    if (tabView === 'sessions') {
+      return currentView === 'sessions' || currentView === 'session-prompts';
     }
     return currentView === tabView;
   }

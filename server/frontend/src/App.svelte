@@ -11,7 +11,7 @@
   import { createSSEClient } from "./lib/sse-client";
   import { reviveSessions, dismissSession } from "./lib/stores/dismissed.svelte";
   import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
-  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView } from "./lib/stores/navigation.svelte";
+  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView, popToSessions, isSessionPromptsView } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
   import ShortcutCheatsheet from './components/ShortcutCheatsheet.svelte';
   import TopNav from './components/TopNav.svelte';
@@ -22,6 +22,7 @@
   import ContextRecoveryPage from './components/pages/ContextRecoveryPage.svelte';
   import SummariesPage from './components/pages/SummariesPage.svelte';
   import MemosPage from './components/pages/MemosPage.svelte';
+  import SessionCards from './components/SessionCards.svelte';
 
   let connected = $state(false);
   let loading = $state(true);
@@ -42,6 +43,7 @@
     { value: "all", label: "All" },
   ];
   let currentView = $derived(getCurrentView());
+  let isSessionPrompts = $derived(isSessionPromptsView());
   let showBackground = $state(false);
   let backgroundCount = $state(0);
 
@@ -131,6 +133,12 @@
       return;
     }
 
+    if (e.key === 'Escape' && isSessionPrompts) {
+      e.preventDefault();
+      popToSessions();
+      return;
+    }
+
     if (e.key === 'Escape' && isDetail) {
       e.preventDefault();
       popToOverview();
@@ -211,6 +219,22 @@
     <SummariesPage />
   {:else if currentView === 'memos'}
     <MemosPage />
+  {:else if currentView === 'sessions'}
+    <div class="panel sessions-page">
+      <h2>Sessions</h2>
+      <SessionCards />
+    </div>
+  {:else if currentView === 'session-prompts' && detailId}
+    <div class="panel prompts-page view-transition">
+      <div class="prompts-page-header">
+        <button class="back-btn" onclick={popToSessions} title="세션 목록으로">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Sessions
+        </button>
+        <span class="prompts-page-id" title={detailId}>{getSessions().find(s => s.sessionId === detailId)?.title || detailId.slice(0, 16)}</span>
+      </div>
+      <RecentPrompts sessionIdFilter={detailId} bind:showBackground onBackgroundCountChange={(c) => { backgroundCount = c; }} paneActive={true} />
+    </div>
   {:else}
     <div class="dashboard-layout">
       <aside class="sidebar" class:pane-active={focusPane === 'sessions'}>
@@ -422,6 +446,62 @@
   .hint-divider {
     margin: 0 0.15rem;
     opacity: 0.4;
+  }
+
+  .sessions-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .prompts-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .prompts-page-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-family: inherit;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .back-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .prompts-page-id {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
   }
 
   :global(.pane-active) > .panel > h2,

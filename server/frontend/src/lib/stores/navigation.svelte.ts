@@ -2,6 +2,8 @@
 type ViewType =
   | 'overview'
   | 'session-detail'
+  | 'sessions'
+  | 'session-prompts'
   | 'token-cost'
   | 'code-impact'
   | 'timeline'
@@ -13,6 +15,8 @@ type ViewType =
 const VALID_VIEWS: ViewType[] = [
   'overview',
   'session-detail',
+  'sessions',
+  'session-prompts',
   'token-cost',
   'code-impact',
   'timeline',
@@ -43,6 +47,14 @@ function getInitialState(): NavigationState {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session');
     const view = params.get('view') as ViewType | null;
+
+    if (view === 'session-prompts' && sessionId) {
+      return {
+        currentView: 'session-prompts',
+        sessionId,
+        previousScrollPosition: 0,
+      };
+    }
 
     if (sessionId) {
       return {
@@ -76,7 +88,10 @@ if (typeof window !== 'undefined') {
     const sessionId = params.get('session');
     const view = params.get('view') as ViewType | null;
 
-    if (sessionId) {
+    if (view === 'session-prompts' && sessionId) {
+      state.currentView = 'session-prompts';
+      state.sessionId = sessionId;
+    } else if (sessionId) {
       state.currentView = 'session-detail';
       state.sessionId = sessionId;
     } else if (view && VALID_VIEWS.includes(view)) {
@@ -160,6 +175,34 @@ export function popToOverview(): void {
       }
     });
   }
+}
+
+export function pushSessionPrompts(sessionId: string): void {
+  state.currentView = 'session-prompts';
+  state.sessionId = sessionId;
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'session-prompts');
+    url.searchParams.set('session', sessionId);
+    history.pushState(null, '', url.toString());
+  }
+}
+
+export function popToSessions(): void {
+  state.currentView = 'sessions';
+  state.sessionId = null;
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'sessions');
+    url.searchParams.delete('session');
+    history.pushState(null, '', url.toString());
+  }
+}
+
+export function isSessionPromptsView(): boolean {
+  return state.currentView === 'session-prompts';
 }
 
 export function isDetailView(): boolean {
