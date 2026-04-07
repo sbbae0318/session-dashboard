@@ -46,7 +46,7 @@ _이번 세션/최근에 배운 것._
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **Sessions 카드 키보드 포커스 검증** — `svelte:window` 전환 후 실제 브라우저에서 j/k/h/l 이동 동작 확인 필요.
+1. **Sessions 카드 j/k/h/l 키보드 포커스 실제 동작 검증** — `svelte:window` 전환 후 브라우저에서 확인 필요.
 2. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
 3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
 

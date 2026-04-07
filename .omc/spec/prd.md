@@ -384,6 +384,8 @@ Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) 
 |----|------|
 | `Cmd/Ctrl+K` | Command Palette 토글 |
 | `?` | 단축키 치트시트 |
+| `Tab` | 다음 메뉴 탭으로 이동 |
+| `Shift+Tab` | 이전 메뉴 탭으로 이동 |
 | `h` | 세션 패인 포커스 (Monitor 뷰에서만) |
 | `l` | 프롬프트 패인 포커스 (Monitor 뷰에서만) |
 | `Escape` | 디테일/프롬프트 뷰 → 상위 복귀 |
@@ -421,6 +423,8 @@ Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) 
 | `e` / `Enter` | 선택 카드 → 프롬프트 리스트 진입 |
 | `c` | resume 명령어 클립보드 복사 |
 | `Escape` | session-prompts → sessions 복귀 |
+
+- **Tab 포커스 제외**: 카드 `tabindex="-1"` — Tab은 글로벌 메뉴 순환에 사용
 
 ### F7.5 치트시트 (ShortcutCheatsheet.svelte)
 
