@@ -11,7 +11,7 @@
   import { createSSEClient } from "./lib/sse-client";
   import { reviveSessions, dismissSession } from "./lib/stores/dismissed.svelte";
   import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
-  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView, popToSessions, isSessionPromptsView } from "./lib/stores/navigation.svelte";
+  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView, popToSessions, isSessionPromptsView, cycleTab } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
   import ShortcutCheatsheet from './components/ShortcutCheatsheet.svelte';
   import TopNav from './components/TopNav.svelte';
@@ -119,6 +119,12 @@
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       paletteOpen = !paletteOpen;
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      cycleTab(e.shiftKey ? -1 : 1);
       return;
     }
 

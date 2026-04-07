@@ -41,7 +41,7 @@
       onclick={() => pushView(tab.view)}
       onkeydown={(e) => handleKeydown(e, tab.view)}
       data-testid="tab-{tab.view}"
-      tabindex="0"
+      tabindex="-1"
       aria-current={isTabActive(tab.view) ? 'page' : undefined}
     >
       {tab.label}

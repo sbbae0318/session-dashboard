@@ -212,3 +212,24 @@ export function isDetailView(): boolean {
 export function isEnrichmentPage(): boolean {
   return ENRICHMENT_VIEWS.includes(state.currentView);
 }
+
+/** TopNav 탭 순서 — Tab 키 순환용 */
+const TAB_ORDER: ViewType[] = [
+  'sessions', 'overview', 'summaries', 'token-cost',
+  'code-impact', 'timeline', 'projects', 'context-recovery', 'memos',
+];
+
+/** 현재 뷰의 탭 인덱스 반환 (sub-view → 부모 탭으로 매핑) */
+function resolveTabIndex(): number {
+  const v = state.currentView;
+  if (v === 'session-detail') return TAB_ORDER.indexOf('overview');
+  if (v === 'session-prompts') return TAB_ORDER.indexOf('sessions');
+  const idx = TAB_ORDER.indexOf(v);
+  return idx >= 0 ? idx : 0;
+}
+
+export function cycleTab(direction: 1 | -1): void {
+  const cur = resolveTabIndex();
+  const next = (cur + direction + TAB_ORDER.length) % TAB_ORDER.length;
+  pushView(TAB_ORDER[next]);
+}

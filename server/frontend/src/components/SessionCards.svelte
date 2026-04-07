@@ -198,6 +198,7 @@
           onclick={() => handleCardClick(session)}
           data-card-index={si}
           data-testid="session-card"
+          tabindex="-1"
         >
           <div class="card-top">
             <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>
