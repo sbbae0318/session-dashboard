@@ -145,16 +145,18 @@
       return;
     }
 
-    // h/l: pane 전환
-    if (e.key === 'h') {
-      e.preventDefault();
-      focusPane = 'sessions';
-      return;
-    }
-    if (e.key === 'l') {
-      e.preventDefault();
-      focusPane = 'prompts';
-      return;
+    // h/l: pane 전환 (Monitor 뷰에서만)
+    if (currentView === 'overview' || currentView === 'session-detail') {
+      if (e.key === 'h') {
+        e.preventDefault();
+        focusPane = 'sessions';
+        return;
+      }
+      if (e.key === 'l') {
+        e.preventDefault();
+        focusPane = 'prompts';
+        return;
+      }
     }
   }
 </script>

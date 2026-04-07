@@ -5,12 +5,15 @@
   import { getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionPrompts } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatRss, getDisplayStatus, detectStatusChanges } from "../lib/utils";
+  import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
+  let focusedIndex = $state(-1);
   let prevStatusMap = new Map<string, string>();
   let flashingIds = $state(new Set<string>());
+  let toastMessage = $state<string | null>(null);
+  let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   onMount(() => {
     const id = setInterval(() => tick++, 60_000);
@@ -75,6 +78,97 @@
   function handleCardClick(session: DashboardSession): void {
     pushSessionPrompts(session.sessionId);
   }
+
+  function buildSessionCommand(session: DashboardSession): string {
+    const cwd = session.projectCwd ?? '~';
+    if (session.source === 'claude-code') {
+      return `cd ${cwd} && claude --resume ${session.sessionId}`;
+    }
+    const rawHost = session.machineHost ?? 'localhost';
+    const host = (rawHost === 'host.docker.internal' || rawHost === '127.0.0.1')
+      ? 'localhost' : rawHost;
+    return `opencode attach http://${host}:4096 --session ${session.sessionId}`;
+  }
+
+  function showToast(msg: string): void {
+    toastMessage = msg;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { toastMessage = null; }, 1800);
+  }
+
+  function scrollToFocused(): void {
+    requestAnimationFrame(() => {
+      const cards = document.querySelectorAll<HTMLElement>('[data-card-index]');
+      cards[focusedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  /** 그리드 열 수 계산 (auto-fill 기반) */
+  function getGridColumns(): number {
+    const grid = document.querySelector<HTMLElement>('.cards-grid');
+    if (!grid) return 1;
+    return getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+  }
+
+  function handleKeydown(e: KeyboardEvent): void {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    const len = filteredSessions.length;
+    if (len === 0) return;
+
+    switch (e.key) {
+      case 'j':
+      case 'ArrowDown': {
+        e.preventDefault();
+        const cols = getGridColumns();
+        const next = focusedIndex < 0 ? 0 : Math.min(focusedIndex + cols, len - 1);
+        focusedIndex = next;
+        scrollToFocused();
+        break;
+      }
+      case 'k':
+      case 'ArrowUp': {
+        e.preventDefault();
+        const cols = getGridColumns();
+        const next = focusedIndex < 0 ? 0 : Math.max(focusedIndex - cols, 0);
+        focusedIndex = next;
+        scrollToFocused();
+        break;
+      }
+      case 'h':
+      case 'ArrowLeft':
+        e.preventDefault();
+        focusedIndex = focusedIndex < 1 ? 0 : focusedIndex - 1;
+        scrollToFocused();
+        break;
+      case 'l':
+      case 'ArrowRight':
+        e.preventDefault();
+        focusedIndex = focusedIndex < 0 ? 0 : Math.min(focusedIndex + 1, len - 1);
+        scrollToFocused();
+        break;
+      case 'e':
+      case 'Enter':
+        if (focusedIndex >= 0 && focusedIndex < len) {
+          e.preventDefault();
+          handleCardClick(filteredSessions[focusedIndex]);
+        }
+        break;
+      case 'c':
+        if (focusedIndex >= 0 && focusedIndex < len) {
+          e.preventDefault();
+          const cmd = buildSessionCommand(filteredSessions[focusedIndex]);
+          copyToClipboard(cmd).then(ok => showToast(ok ? 'Copied!' : 'Copy failed'));
+        }
+        break;
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeydown);
+    return () => document.removeEventListener('keydown', handleKeydown);
+  });
 </script>
 
 <div class="session-cards-container" data-testid="session-cards">
@@ -97,12 +191,14 @@
     <div class="empty-state">세션 없음</div>
   {:else}
     <div class="cards-grid">
-      {#each filteredSessions as session (session.sessionId)}
+      {#each filteredSessions as session, si (session.sessionId)}
         {@const ds = getDisplayStatus(session)}
         <button
           class="card"
           class:card-working={ds.cssClass === 'status-working'}
+          class:focused={focusedIndex === si}
           onclick={() => handleCardClick(session)}
+          data-card-index={si}
           data-testid="session-card"
         >
           <div class="card-top">
@@ -163,6 +259,10 @@
   {/if}
 </div>
 
+{#if toastMessage}
+  <div class="copy-toast">{toastMessage}</div>
+{/if}
+
 <style>
   .session-cards-container {
     flex: 1;
@@ -220,8 +320,9 @@
     background: rgba(88, 166, 255, 0.04);
   }
 
-  .card:focus-visible {
-    outline: 2px solid var(--accent);
+  .card:focus-visible,
+  .card.focused {
+    outline: 2px solid rgba(88, 166, 255, 0.6);
     outline-offset: -2px;
   }
 
@@ -420,6 +521,31 @@
   @media (prefers-reduced-motion: reduce) {
     .status-flash { animation: none; }
     .dot-loader span { animation: none; opacity: 0.5; }
+  }
+
+  .copy-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.4rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 1000;
+    pointer-events: none;
+    animation: toast-fade 1.8s ease-out forwards;
+    white-space: nowrap;
+  }
+
+  @keyframes toast-fade {
+    0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
   }
 
   @media (max-width: 599px) {
