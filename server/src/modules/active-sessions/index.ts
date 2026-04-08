@@ -126,19 +126,18 @@ export class ActiveSessionsModule implements BackendModule {
 
     this.cachedSessions = filtered
       .sort((a, b) => {
-        const timeDiff = b.lastActivityTime - a.lastActivityTime;
-        // 시간차 60초 이내이면 상태 우선순위로 정렬 (WORKING > WAITING > IDLE)
-        if (Math.abs(timeDiff) < 60_000) {
-          const statusPriority = (s: DashboardSession): number => {
-            if ((s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool)
-                && !s.waitingForInput) return 0; // WORKING
-            if (s.waitingForInput) return 1;      // WAITING
-            return 2;                              // IDLE
-          };
-          const sp = statusPriority(a) - statusPriority(b);
-          if (sp !== 0) return sp;
-        }
-        return timeDiff;
+        // 상태 우선순위: WAITING > WORKING > RENAME > IDLE (시간 무관)
+        const statusPriority = (s: DashboardSession): number => {
+          if (s.waitingForInput) return 0;                   // WAITING
+          if ((s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool)
+              && !s.waitingForInput) return 1;               // WORKING
+          if (s.recentlyRenamed) return 2;                   // RENAME
+          return 3;                                          // IDLE
+        };
+        const sp = statusPriority(a) - statusPriority(b);
+        if (sp !== 0) return sp;
+        // 같은 우선순위 내에서는 최근 활동 순
+        return b.lastActivityTime - a.lastActivityTime;
       });
     this.onUpdate?.(this.cachedSessions);
 
