@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSS Animation Diagnostic</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent: #58a6ff;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 2rem;
+  }
+
+  /* ---------- Diagnostics Panel ---------- */
+  #diagnostics {
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    font-size: 0.82rem;
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  }
+
+  #diagnostics h2 {
+    font-size: 0.9rem;
+    color: var(--accent);
+    margin-bottom: 0.6rem;
+  }
+
+  .diag-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .diag-row:last-child { border-bottom: none; }
+
+  .diag-label { color: var(--text-secondary); }
+  .diag-value { font-weight: 600; }
+  .diag-ok { color: var(--success); }
+  .diag-warn { color: var(--warning); }
+  .diag-fail { color: var(--danger); }
+
+  /* ---------- Test Grid ---------- */
+  .tests {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .test-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+
+  .test-card h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .test-card .expect {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+
+  .test-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    padding: 1rem;
+  }
+
+  .computed-info {
+    margin-top: 0.75rem;
+    font-size: 0.72rem;
+    font-family: monospace;
+    color: var(--text-secondary);
+    min-height: 1.2em;
+  }
+
+  /* ========== Test 1: Dot-Loader (exact dashboard copy) ========== */
+  .dot-loader {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .dot-loader span {
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+
+  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7) translateY(0); }
+    40% { opacity: 1; transform: scale(1.2) translateY(-3px); }
+  }
+
+  /* ========== Test 2: Flashing Badge (exact dashboard copy) ========== */
+  .badge-container {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .test-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+
+  .badge-flash-loop {
+    animation: badge-flash 1.2s ease-out infinite;
+  }
+
+  @keyframes badge-flash {
+    0%   { filter: brightness(1); transform: scale(1); }
+    15%  { filter: brightness(1.8); transform: scale(1.15); }
+    30%  { filter: brightness(1); transform: scale(1); }
+    45%  { filter: brightness(1.5); transform: scale(1.1); }
+    60%  { filter: brightness(1); transform: scale(1); }
+    100% { filter: brightness(1); transform: scale(1); }
+  }
+
+  /* ========== Test 3: Color-Cycling Box ========== */
+  .color-box {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    animation: color-cycle 3s linear infinite;
+  }
+
+  @keyframes color-cycle {
+    0%   { background: var(--accent); }
+    25%  { background: var(--success); }
+    50%  { background: var(--warning); }
+    75%  { background: var(--danger); }
+    100% { background: var(--accent); }
+  }
+
+  /* ========== Test 4: Spinner (basic rotation) ========== */
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--bg-tertiary);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ========== Test 5: Opacity Pulse ========== */
+  .pulse-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent);
+    animation: opacity-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes opacity-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* ========== prefers-reduced-motion test ========== */
+  @media (prefers-reduced-motion: reduce) {
+    .reduced-motion-indicator { display: block !important; }
+  }
+
+  .reduced-motion-indicator {
+    display: none;
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--danger);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    margin-bottom: 1.5rem;
+  }
+</style>
+</head>
+<body>
+  <h1>CSS Animation Diagnostic</h1>
+  <p class="subtitle">Standalone test page — no Svelte, no bundler, no external deps. If these animate, the browser is fine.</p>
+
+  <div class="reduced-motion-indicator">
+    prefers-reduced-motion: reduce is ACTIVE (CSS media query matched — this element is visible only when reduced motion is on)
+  </div>
+
+  <div id="diagnostics">
+    <h2>Browser Diagnostics</h2>
+    <div class="diag-row">
+      <span class="diag-label">User Agent</span>
+      <span class="diag-value" id="d-ua">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">prefers-reduced-motion</span>
+      <span class="diag-value" id="d-reduced-motion">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">CSS animation support</span>
+      <span class="diag-value" id="d-anim-support">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">CSS transform support</span>
+      <span class="diag-value" id="d-transform-support">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">Web Animations API</span>
+      <span class="diag-value" id="d-waapi">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">Dot-loader animationName (computed)</span>
+      <span class="diag-value" id="d-dot-anim">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">Dot-loader animationPlayState</span>
+      <span class="diag-value" id="d-dot-play">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">Color-box animationName (computed)</span>
+      <span class="diag-value" id="d-box-anim">—</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-label">Spinner transform (sampled at 500ms)</span>
+      <span class="diag-value" id="d-spin-transform">—</span>
+    </div>
+  </div>
+
+  <div class="tests">
+    <!-- Test 1: Dot Loader -->
+    <div class="test-card">
+      <h3>1. Dot Loader (dashboard exact copy)</h3>
+      <p class="expect">Expect: 3 small blue circles bouncing up/down with opacity changes, staggered by 0.2s</p>
+      <div class="test-area">
+        <span style="color:var(--text-secondary); font-size:0.85rem; margin-right:0.75rem;">WORKING</span>
+        <div class="dot-loader" id="dot-loader">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+      <div class="computed-info" id="ci-dot"></div>
+    </div>
+
+    <!-- Test 2: Flashing Badge -->
+    <div class="test-card">
+      <h3>2. Flashing Badge (dashboard exact copy)</h3>
+      <p class="expect">Expect: badge pulses brighter and scales up/down in a 1.2s loop</p>
+      <div class="test-area">
+        <div class="badge-container">
+          <span class="test-badge">Static</span>
+          <span class="test-badge badge-flash-loop" id="flash-badge">Flashing</span>
+        </div>
+      </div>
+      <div class="computed-info" id="ci-flash"></div>
+    </div>
+
+    <!-- Test 3: Color Cycling Box -->
+    <div class="test-card">
+      <h3>3. Color-Cycling Box</h3>
+      <p class="expect">Expect: square cycles through blue -> green -> yellow -> red continuously</p>
+      <div class="test-area">
+        <div class="color-box" id="color-box"></div>
+      </div>
+      <div class="computed-info" id="ci-color"></div>
+    </div>
+
+    <!-- Test 4: Spinner -->
+    <div class="test-card">
+      <h3>4. Spinner (basic rotation)</h3>
+      <p class="expect">Expect: blue-topped ring spinning clockwise, 1 revolution per second</p>
+      <div class="test-area">
+        <div class="spinner" id="spinner"></div>
+      </div>
+      <div class="computed-info" id="ci-spin"></div>
+    </div>
+
+    <!-- Test 5: Opacity Pulse -->
+    <div class="test-card">
+      <h3>5. Opacity Pulse</h3>
+      <p class="expect">Expect: text fading in and out every 2 seconds</p>
+      <div class="test-area">
+        <span class="pulse-text" id="pulse-text">Pulsing Text</span>
+      </div>
+      <div class="computed-info" id="ci-pulse"></div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  // --- UA ---
+  document.getElementById('d-ua').textContent = navigator.userAgent.slice(0, 100);
+
+  // --- prefers-reduced-motion ---
+  var mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var rmEl = document.getElementById('d-reduced-motion');
+  if (mql.matches) {
+    rmEl.textContent = 'REDUCE (animations may be suppressed!)';
+    rmEl.className = 'diag-value diag-fail';
+  } else {
+    rmEl.textContent = 'no-preference (normal)';
+    rmEl.className = 'diag-value diag-ok';
+  }
+
+  // --- CSS animation support ---
+  var animEl = document.getElementById('d-anim-support');
+  var hasAnim = 'animation' in document.body.style || 'webkitAnimation' in document.body.style;
+  animEl.textContent = hasAnim ? 'Supported' : 'NOT supported';
+  animEl.className = 'diag-value ' + (hasAnim ? 'diag-ok' : 'diag-fail');
+
+  // --- CSS transform support ---
+  var transEl = document.getElementById('d-transform-support');
+  var hasTrans = 'transform' in document.body.style || 'webkitTransform' in document.body.style;
+  transEl.textContent = hasTrans ? 'Supported' : 'NOT supported';
+  transEl.className = 'diag-value ' + (hasTrans ? 'diag-ok' : 'diag-fail');
+
+  // --- Web Animations API ---
+  var waapiEl = document.getElementById('d-waapi');
+  var hasWAAPI = typeof Element.prototype.animate === 'function';
+  waapiEl.textContent = hasWAAPI ? 'Available' : 'Not available';
+  waapiEl.className = 'diag-value ' + (hasWAAPI ? 'diag-ok' : 'diag-warn');
+
+  // --- Computed style sampling (after a short delay so animations start) ---
+  setTimeout(function() {
+    // Dot loader
+    var dot1 = document.querySelector('#dot-loader span');
+    if (dot1) {
+      var cs = getComputedStyle(dot1);
+      var animName = cs.animationName || cs.webkitAnimationName || 'none';
+      var playState = cs.animationPlayState || cs.webkitAnimationPlayState || 'unknown';
+
+      var dDot = document.getElementById('d-dot-anim');
+      dDot.textContent = animName;
+      dDot.className = 'diag-value ' + (animName !== 'none' ? 'diag-ok' : 'diag-fail');
+
+      var dPlay = document.getElementById('d-dot-play');
+      dPlay.textContent = playState;
+      dPlay.className = 'diag-value ' + (playState === 'running' ? 'diag-ok' : 'diag-fail');
+
+      document.getElementById('ci-dot').textContent =
+        'animationName=' + animName + '  playState=' + playState +
+        '  opacity=' + cs.opacity + '  transform=' + cs.transform;
+    }
+
+    // Color box
+    var box = document.getElementById('color-box');
+    if (box) {
+      var csBox = getComputedStyle(box);
+      var boxAnim = csBox.animationName || 'none';
+
+      var dBox = document.getElementById('d-box-anim');
+      dBox.textContent = boxAnim;
+      dBox.className = 'diag-value ' + (boxAnim !== 'none' ? 'diag-ok' : 'diag-fail');
+
+      document.getElementById('ci-color').textContent =
+        'animationName=' + boxAnim + '  background=' + csBox.backgroundColor;
+    }
+
+    // Flash badge
+    var badge = document.getElementById('flash-badge');
+    if (badge) {
+      var csBadge = getComputedStyle(badge);
+      document.getElementById('ci-flash').textContent =
+        'animationName=' + (csBadge.animationName || 'none') +
+        '  filter=' + csBadge.filter + '  transform=' + csBadge.transform;
+    }
+
+    // Pulse text
+    var pulse = document.getElementById('pulse-text');
+    if (pulse) {
+      var csPulse = getComputedStyle(pulse);
+      document.getElementById('ci-pulse').textContent =
+        'animationName=' + (csPulse.animationName || 'none') +
+        '  opacity=' + csPulse.opacity;
+    }
+  }, 200);
+
+  // --- Spinner: sample transform at 500ms to prove rotation is happening ---
+  setTimeout(function() {
+    var spin = document.getElementById('spinner');
+    if (spin) {
+      var csSpin = getComputedStyle(spin);
+      var t = csSpin.transform;
+
+      var dSpin = document.getElementById('d-spin-transform');
+      dSpin.textContent = t;
+      dSpin.className = 'diag-value ' + (t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)' ? 'diag-ok' : 'diag-warn');
+
+      document.getElementById('ci-spin').textContent =
+        'transform@500ms=' + t + '  animationName=' + (csSpin.animationName || 'none');
+    }
+  }, 500);
+
+  // --- Live opacity sampling for dot-loader (proves animation is ticking) ---
+  var sampleCount = 0;
+  var opacityValues = [];
+  var liveSampler = setInterval(function() {
+    var dot = document.querySelector('#dot-loader span');
+    if (!dot) return;
+    var o = parseFloat(getComputedStyle(dot).opacity);
+    opacityValues.push(o.toFixed(3));
+    sampleCount++;
+    if (sampleCount >= 10) {
+      clearInterval(liveSampler);
+      var ciDot = document.getElementById('ci-dot');
+      var uniqueVals = new Set(opacityValues);
+      var isAnimating = uniqueVals.size > 1;
+      ciDot.textContent += '  |  10 samples over 1s: [' + opacityValues.join(', ') + ']' +
+        (isAnimating ? ' ANIMATING' : ' STATIC (not animating!)');
+      ciDot.style.color = isAnimating ? 'var(--success)' : 'var(--danger)';
+    }
+  }, 100);
+})();
+</script>
+</body>
+</html>
