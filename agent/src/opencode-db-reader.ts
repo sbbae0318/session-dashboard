@@ -48,6 +48,7 @@ export interface RecentSessionMeta {
   directory: string | null;
   timeCreated: number;
   timeUpdated: number;
+  lastActiveAt: number;
 }
 
 export interface SessionTokenStats {
@@ -344,6 +345,7 @@ export class OpenCodeDBReader {
     const rows = this.stmtRecentSessionMetas.all(cutoff, limit) as Array<{
       id: string; title: string | null; parent_id: string | null;
       directory: string | null; time_created: number; time_updated: number;
+      last_active: number;
     }>;
     return rows.map(r => ({
       id: r.id,
@@ -352,6 +354,7 @@ export class OpenCodeDBReader {
       directory: r.directory,
       timeCreated: r.time_created,
       timeUpdated: r.time_updated,
+      lastActiveAt: r.last_active,
     }));
   }
 
@@ -1096,11 +1099,16 @@ export class OpenCodeDBReader {
     return db.prepare(`
       SELECT s.id, s.title, s.parent_id,
         COALESCE(p.worktree, s.directory, s.project_id) AS directory,
-        s.time_created, s.time_updated
+        s.time_created, s.time_updated,
+        MAX(s.time_updated, COALESCE(lm.max_time, 0)) AS last_active
       FROM session s
       LEFT JOIN project p ON s.project_id = p.id
-      WHERE s.time_updated >= ?
-      ORDER BY s.time_updated DESC
+      LEFT JOIN (
+        SELECT session_id, MAX(time_created) AS max_time
+        FROM message GROUP BY session_id
+      ) lm ON lm.session_id = s.id
+      WHERE MAX(s.time_updated, COALESCE(lm.max_time, 0)) >= ?
+      ORDER BY last_active DESC
       LIMIT ?
     `);
   }

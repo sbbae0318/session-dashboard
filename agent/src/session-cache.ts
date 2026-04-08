@@ -943,7 +943,7 @@ export class SessionCache {
             title: meta.title,
             parentSessionId: meta.parentId,
             createdAt: meta.timeCreated,
-            lastActiveAt: meta.timeUpdated,
+            lastActiveAt: meta.lastActiveAt,
           });
           seeded++;
           continue;
@@ -957,7 +957,7 @@ export class SessionCache {
             title: titleMissing ? (meta.title ?? existing.title) : existing.title,
             parentSessionId: existing.parentSessionId ?? meta.parentId,
             createdAt: existing.createdAt || meta.timeCreated,
-            lastActiveAt: Math.max(existing.lastActiveAt, meta.timeUpdated),
+            lastActiveAt: Math.max(existing.lastActiveAt, meta.lastActiveAt),
             directory: existing.directory ?? meta.directory,
           });
           enriched++;

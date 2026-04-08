@@ -243,7 +243,11 @@ export class OpenCodeDbSource {
         currentTool,
         waitingForInput: false,
         createdAt: row.timeCreated,
-        lastActiveAt: row.timeUpdated,
+        lastActiveAt: Math.max(
+          row.timeUpdated,
+          row.lastMsgTimeCreated ?? 0,
+          row.lastMsgTimeUpdated ?? 0,
+        ),
       };
 
       this.sessions.set(row.id, monitored);
