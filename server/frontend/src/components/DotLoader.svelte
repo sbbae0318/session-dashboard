@@ -35,7 +35,7 @@
     height: 3px;
   }
 
-  @keyframes dot-bounce {
+  @keyframes -global-dot-bounce {
     0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); }
     40% { opacity: 1; transform: scale(1.2); }
   }
