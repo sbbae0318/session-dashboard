@@ -111,6 +111,26 @@ describe("getDisplayStatus", () => {
     const ds = getDisplayStatus({ apiStatus: "idle", currentTool: null, waitingForInput: false });
     expect(ds).toEqual({ label: "Idle", cssClass: "status-idle" });
   });
+
+  it("returns Disconnected when machineConnected=false", () => {
+    const ds = getDisplayStatus({ apiStatus: null, currentTool: null, waitingForInput: false, machineConnected: false });
+    expect(ds).toEqual({ label: "Disconnected", cssClass: "status-disconnected" });
+  });
+
+  it("returns Disconnected even if apiStatus=busy when machineConnected=false (stale data)", () => {
+    const ds = getDisplayStatus({ apiStatus: "busy", currentTool: "Bash", waitingForInput: false, machineConnected: false });
+    expect(ds).toEqual({ label: "Disconnected", cssClass: "status-disconnected" });
+  });
+
+  it("Rename takes priority over Disconnected", () => {
+    const ds = getDisplayStatus({ apiStatus: null, currentTool: null, waitingForInput: false, recentlyRenamed: true, machineConnected: false });
+    expect(ds).toEqual({ label: "Rename", cssClass: "status-rename" });
+  });
+
+  it("machineConnected=true behaves normally (Working)", () => {
+    const ds = getDisplayStatus({ apiStatus: "busy", currentTool: null, waitingForInput: false, machineConnected: true });
+    expect(ds).toEqual({ label: "Working", cssClass: "status-working" });
+  });
 });
 
 // ── detectStatusChanges: 상태 전환 flash 감지 regression ──

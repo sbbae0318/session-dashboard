@@ -111,6 +111,8 @@ export class ActiveSessionsModule implements BackendModule {
     }
 
     const machineStatuses = this.machineManager.getMachineStatuses();
+    const connectedMachineIds = new Set(machineStatuses.filter(ms => ms.connected).map(ms => ms.machineId));
+
     const currentMachineIds = new Set(filtered.map(s => s.machineId));
     for (const ms of machineStatuses) {
       if (ms.connected && !currentMachineIds.has(ms.machineId)) {
@@ -122,12 +124,18 @@ export class ActiveSessionsModule implements BackendModule {
       }
     }
 
+    // machineConnected 필드 설정: disconnected 머신의 세션은 false
+    for (let i = 0; i < filtered.length; i++) {
+      filtered[i] = { ...filtered[i], machineConnected: connectedMachineIds.has(filtered[i].machineId) };
+    }
+
     this.previousSessionMap = sessionMap;
 
     this.cachedSessions = filtered
       .sort((a, b) => {
-        // 상태 우선순위: WAITING > WORKING > RENAME > IDLE (시간 무관)
+        // 상태 우선순위: WAITING > WORKING > RENAME > IDLE > DISCONNECTED (시간 무관)
         const statusPriority = (s: DashboardSession): number => {
+          if (!s.machineConnected) return 4;                 // DISCONNECTED
           if (s.waitingForInput) return 0;                   // WAITING
           if ((s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool)
               && !s.waitingForInput) return 1;               // WORKING
@@ -259,6 +267,7 @@ export class ActiveSessionsModule implements BackendModule {
         machineId: (s.machineId as string) ?? '',
         machineHost: (s.machineHost as string) ?? '',
         machineAlias: (s.machineAlias as string) ?? '',
+        machineConnected: true, // poll()에서 머신 상태 기반으로 덮어씀
       });
     }
 
@@ -293,6 +302,7 @@ export class ActiveSessionsModule implements BackendModule {
         machineHost: machine?.host ?? '',
         machineAlias: machine?.alias ?? '',
         source: 'opencode',
+        machineConnected: true, // poll()에서 머신 상태 기반으로 덮어씀
       });
     }
 

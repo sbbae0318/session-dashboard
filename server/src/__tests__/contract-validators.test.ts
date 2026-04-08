@@ -41,6 +41,7 @@ function validSession(overrides: Record<string, unknown> = {}): Record<string, u
     machineId: 'macbook',
     machineHost: '192.168.0.63',
     machineAlias: 'MacBook Pro',
+    machineConnected: true,
     ...overrides,
   };
 }
@@ -153,6 +154,19 @@ describe('validateSession', () => {
     const result = validateSession(validSession({ waitingForInput: 'true' }));
     expect(result.valid).toBe(false);
     expect(result.errors[0].field).toBe('waitingForInput');
+  });
+
+  it('machineConnected=false passes', () => {
+    const result = validateSession(validSession({ machineConnected: false }));
+    expect(result.valid).toBe(true);
+  });
+
+  it('fails on missing machineConnected', () => {
+    const s = validSession();
+    delete s.machineConnected;
+    const result = validateSession(s);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'machineConnected')).toBe(true);
   });
 
   it('fails on string startTime', () => {

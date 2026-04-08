@@ -1280,3 +1280,130 @@ describe('ActiveSessionsModule — idle session status regression', () => {
     expect(sessions.every((s: any) => s.status === 'idle')).toBe(true);
   });
 });
+
+describe('ActiveSessionsModule — machineConnected 필드', () => {
+  let module: ActiveSessionsModule;
+
+  afterEach(async () => {
+    if (module) await module.stop();
+    vi.clearAllMocks();
+  });
+
+  it('연결된 머신의 세션은 machineConnected=true', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      getMachineStatuses: () => [
+        { machineId: 'mac-1', connected: true, machineAlias: 'Test Mac', machineHost: '10.0.0.1', lastSeen: Date.now(), error: null, source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_conn',
+            title: 'Connected Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/project',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: { 'ses_conn': { type: 'idle', machineId: 'mac-1' } },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({}),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_conn');
+    expect(session).toBeDefined();
+    expect(session.machineConnected).toBe(true);
+  });
+
+  it('연결 끊긴 머신의 세션은 machineConnected=false', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Test Mac', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      getMachineStatuses: () => [
+        { machineId: 'mac-1', connected: false, machineAlias: 'Test Mac', machineHost: '10.0.0.1', lastSeen: Date.now() - 60000, error: 'ECONNREFUSED', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_disc',
+            title: 'Disconnected Session',
+            machineId: 'mac-1',
+            machineAlias: 'Test Mac',
+            machineHost: '10.0.0.1',
+            directory: '/project',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: { 'ses_disc': { type: 'idle', machineId: 'mac-1' } },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({}),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const session = sessions.find((s: any) => s.sessionId === 'ses_disc');
+    expect(session).toBeDefined();
+    expect(session.machineConnected).toBe(false);
+  });
+
+  it('disconnected 세션은 IDLE보다 낮은 정렬 우선순위(4)', async () => {
+    const mockMachineManager = createMockMachineManager({
+      getMachines: () => [
+        { id: 'mac-1', alias: 'Connected', host: '10.0.0.1', port: 3100, apiKey: 'key', source: 'both' },
+        { id: 'mac-2', alias: 'Disconnected', host: '10.0.0.2', port: 3100, apiKey: 'key', source: 'both' },
+      ],
+      getMachineStatuses: () => [
+        { machineId: 'mac-1', connected: true, machineAlias: 'Connected', machineHost: '10.0.0.1', lastSeen: Date.now(), error: null, source: 'both' },
+        { machineId: 'mac-2', connected: false, machineAlias: 'Disconnected', machineHost: '10.0.0.2', lastSeen: Date.now() - 60000, error: 'ECONNREFUSED', source: 'both' },
+      ],
+      pollAllSessions: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            id: 'ses_idle',
+            title: 'Idle Session',
+            machineId: 'mac-1',
+            machineAlias: 'Connected',
+            machineHost: '10.0.0.1',
+            directory: '/project1',
+            time: { created: 1000, updated: 2000 },
+          },
+          {
+            id: 'ses_disconn',
+            title: 'Disconnected Session',
+            machineId: 'mac-2',
+            machineAlias: 'Disconnected',
+            machineHost: '10.0.0.2',
+            directory: '/project2',
+            time: { created: 1000, updated: 2000 },
+          },
+        ],
+        statuses: {
+          'ses_idle': { type: 'idle', machineId: 'mac-1' },
+          'ses_disconn': { type: 'idle', machineId: 'mac-2' },
+        },
+      }),
+      pollSessionDetails: vi.fn().mockResolvedValue({}),
+    });
+
+    module = new ActiveSessionsModule(mockMachineManager);
+    await (module as any).poll();
+
+    const sessions: any[] = (module as any).cachedSessions;
+    const idleIdx = sessions.findIndex((s: any) => s.sessionId === 'ses_idle');
+    const disconnIdx = sessions.findIndex((s: any) => s.sessionId === 'ses_disconn');
+
+    // IDLE(connected) should appear before DISCONNECTED
+    expect(idleIdx).toBeLessThan(disconnIdx);
+  });
+});

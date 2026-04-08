@@ -118,6 +118,9 @@ export function validateSession(s: Record<string, unknown>): ValidationResult {
     push(check('hooksActive', 'boolean | undefined', s.hooksActive, isBoolean(s.hooksActive)));
   }
 
+  // machineConnected: 필수 boolean
+  push(check('machineConnected', 'boolean', s.machineConnected, isBoolean(s.machineConnected)));
+
   return errors.length === 0 ? ok() : fail(errors);
 }
 

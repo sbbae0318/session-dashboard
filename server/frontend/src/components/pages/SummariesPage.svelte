@@ -102,6 +102,7 @@
       'status-waiting': 'st-waiting',
       'status-idle': 'st-idle',
       'status-rename': 'st-working',
+      'status-disconnected': 'st-disconnected',
     };
     return { label: ds.label, cls: clsMap[ds.cssClass] ?? 'st-idle' };
   }
@@ -524,6 +525,7 @@
   .st-working { background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.25); }
   .st-waiting { background: rgba(209,105,239,0.12); color: #d169ef; border: 1px solid rgba(209,105,239,0.25); }
   .st-idle { background: rgba(63,185,80,0.1); color: var(--success); border: 1px solid rgba(63,185,80,0.2); }
+  .st-disconnected { background: rgba(139,148,158,0.1); color: #8b949e; border: 1px solid rgba(139,148,158,0.2); }
 
   /* session meta */
   .s-meta {

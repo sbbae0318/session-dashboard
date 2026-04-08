@@ -473,6 +473,12 @@
     border: 1px solid var(--border);
   }
 
+  .status-disconnected {
+    background: rgba(139, 148, 158, 0.15);
+    color: #8b949e;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+  }
+
   .session-time {
     font-size: 0.72rem;
     color: var(--text-secondary);

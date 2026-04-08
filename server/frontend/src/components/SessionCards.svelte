@@ -370,6 +370,12 @@
     border: 1px solid rgba(255, 180, 50, 0.3);
   }
 
+  .status-disconnected {
+    background: rgba(139, 148, 158, 0.15);
+    color: #8b949e;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+  }
+
   .source-text {
     font-size: 0.65rem;
     font-weight: 500;

@@ -71,6 +71,8 @@ export interface DashboardSession {
   machineId: string;
   machineHost: string;
   machineAlias: string;
+  /** 해당 세션이 속한 머신의 연결 상태 */
+  machineConnected: boolean;
 }
 
 export interface SessionsResponse {
@@ -161,11 +163,13 @@ export type SSEEventName = keyof SSEEventMap;
 // =============================================================================
 
 /**
- * 프론트엔드 DisplayStatus 결정 규칙:
+ * 프론트엔드 DisplayStatus 결정 규칙 (우선순위 순):
  *
- *   WORKING: (apiStatus === 'busy' || apiStatus === 'retry' || currentTool != null)
- *            AND waitingForInput === false
- *   WAITING: waitingForInput === true
- *   IDLE:    그 외
+ *   RENAME:       recentlyRenamed === true (최우선, 3초 TTL)
+ *   DISCONNECTED: machineConnected === false (머신 연결 끊김 — stale 데이터)
+ *   WORKING:      (apiStatus === 'busy' || apiStatus === 'retry' || currentTool != null)
+ *                 AND waitingForInput === false
+ *   WAITING:      waitingForInput === true
+ *   IDLE:         그 외
  */
-export type DisplayStatusLabel = 'Working' | 'Retry' | 'Waiting' | 'Idle' | 'Rename';
+export type DisplayStatusLabel = 'Working' | 'Retry' | 'Waiting' | 'Idle' | 'Rename' | 'Disconnected';

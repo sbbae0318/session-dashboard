@@ -36,6 +36,7 @@ describe('DashboardSession waitingForInput 계약', () => {
       machineId: 'macbook',
       machineHost: '192.168.0.63',
       machineAlias: 'MacBook Pro',
+      machineConnected: true,
       ...overrides,
     };
   }
