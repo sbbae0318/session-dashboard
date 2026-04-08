@@ -82,7 +82,7 @@ Browser
   IDLE:    그 외
   ```
 
-- **정렬 우선순위**: 세션 목록은 `lastActivityTime` 내림차순 정렬. 시간차 60초 이내 세션 간에는 상태 우선순위 적용 (WORKING > WAITING > IDLE).
+- **정렬 우선순위**: 시간 무관 상태 우선순위 항상 적용 (WAITING > WORKING > RENAME > IDLE). 같은 우선순위 내에서 `lastActivityTime` 내림차순.
 
 - **상태 변경 flash 효과**: 세션 상태가 전환될 때 (예: Idle→Working) 뱃지가 1.2초간 brightness+scale 펄스로 반짝임. 이전 상태를 Map으로 추적하여 변경 감지. `prefers-reduced-motion` 존중.
 
@@ -465,6 +465,7 @@ Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) 
 
 - **터치**: `@media (pointer: coarse)` → 버튼 최소 44px
 - **모션 감소**: `prefers-reduced-motion: reduce` → 모든 애니메이션 비활성화
+- **CSS 애니메이션 규칙 (F-007)**: `@keyframes`와 `animation` 속성은 **반드시 `app.css` 글로벌로 정의**. Svelte 5 컴포넌트 `<style>` 내 `@keyframes` 사용 금지 — scoped 해시가 실제 브라우저에서 미동작. 공통 클래스: `.dot-loader`(4px, bounce), `.dot-loader-sm`(3px), `.status-flash`(badge pulse)
 
 ### F8.3 클립보드
 
