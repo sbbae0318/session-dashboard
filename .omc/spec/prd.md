@@ -128,6 +128,10 @@ Browser
   getQueryResult, busySessions, isSessionBusy 모두 이 조건 사용.
   getDisplayStatus와 불일치 시 세션 뱃지는 Working인데 스피너 미표시 (F-004).
 
+- **세션별 쿼리 fetch**: 글로벌 캐시(200건)에 없는 세션 클릭 시
+  `/api/queries?sessionId=X`로 에이전트에서 직접 조회 → store 병합.
+  session-detail, session-prompts 진입 시 자동 트리거.
+
 - **정렬**: busy 세션의 최신 프롬프트 최상단 고정, 나머지 timestamp 역순
 
 - **Background 쿼리**:

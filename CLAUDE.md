@@ -30,7 +30,7 @@ session-dashboard/
 |----------|--------|---------------|------|
 | `/health` | GET | `HealthResponse` | 서버 상태 |
 | `/api/sessions` | GET | `SessionsResponse` | 활성 세션 목록 |
-| `/api/queries` | GET | `QueriesResponse` | 최근 프롬프트 |
+| `/api/queries` | GET | `QueriesResponse` | 최근 프롬프트 (`?sessionId=X` 세션별 조회) |
 | `/api/machines` | GET | `MachinesResponse` | 머신 연결 상태 |
 | `/api/search` | POST | `SearchResponse` | 프롬프트 검색 |
 | `/api/enrichment` | GET | (enrichment 전용) | enrichment 캐시 |
