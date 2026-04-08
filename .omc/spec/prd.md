@@ -123,6 +123,11 @@ Browser
   - 전체 확장/축소 버튼 (동시 요청 3개 제한)
   - 코드 블록 8줄 초과 시 자동 접힘 (`<details>`)
 
+- **In-Progress 판별 (F-004 교훈)**: F1.1의 WORKING 조건과 동일한 조건 사용 필수:
+  `(apiStatus ∈ {busy, retry} ∨ currentTool ≠ null) ∧ ¬waitingForInput`
+  getQueryResult, busySessions, isSessionBusy 모두 이 조건 사용.
+  getDisplayStatus와 불일치 시 세션 뱃지는 Working인데 스피너 미표시 (F-004).
+
 - **정렬**: busy 세션의 최신 프롬프트 최상단 고정, 나머지 timestamp 역순
 
 - **Background 쿼리**:
