@@ -222,7 +222,7 @@
             <div class="session-header">
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
-                <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader-session"><span></span><span></span><span></span></span>{/if}</span>
+                <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader"><span></span><span></span><span></span></span>{/if}</span>
                 <span class="session-title">{session.title || session.lastPrompt?.slice(0, 60) || session.sessionId.slice(0, 8)}</span>
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
                   <span class="subagent-badge" title="{session.childSessionIds.length} subagent session(s)">{session.childSessionIds.length}</span>
@@ -552,28 +552,6 @@
     flex-shrink: 0;
   }
 
-  .dot-loader-session {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    vertical-align: middle;
-  }
-
-  .dot-loader-session span {
-    width: 4px;
-    height: 4px;
-    background: var(--accent);
-    border-radius: 50%;
-    animation: dot-bounce-session 1.4s ease-in-out infinite;
-  }
-
-  .dot-loader-session span:nth-child(2) { animation-delay: 0.2s; }
-  .dot-loader-session span:nth-child(3) { animation-delay: 0.4s; }
-
-  @keyframes dot-bounce-session {
-    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7) translateY(0); }
-    40% { opacity: 1; transform: scale(1.2) translateY(-3px); }
-  }
 
   .empty-state {
     display: flex;
@@ -660,22 +638,6 @@
     white-space: nowrap;
   }
 
-  .status-flash {
-    animation: badge-flash 1.2s ease-out;
-  }
-
-  @keyframes badge-flash {
-    0%   { filter: brightness(1); transform: scale(1); }
-    15%  { filter: brightness(1.8); transform: scale(1.15); }
-    30%  { filter: brightness(1); transform: scale(1); }
-    45%  { filter: brightness(1.5); transform: scale(1.1); }
-    60%  { filter: brightness(1); transform: scale(1); }
-    100% { filter: brightness(1); transform: scale(1); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .status-flash { animation: none; }
-  }
 
   @keyframes toast-fade {
     0% { opacity: 0; transform: translateX(-50%) translateY(8px); }

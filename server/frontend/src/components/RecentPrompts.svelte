@@ -810,56 +810,8 @@
     50% { border-left-color: rgba(88, 166, 255, 1); box-shadow: inset 3px 0 12px rgba(88, 166, 255, 0.15); }
   }
 
-  /* ── Dot loaders ── */
-  .dot-loader {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    vertical-align: middle;
-    padding-left: 2px;
-  }
-
-  .dot-loader span {
-    width: 5px;
-    height: 5px;
-    background: var(--accent);
-    border-radius: 50%;
-    animation: dot-bounce 1.4s ease-in-out infinite;
-    will-change: transform, opacity;
-    backface-visibility: hidden;
-  }
-
-  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
-  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
-
-  @keyframes dot-bounce {
-    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); }
-    40% { opacity: 1; transform: scale(1.2); }
-  }
-
-  .dot-loader-sm {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .dot-loader-sm span {
-    width: 4px;
-    height: 4px;
-    background: var(--accent);
-    border-radius: 50%;
-    animation: dot-bounce 1.4s ease-in-out infinite;
-    will-change: transform, opacity;
-    backface-visibility: hidden;
-  }
-
-  .dot-loader-sm span:nth-child(2) { animation-delay: 0.2s; }
-  .dot-loader-sm span:nth-child(3) { animation-delay: 0.4s; }
-
-
   @media (prefers-reduced-motion: reduce) {
     .prompt-item.in-progress { animation: none; border-left-color: var(--accent); box-shadow: none; }
-    .dot-loader span, .dot-loader-sm span { animation: none; opacity: 0.7; transform: none; }
     .response-area { animation: none; }
   }
 
