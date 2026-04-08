@@ -6,7 +6,6 @@
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionPrompts } from '../lib/stores/navigation.svelte';
   import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges } from "../lib/utils";
-  import DotLoader from "./DotLoader.svelte";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -205,7 +204,7 @@
             <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>
               {ds.label}
               {#if ds.cssClass === 'status-working'}
-                &nbsp;<DotLoader />
+                &nbsp;<span class="dot-loader"><span></span><span></span><span></span></span>
               {/if}
             </span>
             {#if session.source === "claude-code"}
@@ -482,6 +481,28 @@
     border-color: var(--accent);
   }
 
+  .dot-loader {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    vertical-align: middle;
+  }
+
+  .dot-loader span {
+    width: 3.5px;
+    height: 3.5px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+
+  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7) translateY(0); }
+    40% { opacity: 1; transform: scale(1.2) translateY(-3px); }
+  }
 
   .status-flash {
     animation: badge-flash 1.2s ease-out;
@@ -498,6 +519,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .status-flash { animation: none; }
+    .dot-loader span { animation: none; opacity: 0.5; }
   }
 
   .copy-toast {

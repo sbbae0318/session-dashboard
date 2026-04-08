@@ -1,7 +1,6 @@
 <script lang="ts">
   import { formatTimestamp } from "../lib/utils";
   import { renderMarkdown } from "../lib/markdown";
-  import DotLoader from "./DotLoader.svelte";
   import { onMount } from "svelte";
 
   let {
@@ -113,7 +112,7 @@
       {:else}
         {#if responseLoading}
           <div class="response-loading">
-            <DotLoader />
+            <span class="dot-loader"><span></span><span></span><span></span></span>
             <span>응답 로딩 중...</span>
           </div>
         {:else if responseError && !responseText}
@@ -361,6 +360,27 @@
     opacity: 0.7;
   }
 
+  /* ── Dot loader ── */
+  .dot-loader {
+    display: inline-flex;
+    gap: 4px;
+  }
+
+  .dot-loader span {
+    width: 5px;
+    height: 5px;
+    background: var(--accent, #58a6ff);
+    border-radius: 50%;
+    animation: dot-bounce 1.4s ease-in-out infinite;
+  }
+
+  .dot-loader span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-loader span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); }
+    40% { opacity: 1; transform: scale(1.2); }
+  }
 
   /* ── Footer ── */
   .modal-footer {
