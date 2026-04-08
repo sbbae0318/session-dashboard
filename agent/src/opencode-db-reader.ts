@@ -229,6 +229,7 @@ export class OpenCodeDBReader {
   private stmtSessionCurrentToolPart!: Statement;
   private stmtFindUserMessageByTime!: Statement;
   private stmtAssistantTextPartsAfterMessage!: Statement;
+  private stmtToolNamesSince!: Statement;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -286,6 +287,7 @@ export class OpenCodeDBReader {
     this.stmtSessionCurrentToolPart = this.prepareSessionCurrentToolPartStmt(db);
     this.stmtFindUserMessageByTime = this.prepareFindUserMessageByTimeStmt(db);
     this.stmtAssistantTextPartsAfterMessage = this.prepareAssistantTextPartsAfterMessageStmt(db);
+    this.stmtToolNamesSince = this.prepareToolNamesSinceStmt(db);
   }
 
   isAvailable(): boolean {
@@ -1039,6 +1041,22 @@ export class OpenCodeDBReader {
       ORDER BY time_created DESC
       LIMIT 5
     `);
+  }
+
+  private prepareToolNamesSinceStmt(db: Database.Database): Statement {
+    return db.prepare(`
+      SELECT DISTINCT json_extract(data, '$.tool') AS tool_name
+      FROM message
+      WHERE session_id = ? AND json_extract(data, '$.role') = 'assistant'
+        AND json_extract(data, '$.tool') IS NOT NULL
+        AND time_created >= ?
+    `);
+  }
+
+  /** 특정 시점 이후 세션에서 사용된 도구 이름 목록. */
+  getToolNamesSince(sessionId: string, sinceTs: number): string[] {
+    const rows = this.stmtToolNamesSince.all(sessionId, sinceTs) as Array<{ tool_name: string }>;
+    return rows.map(r => r.tool_name).filter(Boolean);
   }
 
   private prepareSessionMessagesStmt(db: Database.Database): Statement {

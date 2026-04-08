@@ -29,10 +29,10 @@ import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeCo
 import { SessionCache } from './session-cache.js';
 import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
 import { PromptStore } from './prompt-store.js';
+import { SummaryEngine } from './summary-engine.js';
 import { ClaudeHeartbeat } from './claude-heartbeat.js';
 import { ProcessScanner } from './process-scanner.js';
 import { ClaudeSource } from './claude-source.js';
-import { spawn } from 'node:child_process';
 import { OpenCodeDBReader, DEFAULT_OPENCODE_DB_PATH, type EnrichmentResponse, type TokensData, type SearchResult } from './opencode-db-reader.js';
 import { OpenCodeDbSource } from './opencode-db-source.js';
 import type { AgentConfig, HealthResponse, QueriesResponse, TokenRequest } from './types.js';
@@ -121,8 +121,11 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   let promptStore: PromptStore | null = null;
   let bgCollectionInterval: NodeJS.Timeout | null = null;
   let busyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let summaryEngine: SummaryEngine | null = null;
+
   if (ocServeEnabled && ocQueryCollector) {
     promptStore = new PromptStore();
+    summaryEngine = new SummaryEngine(promptStore.database);
 
     const doCollection = async (): Promise<void> => {
       try {
@@ -168,6 +171,29 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
 
         promptStore!.evict();
         promptStore!.trimToMax();
+
+        // Auto-trigger progressive summaries for sessions with enough new prompts
+        if (summaryEngine) {
+          const sessionIds = new Set(entries.map(e => e.sessionId));
+          for (const sid of sessionIds) {
+            const prompts = promptStore!.getBySessionId(sid, 200);
+            if (prompts.length === 0) continue;
+            // Fetch tool names from OC DB (best-effort)
+            const latest = summaryEngine.getLatest(sid);
+            const sinceTs = latest
+              ? prompts[latest.promptCount]?.timestamp ?? 0
+              : 0;
+            const toolNames = ocDbReader?.isAvailable()
+              ? ocDbReader.getToolNamesSince(sid, sinceTs)
+              : [];
+            const title = prompts[0]?.sessionTitle ?? undefined;
+            void summaryEngine.checkAndGenerate(
+              sid,
+              prompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+              { toolNames, sessionTitle: title },
+            );
+          }
+        }
       } catch (err) {
         console.error('[prompt-store] Collection error:', err);
       }
@@ -629,177 +655,114 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
     },
   );
 
-  const SUMMARY_CACHE_MAX = 100;
-  const SUMMARY_CACHE_TTL_MS = 3_600_000;
-  const summaryCache = new Map<string, { summary: string; generatedAt: number }>();
-  const summaryCacheEvictionTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of summaryCache) {
-      if (now - entry.generatedAt > SUMMARY_CACHE_TTL_MS) {
-        summaryCache.delete(key);
-      }
-    }
-    if (summaryCache.size > SUMMARY_CACHE_MAX) {
-      const sorted = [...summaryCache.entries()].sort((a, b) => a[1].generatedAt - b[1].generatedAt);
-      const toRemove = sorted.slice(0, summaryCache.size - SUMMARY_CACHE_MAX);
-      for (const [key] of toRemove) summaryCache.delete(key);
-    }
-  }, 60_000);
+  // ── Progressive Summary endpoints ──
 
-  app.post<{ Params: { sessionId: string } }>(
-    '/api/enrichment/recovery/:sessionId/summarize',
+  // GET /api/session-summaries — 모든 세션의 최신 요약
+  app.get('/api/session-summaries', async () => {
+    if (!summaryEngine) return { summaries: [] };
+    return { summaries: summaryEngine.getAllLatest() };
+  });
+
+  // GET /api/session-summaries/:sessionId — 특정 세션 요약 (latest + history)
+  app.get<{ Params: { sessionId: string } }>(
+    '/api/session-summaries/:sessionId',
     async (request) => {
       const { sessionId } = request.params;
-
-      const cached = summaryCache.get(sessionId);
-      if (cached && (Date.now() - cached.generatedAt) < SUMMARY_CACHE_TTL_MS) {
-        return { summary: cached.summary, generatedAt: cached.generatedAt, cached: true };
-      }
-
-      if (!ocDbReader || !ocDbReader.isAvailable()) {
-        return { summary: null, error: 'DB not available' };
-      }
-
-      const exists = ocDbReader.getSessionRecoveryContext(sessionId);
-      if (!exists) {
-        return { summary: null, error: 'Session not found' };
-      }
-
-      const messages = ocDbReader.getSessionMessages(sessionId, { limit: 30 });
-      if (messages.length === 0) {
-        return { summary: null, error: 'No messages found' };
-      }
-
-      const formatted = messages.map(m => {
-        const d = new Date(m.time * 1000);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `[${hh}:${mm}] (${m.role}) ${m.content}`;
-      }).join('\n');
-
-      const prompt = `다음은 OpenCode AI 코딩 세션의 메시지 기록입니다.
-이 세션에서 무슨 작업을 했는지 타임라인 형식으로 간결하게 요약하세요.
-
-규칙:
-- 한국어로 작성
-- 각 항목은 "[시간] 작업내용 → 결과" 형식
-- 성공/실패/진행중 표시
-- 최대 8줄
-- 문제가 있었다면 어떤 문제인지 명시
-
-세션: ${exists.sessionTitle ?? sessionId}
-프로젝트: ${exists.directory ?? 'unknown'}
-
-메시지 기록:
-${formatted}`;
-
-      try {
-        const summary = await new Promise<string>((resolve, reject) => {
-          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 60_000,
-          });
-
-          let stdout = '';
-          let stderr = '';
-          child.stdout.on('data', (chunk: Buffer) => { stdout += chunk; });
-          child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
-
-          child.on('close', (code) => {
-            if (code === 0) {
-              resolve(stdout.trim());
-            } else {
-              reject(new Error(`claude -p exited with code ${code}: ${stderr}`));
-            }
-          });
-
-          child.on('error', reject);
-          child.stdin.write(prompt);
-          child.stdin.end();
-        });
-
-        const result = { summary, generatedAt: Date.now() };
-        summaryCache.set(sessionId, result);
-        return { ...result, cached: false };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[summarize] claude -p failed:', msg);
-        return { summary: null, error: 'Summary generation failed' };
-      }
+      if (!summaryEngine) return { latest: null, history: [] };
+      return {
+        latest: summaryEngine.getLatest(sessionId),
+        history: summaryEngine.getHistory(sessionId),
+      };
     },
   );
 
-  // POST /api/session-summary/:sessionId — 범용 세션 요약 (OpenCode + Claude 모두)
+  // POST /api/session-summaries/:sessionId — 수동 강제 생성
   app.post<{ Params: { sessionId: string } }>(
-    '/api/session-summary/:sessionId',
+    '/api/session-summaries/:sessionId',
     async (request) => {
       const { sessionId } = request.params;
-
-      const cached = summaryCache.get(sessionId);
-      if (cached && (Date.now() - cached.generatedAt) < SUMMARY_CACHE_TTL_MS) {
-        return { summary: cached.summary, generatedAt: cached.generatedAt, cached: true };
+      if (!summaryEngine || !promptStore) {
+        return { summary: null, error: 'SummaryEngine not available' };
       }
 
-      if (!promptStore) {
-        return { summary: null, error: 'PromptStore not available' };
-      }
-
-      const prompts = promptStore.getBySessionId(sessionId, 50);
+      const prompts = promptStore.getBySessionId(sessionId, 200);
       if (prompts.length === 0) {
         return { summary: null, error: 'No prompts found for session' };
       }
 
-      const formatted = prompts.map(p => {
-        const d = new Date(p.timestamp);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `[${hh}:${mm}] "${p.query}"`;
-      }).join('\n');
+      const toolNames = ocDbReader?.isAvailable()
+        ? ocDbReader.getToolNamesSince(sessionId, 0)
+        : [];
+      const title = prompts[0]?.sessionTitle ?? undefined;
 
-      const sessionTitle = prompts[0].sessionTitle ?? sessionId.slice(0, 12);
+      const result = await summaryEngine.generate(
+        sessionId,
+        prompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+        { toolNames, sessionTitle: title },
+      );
 
-      const prompt = `다음은 코딩 세션의 사용자 프롬프트 목록입니다.
-이 세션에서 무슨 작업을 했는지 간결하게 요약하세요.
+      if (!result) return { summary: null, error: 'Generation failed' };
+      return result;
+    },
+  );
 
-규칙:
-- 한국어로 작성
-- 2~3문장으로 요약: 무엇을 했고, 현재 상태는 무엇인지
-- 핵심 작업만 언급 (사소한 것 제외)
-
-세션: ${sessionTitle}
-프롬프트 (${prompts.length}개):
-${formatted}`;
-
-      try {
-        const summary = await new Promise<string>((resolve, reject) => {
-          const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'], {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 60_000,
-          });
-
-          let stdout = '';
-          let stderr = '';
-          child.stdout.on('data', (chunk: Buffer) => { stdout += chunk; });
-          child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
-
-          child.on('close', (code) => {
-            if (code === 0) resolve(stdout.trim());
-            else reject(new Error(`claude -p exited ${code}: ${stderr}`));
-          });
-
-          child.on('error', reject);
-          child.stdin.write(prompt);
-          child.stdin.end();
-        });
-
-        const result = { summary, generatedAt: Date.now() };
-        summaryCache.set(sessionId, result);
-        return { ...result, promptCount: prompts.length, cached: false };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[session-summary] claude -p failed:', msg);
-        return { summary: null, error: 'Summary generation failed' };
+  // Legacy: POST /api/session-summary/:sessionId — 이전 API 호환 (SummaryEngine 위임)
+  app.post<{ Params: { sessionId: string } }>(
+    '/api/session-summary/:sessionId',
+    async (request) => {
+      const { sessionId } = request.params;
+      if (!summaryEngine || !promptStore) {
+        return { summary: null, error: 'SummaryEngine not available' };
       }
+
+      const prompts = promptStore.getBySessionId(sessionId, 200);
+      if (prompts.length === 0) {
+        return { summary: null, error: 'No prompts found for session' };
+      }
+
+      const toolNames = ocDbReader?.isAvailable()
+        ? ocDbReader.getToolNamesSince(sessionId, 0)
+        : [];
+      const title = prompts[0]?.sessionTitle ?? undefined;
+
+      const result = await summaryEngine.generate(
+        sessionId,
+        prompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+        { toolNames, sessionTitle: title },
+      );
+
+      if (!result) return { summary: null, error: 'Generation failed' };
+      return { summary: result.summary, generatedAt: result.generatedAt, promptCount: result.promptCount };
+    },
+  );
+
+  // Legacy: POST /api/enrichment/recovery/:sessionId/summarize — ContextRecovery용 (SummaryEngine 위임)
+  app.post<{ Params: { sessionId: string } }>(
+    '/api/enrichment/recovery/:sessionId/summarize',
+    async (request) => {
+      const { sessionId } = request.params;
+      if (!summaryEngine || !promptStore) {
+        return { summary: null, error: 'SummaryEngine not available' };
+      }
+
+      const prompts = promptStore.getBySessionId(sessionId, 200);
+      if (prompts.length === 0) {
+        return { summary: null, error: 'No prompts found for session' };
+      }
+
+      const toolNames = ocDbReader?.isAvailable()
+        ? ocDbReader.getToolNamesSince(sessionId, 0)
+        : [];
+      const title = prompts[0]?.sessionTitle ?? undefined;
+
+      const result = await summaryEngine.generate(
+        sessionId,
+        prompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+        { toolNames, sessionTitle: title },
+      );
+
+      if (!result) return { summary: null, error: 'Generation failed' };
+      return { summary: result.summary, generatedAt: result.generatedAt };
     },
   );
 
@@ -834,7 +797,6 @@ ${formatted}`;
   app.addHook('onClose', async () => {
     if (bgCollectionInterval) clearInterval(bgCollectionInterval);
     if (busyDebounceTimer) clearTimeout(busyDebounceTimer);
-    clearInterval(summaryCacheEvictionTimer);
     if (promptStore) promptStore.close();
     if (sessionCache) sessionCache.stop();
     if (dbSource) dbSource.stop();

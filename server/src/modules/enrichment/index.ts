@@ -254,6 +254,63 @@ export class EnrichmentModule implements BackendModule {
       },
     );
 
+    // ── Progressive Summaries ──
+
+    // GET /api/session-summaries — 모든 머신에서 세션 요약 수집
+    app.get('/api/session-summaries', async () => {
+      const machines = this.machineManager.getMachines();
+      const allSummaries: unknown[] = [];
+      for (const machine of machines) {
+        try {
+          const result = await this.machineManager.fetchFromMachine<{ summaries: unknown[] }>(
+            machine,
+            '/api/session-summaries',
+          );
+          if (result.summaries) allSummaries.push(...result.summaries);
+        } catch { continue; }
+      }
+      return { summaries: allSummaries };
+    });
+
+    // GET /api/session-summaries/:sessionId — 특정 세션 요약 (머신 순회)
+    app.get<{ Params: { sessionId: string } }>(
+      '/api/session-summaries/:sessionId',
+      async (req) => {
+        const { sessionId } = req.params;
+        const machines = this.machineManager.getMachines();
+        for (const machine of machines) {
+          try {
+            const result = await this.machineManager.fetchFromMachine<{ latest: unknown }>(
+              machine,
+              `/api/session-summaries/${sessionId}`,
+            );
+            if (result.latest) return result;
+          } catch { continue; }
+        }
+        return { latest: null, history: [] };
+      },
+    );
+
+    // POST /api/session-summaries/:sessionId — 수동 강제 생성 (머신 순회)
+    app.post<{ Params: { sessionId: string } }>(
+      '/api/session-summaries/:sessionId',
+      async (req) => {
+        const { sessionId } = req.params;
+        const machines = this.machineManager.getMachines();
+        for (const machine of machines) {
+          try {
+            const result = await this.machineManager.fetchFromMachine<{ summary?: string | null; error?: string }>(
+              machine,
+              `/api/session-summaries/${sessionId}`,
+              { method: 'POST' },
+            );
+            if (result.summary) return result;
+          } catch { continue; }
+        }
+        return { summary: null, error: 'No machine could generate summary' };
+      },
+    );
+
   }
 
   async start(): Promise<void> {

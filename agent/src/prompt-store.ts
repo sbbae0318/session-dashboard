@@ -200,6 +200,11 @@ export class PromptStore {
     return rows.map(rowToQueryEntry);
   }
 
+  /** 내부 DB 인스턴스 접근 (SummaryEngine 등 동일 DB 공유용). */
+  get database(): Database.Database {
+    return this.db;
+  }
+
   /** DB 연결 종료. 이후 작업 시 에러 발생. */
   close(): void {
     this.db.close();

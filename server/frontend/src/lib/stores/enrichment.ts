@@ -147,8 +147,9 @@ interface MergedTokensData {
   grandTotal: TokensData['grandTotal'];
 }
 
-export const summaryCache = writable<Record<string, { summary: string; generatedAt: number }>>({});
+export const summaryCache = writable<Record<string, { summary: string; generatedAt: number; version?: number; promptCount?: number }>>({});
 export const summaryLoadingIds = writable<string[]>([]);
+export const progressiveSummariesLoaded = writable(false);
 
 export async function fetchTokenStats(): Promise<void> {
   const machineId = resolveEnrichmentMachineId();
@@ -362,6 +363,61 @@ export async function fetchSessionSummary(sessionId: string): Promise<void> {
     }
   } catch (e) {
     console.error('Failed to fetch session summary:', e);
+  } finally {
+    summaryLoadingIds.update(ids => ids.filter(id => id !== sessionId));
+  }
+}
+
+/** Progressive summaries — 모든 세션의 자동 생성된 요약 로드 */
+export async function loadProgressiveSummaries(): Promise<void> {
+  try {
+    const res = await fetchJSON<{ summaries: Array<{ sessionId: string; summary: string; generatedAt: number; version: number; promptCount: number; sessionTitle?: string }> }>(
+      '/api/session-summaries',
+    );
+    if (res.summaries?.length) {
+      summaryCache.update(cache => {
+        const next = { ...cache };
+        for (const s of res.summaries) {
+          // 기존 수동 생성 캐시보다 progressive가 최신이면 덮어씀
+          const existing = next[s.sessionId];
+          if (!existing || s.generatedAt > existing.generatedAt) {
+            next[s.sessionId] = s;
+          }
+        }
+        return next;
+      });
+    }
+    progressiveSummariesLoaded.set(true);
+  } catch (e) {
+    console.error('Failed to load progressive summaries:', e);
+  }
+}
+
+/** 특정 세션의 요약 히스토리 조회 */
+export async function fetchSummaryHistory(sessionId: string): Promise<Array<{ summary: string; version: number; generatedAt: number; promptCount: number }>> {
+  try {
+    const res = await fetchJSON<{ history: Array<{ summary: string; version: number; generatedAt: number; promptCount: number }> }>(
+      `/api/session-summaries/${sessionId}`,
+    );
+    return res.history ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** 수동 강제 생성 (progressive endpoint) */
+export async function forceGenerateSummary(sessionId: string): Promise<void> {
+  summaryLoadingIds.update(ids => [...ids, sessionId]);
+  try {
+    const res = await fetchJSON<{ sessionId: string; summary: string; generatedAt: number; version: number; promptCount: number }>(
+      `/api/session-summaries/${sessionId}`,
+      { method: 'POST' },
+    );
+    if (res.summary) {
+      summaryCache.update(cache => ({ ...cache, [sessionId]: res }));
+    }
+  } catch (e) {
+    console.error('Failed to force generate summary:', e);
   } finally {
     summaryLoadingIds.update(ids => ids.filter(id => id !== sessionId));
   }

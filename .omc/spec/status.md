@@ -39,7 +39,7 @@ _이번 세션/최근에 배운 것._
 - **상태 뱃지 flash 구현 패턴**: prevStatusMap(Map<sessionId, cssClass>)으로 이전 상태 추적 → `$effect`에서 topLevelSessions 변경 시 비교 → 변경된 세션에 `status-flash` 클래스 부여 + setTimeout 1.2초 후 해제. CSS animation(brightness+scale 펄스)으로 구현, `prefers-reduced-motion` 존중.
 - **recentlyRenamed 플래그 패턴**: agent의 `refreshSessionFromFile()`에서 title 변경 감지 → `recentlyRenamed: true` 설정 + `setTimeout` 3초 후 `false`로 해제. 프론트엔드 `getDisplayStatus()`에서 최우선 체크하여 "Rename" 배지(주황) 표시. `renameTimers` Map으로 세션별 타이머 관리, `stop()` 시 정리.
 - **Hook SSE push (B')**: agent가 `/api/claude/events` SSE 엔드포인트를 제공, hook 이벤트 발생 시 세션 full snapshot을 구독자에게 즉시 브로드캐스트. server가 머신별 SSE 구독 + `cachedDetails` 실시간 병합 + 100ms debounce poll 트리거.
-- **정렬 우선순위 로직**: `lastActivityTime` 시간차 60초 이내 세션 간에는 상태 우선순위 적용 (WORKING=0 > WAITING=1 > IDLE=2). "방금 전" 표시되는 세션들 사이에서 WORKING이 항상 상단에 위치하도록 보장.
+- **정렬 우선순위 로직**: 시간 무관 상태 우선순위 항상 적용 (WAITING=0 > WORKING=1 > RENAME=2 > IDLE=3). 같은 우선순위 내에서만 `lastActivityTime` 순. 활성 세션이 항상 IDLE 위에 표시되도록 보장.
 - **Svelte 5 `document.addEventListener` vs `svelte:window`**: `document.addEventListener`로 등록한 핸들러에서 `$state`/`$derived` 변수 접근 시 reactive 업데이트가 동작하지 않을 수 있음. `svelte:window onkeydown`으로 전환하면 Svelte reactive context 내에서 실행되어 정상 동작. (`de44c26`에서 발견)
 - **프롬프트 스피너 busy 조건 불일치 (F-004)**: `getDisplayStatus`는 `currentTool` 존재만으로 Working 판정하지만, `getQueryResult`/`busySessions`/`isSessionBusy`는 `apiStatus==='busy'`만 체크했음. Hook이 `currentTool`을 먼저 세팅하는 타이밍에 스피너 미표시. 세 곳 모두 `(apiStatus∈{busy,retry} ∨ currentTool) ∧ ¬waitingForInput`으로 정렬하여 해결. **교훈: "is working?" 판정은 반드시 getDisplayStatus와 동일 조건 사용.**
 
@@ -47,9 +47,9 @@ _이번 세션/최근에 배운 것._
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **프롬프트 스피너 수정(F-004) 실제 동작 검증** — Working 세션에서 dot-loader 표시 확인.
-2. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
-3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
+1. **Hook SSE push 안정성 모니터링** — B' 배포 후 재연결 빈도, push 실패율 확인. 안정 확인 후 폴링 1초→2초 복원 검토.
+2. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
+3. **정렬 변경 라이브 검증** — WAITING/WORKING 세션이 IDLE 위에 항상 표시되는지 확인.
 
 ---
 

@@ -1,13 +1,42 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
   import { getSourceFilter } from '../../lib/stores/filter.svelte';
-  import { summaryCache, summaryLoadingIds, fetchSessionSummary } from '../../lib/stores/enrichment';
+  import {
+    summaryCache, summaryLoadingIds,
+    loadProgressiveSummaries, progressiveSummariesLoaded,
+    forceGenerateSummary, fetchSummaryHistory,
+  } from '../../lib/stores/enrichment';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
-  import { relativeTime, formatTimestamp } from '../../lib/utils';
+  import { relativeTime, formatTimestamp, getDisplayStatus } from '../../lib/utils';
   import type { DashboardSession } from '../../types';
 
   let sessions = $derived(getSessions());
   let sourceFilter = $derived(getSourceFilter());
+
+  // 페이지 진입 시 progressive summaries 로드
+  onMount(() => {
+    if (!$progressiveSummariesLoaded) {
+      void loadProgressiveSummaries();
+    }
+  });
+
+  // 세션별 히스토리 (열려있는 세션만)
+  let historyMap = $state<Record<string, Array<{ summary: string; version: number; generatedAt: number; promptCount: number }>>>({});
+  let historyOpen = $state<Set<string>>(new Set());
+
+  async function toggleHistory(sessionId: string) {
+    const next = new Set(historyOpen);
+    if (next.has(sessionId)) {
+      next.delete(sessionId);
+    } else {
+      next.add(sessionId);
+      if (!historyMap[sessionId]) {
+        historyMap[sessionId] = await fetchSummaryHistory(sessionId);
+      }
+    }
+    historyOpen = next;
+  }
 
   // Top-level sessions, source-filtered
   let filteredSessions = $derived(
@@ -67,11 +96,14 @@
   }
 
   function getStatusInfo(s: DashboardSession): { label: string; cls: string } {
-    if ((s.apiStatus === 'busy' || s.apiStatus === 'retry' || s.currentTool) && !s.waitingForInput)
-      return { label: 'Working', cls: 'st-working' };
-    if (s.waitingForInput)
-      return { label: 'Waiting', cls: 'st-waiting' };
-    return { label: 'Idle', cls: 'st-idle' };
+    const ds = getDisplayStatus(s);
+    const clsMap: Record<string, string> = {
+      'status-working': 'st-working',
+      'status-waiting': 'st-waiting',
+      'status-idle': 'st-idle',
+      'status-rename': 'st-working',
+    };
+    return { label: ds.label, cls: clsMap[ds.cssClass] ?? 'st-idle' };
   }
 
   function shortPath(p: string): string {
@@ -162,24 +194,56 @@
                     {#if cached}
                       <div class="s-summary">{cached.summary}</div>
                       <div class="s-footer">
-                        <span class="s-gen-time">{formatTimestamp(cached.generatedAt)}</span>
-                        <button
-                          class="s-btn s-btn-ghost"
-                          onclick={() => fetchSessionSummary(session.sessionId)}
-                          disabled={isLoading}
-                        >
-                          {#if isLoading}
-                            <span class="spinner"></span>
-                          {:else}
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        <span class="s-gen-time">
+                          {formatTimestamp(cached.generatedAt)}
+                          {#if cached.version}
+                            <span class="s-version">v{cached.version}</span>
                           {/if}
-                        </button>
+                          {#if cached.promptCount}
+                            <span class="s-prompt-count">{cached.promptCount}p</span>
+                          {/if}
+                        </span>
+                        <div class="s-actions">
+                          {#if cached.version && cached.version > 1}
+                            <button
+                              class="s-btn s-btn-ghost"
+                              onclick={() => toggleHistory(session.sessionId)}
+                              title="요약 히스토리"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </button>
+                          {/if}
+                          <button
+                            class="s-btn s-btn-ghost"
+                            onclick={() => forceGenerateSummary(session.sessionId)}
+                            disabled={isLoading}
+                            title="요약 갱신"
+                          >
+                            {#if isLoading}
+                              <span class="spinner"></span>
+                            {:else}
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            {/if}
+                          </button>
+                        </div>
                       </div>
+                      <!-- Version history -->
+                      {#if historyOpen.has(session.sessionId) && historyMap[session.sessionId]}
+                        <div class="s-history">
+                          {#each historyMap[session.sessionId] as ver (ver.version)}
+                            <div class="s-history-entry" class:current={ver.version === cached.version}>
+                              <span class="s-history-ver">v{ver.version}</span>
+                              <span class="s-history-time">{formatTimestamp(ver.generatedAt)}</span>
+                              <span class="s-history-count">{ver.promptCount}p</span>
+                            </div>
+                          {/each}
+                        </div>
+                      {/if}
                     {:else}
                       <div class="s-empty">
                         <button
                           class="s-btn s-btn-generate"
-                          onclick={() => fetchSessionSummary(session.sessionId)}
+                          onclick={() => forceGenerateSummary(session.sessionId)}
                           disabled={isLoading}
                         >
                           {#if isLoading}
@@ -514,6 +578,69 @@
     color: var(--text-secondary);
     opacity: 0.5;
     font-family: "SF Mono", "Fira Code", monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .s-version {
+    background: rgba(88, 166, 255, 0.1);
+    color: var(--accent);
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    font-size: 0.58rem;
+    font-weight: 600;
+  }
+
+  .s-prompt-count {
+    opacity: 0.6;
+    font-size: 0.58rem;
+  }
+
+  .s-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  /* History panel */
+  .s-history {
+    margin-top: 0.3rem;
+    padding: 0.3rem 0.4rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .s-history-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    padding: 0.1rem 0;
+  }
+
+  .s-history-entry.current {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .s-history-ver {
+    font-family: "SF Mono", "Fira Code", monospace;
+    min-width: 1.5rem;
+  }
+
+  .s-history-time {
+    font-family: "SF Mono", "Fira Code", monospace;
+    opacity: 0.6;
+  }
+
+  .s-history-count {
+    opacity: 0.5;
+    margin-left: auto;
   }
 
   /* empty summary */
