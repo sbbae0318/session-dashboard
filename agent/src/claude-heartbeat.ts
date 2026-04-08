@@ -34,6 +34,7 @@ export interface ClaudeSessionInfo {
 
 interface ConversationData {
   readonly status: 'busy' | 'idle';
+  readonly interrupted: boolean;
   readonly title: string | null;
   readonly lastPrompt: string | null;
   readonly lastPromptTime: number | null;
@@ -534,6 +535,7 @@ export class ClaudeHeartbeat {
     title = customTitle ?? firstUserTitle;
 
     // Reverse scan: find last user/assistant → status, timestamps, lastPrompt
+    let interrupted = false;
     let foundStatus = false;
     let foundLastUser = false;
     let foundLastAssistant = false;
@@ -561,6 +563,7 @@ export class ClaudeHeartbeat {
           } else if (entry.type === 'assistant') {
             if (isInterruptedAssistant(entry)) {
               status = 'idle';
+              interrupted = true;
             } else {
               const msg = entry.message as Record<string, unknown> | undefined;
               const msgContent = msg?.content;
@@ -624,7 +627,7 @@ export class ClaudeHeartbeat {
       }
     }
 
-    return { status, title, lastPrompt, lastPromptTime, lastResponseTime };
+    return { status, interrupted, title, lastPrompt, lastPromptTime, lastResponseTime };
   }
 
   // -------------------------------------------------------------------------
@@ -731,8 +734,10 @@ export class ClaudeHeartbeat {
       changed = true;
     }
     // status 전환: hooks가 active이면 hooks가 권한자 → JSONL status 무시
-    // (hooks 미연결 시에만 JSONL 파싱으로 status 판단)
-    if (!existing.hooksActive && parsed.status !== existing.status) {
+    // 예외: stop_sequence(Esc interrupt)는 hooks가 누락하므로 JSONL 신호를 신뢰
+    const shouldUpdateStatus = !existing.hooksActive
+      || (parsed.interrupted && parsed.status === 'idle' && existing.status !== 'idle');
+    if (shouldUpdateStatus && parsed.status !== existing.status) {
       newStatus = parsed.status;
       changed = true;
       if (parsed.status === 'idle') {
