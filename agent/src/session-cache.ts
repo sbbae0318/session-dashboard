@@ -951,7 +951,9 @@ export class SessionCache {
         // Enrich existing sessions: fill missing metadata without overwriting live status
         const titleMissing = !existing.title || existing.title.startsWith('New session');
         const needsEnrich = titleMissing || !existing.createdAt || !existing.directory;
-        if (needsEnrich) {
+        // DB의 lastActiveAt가 더 정확 (메시지 타임스탬프 포함) — 항상 갱신
+        const dbHasNewerActivity = meta.lastActiveAt > existing.lastActiveAt;
+        if (needsEnrich || dbHasNewerActivity) {
           this.store.upsert(meta.id, {
             ...existing,
             title: titleMissing ? (meta.title ?? existing.title) : existing.title,
