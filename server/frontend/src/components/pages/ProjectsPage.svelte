@@ -11,7 +11,7 @@
   import { onMachineChange } from '../../lib/stores/machine.svelte';
   import { getSessions } from '../../lib/stores/sessions.svelte';
   import { pushSessionDetail } from '../../lib/stores/navigation.svelte';
-  import { relativeTime } from '../../lib/utils';
+  import { relativeTime, getDisplayStatus } from '../../lib/utils';
   import type { DashboardSession } from '../../types';
 
   type SortOption = 'recent' | 'sessions' | 'tokens';
@@ -68,10 +68,8 @@
     return `$${n.toFixed(4)}`;
   }
 
-  function getSessionStatus(s: DashboardSession): { label: string; cssClass: string } {
-    if (s.apiStatus === 'busy') return { label: 'Working', cssClass: 'status-working' };
-    if (s.status === 'active') return { label: 'Active', cssClass: 'status-active' };
-    return { label: 'Idle', cssClass: 'status-idle' };
+  function getSessionStatus(s: DashboardSession) {
+    return getDisplayStatus(s);
   }
 </script>
 
