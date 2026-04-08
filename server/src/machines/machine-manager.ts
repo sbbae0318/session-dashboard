@@ -578,7 +578,7 @@ export class MachineManager {
  /**
  * Fetch queries from all machines in parallel.
  */
- async pollAllQueries(limit: number = 50): Promise<Array<Record<string, unknown> & { machineId: string; machineAlias: string; machineHost: string }>> {
+ async pollAllQueries(limit: number = 50, sessionId?: string): Promise<Array<Record<string, unknown> & { machineId: string; machineAlias: string; machineHost: string }>> {
    // Build fetch tasks based on each machine's source configuration
    const fetchTasks: Array<Promise<{ machine: MachineConfig; queries: Array<Record<string, unknown>> }>> = [];
 
@@ -592,7 +592,7 @@ export class MachineManager {
      // Claude Code queries from dashboard-agent
      if (machine.source === 'claude-code' || machine.source === 'both') {
        fetchTasks.push(
-         this.fetchClaudeQueries(machine, limit).then(queries => ({ machine, queries }))
+         this.fetchClaudeQueries(machine, limit, sessionId).then(queries => ({ machine, queries }))
        );
      }
    }
@@ -720,8 +720,9 @@ export class MachineManager {
   /**
    * Fetch Claude Code queries from dashboard-agent
    */
-  private async fetchClaudeQueries(machine: MachineConfig, limit: number): Promise<Array<Record<string, unknown>>> {
-    const url = `http://${machine.host}:${machine.port}/api/claude/queries?limit=${limit}`;
+  private async fetchClaudeQueries(machine: MachineConfig, limit: number, sessionId?: string): Promise<Array<Record<string, unknown>>> {
+    let url = `http://${machine.host}:${machine.port}/api/claude/queries?limit=${limit}`;
+    if (sessionId) url += `&sessionId=${encodeURIComponent(sessionId)}`;
     const headers = { 'Authorization': `Bearer ${machine.apiKey}` };
     const raw = await this.httpGet(url, headers, machine.timeout);
     const response = JSON.parse(raw) as { queries?: Array<Record<string, unknown>> };

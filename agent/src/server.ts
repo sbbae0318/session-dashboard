@@ -335,10 +335,11 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       return { sessions };
     });
 
-    // GET /api/claude/queries?limit=50
-    app.get<{ Querystring: { limit?: string } }>('/api/claude/queries', async (request) => {
+    // GET /api/claude/queries?limit=50&sessionId=X
+    app.get<{ Querystring: { limit?: string; sessionId?: string } }>('/api/claude/queries', async (request) => {
       const limit = parseLimit(request.query.limit);
-      const queries = await claudeSource!.getRecentQueries(limit);
+      const sessionId = request.query.sessionId || undefined;
+      const queries = await claudeSource!.getRecentQueries(limit, sessionId);
       return { queries };
     });
 

@@ -28,3 +28,20 @@ export async function fetchQueries(limit: number = 200): Promise<void> {
     console.error("Failed to fetch queries:", e);
   }
 }
+
+/** 특정 세션의 쿼리를 fetch하여 기존 store에 병합 (dedup) */
+export async function fetchSessionQueries(sessionId: string, limit: number = 50): Promise<void> {
+  try {
+    const data = await fetchJSON<QueriesResponse>(`/api/queries?sessionId=${encodeURIComponent(sessionId)}&limit=${limit}`);
+    const newQueries = data.queries ?? [];
+    if (newQueries.length === 0) return;
+
+    const existingKeys = new Set(queries.map(q => `${q.sessionId}-${q.timestamp}`));
+    const toAdd = newQueries.filter(q => !existingKeys.has(`${q.sessionId}-${q.timestamp}`));
+    if (toAdd.length > 0) {
+      queries = [...queries, ...toAdd];
+    }
+  } catch (e) {
+    console.error("Failed to fetch session queries:", e);
+  }
+}

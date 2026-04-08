@@ -46,10 +46,13 @@ export class ClaudeSource {
     // Stateless reader — no cleanup needed
   }
 
-  async getRecentQueries(limit: number = 50): Promise<ClaudeQueryEntry[]> {
-    const entries = await this.reader.tailLines(limit);
+  async getRecentQueries(limit: number = 50, sessionId?: string): Promise<ClaudeQueryEntry[]> {
+    // sessionId 필터 시 전체 스캔 (history.jsonl 전체 읽음 — tailLines은 이미 전체 로드)
+    const scanLimit = sessionId ? 10000 : limit;
+    const entries = await this.reader.tailLines(scanLimit);
     return entries
       .filter((entry) => this.isRealQuery(entry.display))
+      .filter((entry) => !sessionId || entry.sessionId === sessionId)
       .map((entry) => {
         const filtered = extractUserPrompt(entry.display);
         if (filtered === null) return null;
@@ -63,7 +66,8 @@ export class ClaudeSource {
           completedAt: null,
         };
       })
-      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .slice(-limit);
   }
 
   /** 슬래시 커맨드, 빈 문자열, XML 태그로 시작하는 항목 제외 */

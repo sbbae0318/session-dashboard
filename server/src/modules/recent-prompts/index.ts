@@ -15,10 +15,35 @@ export class RecentPromptsModule implements BackendModule {
   }
 
   registerRoutes(app: FastifyInstance): void {
-    app.get<{ Querystring: { limit?: string } }>(
+    app.get<{ Querystring: { limit?: string; sessionId?: string } }>(
       "/api/queries",
       async (request) => {
         const limit = parseInt(request.query.limit ?? "10", 10);
+        const sessionId = request.query.sessionId || undefined;
+
+        if (sessionId) {
+          // 세션별 조회: 캐시에 있으면 캐시에서, 없으면 에이전트에서 직접 fetch
+          const cached = this.cachedQueries.filter(q => q.sessionId === sessionId);
+          if (cached.length > 0) {
+            return { queries: cached.slice(0, limit) };
+          }
+          // 캐시에 없으면 에이전트에서 직접 fetch
+          const raw = await this.machineManager.pollAllQueries(limit, sessionId);
+          const queries: QueryEntry[] = raw.map(r => ({
+            sessionId: (r.sessionId as string) ?? "",
+            sessionTitle: (r.sessionTitle as string | null) ?? null,
+            timestamp: (r.timestamp as number) ?? 0,
+            query: (r.query as string) ?? "",
+            isBackground: (r.isBackground as boolean) ?? false,
+            source: (r.source as string) === 'claude-code' ? 'claude-code' as const : 'opencode' as const,
+            completedAt: (r.completedAt as number | null) ?? null,
+            machineId: r.machineId,
+            machineHost: r.machineHost,
+            machineAlias: r.machineAlias,
+          }));
+          return { queries: queries.slice(0, limit) };
+        }
+
         return { queries: this.cachedQueries.slice(0, limit) };
       },
     );

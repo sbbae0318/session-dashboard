@@ -4,7 +4,7 @@
   import RecentPrompts from "./components/RecentPrompts.svelte";
   import type { QueryEntry, DashboardSession, MachineInfo } from "./types";
   import { fetchSessions, getSessions, setSessions } from "./lib/stores/sessions.svelte";
-  import { fetchQueries, addQuery } from "./lib/stores/queries.svelte";
+  import { fetchQueries, addQuery, fetchSessionQueries } from "./lib/stores/queries.svelte";
   import { getSelectedSessionId, clearFilter, getSourceFilter, setSourceFilter, getTimeRange, setTimeRange, type TimeRange } from "./lib/stores/filter.svelte";
   import MachineSelector from './components/MachineSelector.svelte';
   import { fetchMachines, setMachines } from './lib/stores/machine.svelte';
@@ -60,6 +60,13 @@
       if (!sessions.some(s => s.sessionId === detailId)) {
         popToOverview();
       }
+    }
+  });
+
+  // 세션 디테일/프롬프트 뷰 진입 시 해당 세션 쿼리 fetch
+  $effect(() => {
+    if (detailId && (isDetail || isSessionPrompts)) {
+      fetchSessionQueries(detailId);
     }
   });
 
