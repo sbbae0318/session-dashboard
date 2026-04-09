@@ -1,14 +1,17 @@
 /**
- * Summary Engine — Python DSPy sidecar 클라이언트
+ * Summary Engine — Python DSPy CLI spawn + Haiku CLI fallback
  *
- * 요약 생성은 Python 서비스(port 3099)에 HTTP로 위임.
- * 읽기(getLatest/getHistory)는 로컬 SQLite에서 직접 조회.
- * Python 서비스 다운 시 기존 Haiku CLI spawn으로 fallback.
+ * 요약 생성: python -m src (stdin JSON → stdout JSON)
+ * Python 실패 시 기존 Haiku CLI spawn으로 fallback.
+ * 읽기(getLatest/getHistory)는 로컬 SQLite.
  */
 
 import type Database from 'better-sqlite3';
 import type { Statement } from 'better-sqlite3';
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,14 +30,21 @@ export interface SummaryPrompt {
   query: string;
 }
 
+export interface SummaryEngineOpts {
+  threshold?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_THRESHOLD = 5;
-const PYTHON_SERVICE_URL = 'http://127.0.0.1:3099';
-const PYTHON_TIMEOUT_MS = 30_000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PYTHON_DIR = join(__dirname, '..', 'python');
+const PYTHON_VENV = join(PYTHON_DIR, '.venv', 'bin', 'python3');
+const PYTHON_TIMEOUT_MS = 90_000;
 const HAIKU_TIMEOUT_MS = 60_000;
+const DEFAULT_THRESHOLD = 5;
 
 // ---------------------------------------------------------------------------
 // SummaryEngine
@@ -48,9 +58,8 @@ export class SummaryEngine {
   private readonly stmtGetHistory: Statement;
   private readonly stmtGetAll: Statement;
   private readonly generating = new Set<string>();
-  private pythonAvailable: boolean | null = null;  // null = 미확인
 
-  constructor(db: Database.Database, opts?: { threshold?: number }) {
+  constructor(db: Database.Database, opts?: SummaryEngineOpts) {
     this.db = db;
     this.threshold = opts?.threshold ?? DEFAULT_THRESHOLD;
 
@@ -73,32 +82,23 @@ export class SummaryEngine {
       INSERT INTO session_summaries (session_id, summary, prompt_count, version, generated_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-
     this.stmtGetLatest = db.prepare(
       'SELECT * FROM session_summaries WHERE session_id = ? ORDER BY version DESC LIMIT 1',
     );
-
     this.stmtGetHistory = db.prepare(
       'SELECT * FROM session_summaries WHERE session_id = ? ORDER BY version ASC',
     );
-
     this.stmtGetAll = db.prepare(`
       SELECT ss.*, ph.session_title
       FROM session_summaries ss
       LEFT JOIN (
         SELECT session_id, session_title,
                ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp DESC) AS rn
-        FROM prompt_history
-        WHERE session_title IS NOT NULL
+        FROM prompt_history WHERE session_title IS NOT NULL
       ) ph ON ph.session_id = ss.session_id AND ph.rn = 1
-      WHERE ss.id IN (
-        SELECT MAX(id) FROM session_summaries GROUP BY session_id
-      )
+      WHERE ss.id IN (SELECT MAX(id) FROM session_summaries GROUP BY session_id)
       ORDER BY ss.generated_at DESC
     `);
-
-    // Python 서비스 가용성 체크 (non-blocking)
-    void this.checkPythonService();
   }
 
   // ── Read (로컬 SQLite) ──
@@ -109,20 +109,22 @@ export class SummaryEngine {
   }
 
   getHistory(sessionId: string): SessionSummary[] {
-    const rows = this.stmtGetHistory.all(sessionId) as SummaryRow[];
-    return rows.map(rowToSummary);
+    return (this.stmtGetHistory.all(sessionId) as SummaryRow[]).map(rowToSummary);
   }
 
   getAllLatest(): Array<SessionSummary & { sessionTitle?: string }> {
-    const rows = this.stmtGetAll.all() as Array<SummaryRow & { session_title?: string }>;
-    return rows.map(r => ({
+    return (this.stmtGetAll.all() as Array<SummaryRow & { session_title?: string }>).map(r => ({
       ...rowToSummary(r),
       sessionTitle: r.session_title ?? undefined,
     }));
   }
 
-  // ── Write (Python sidecar → fallback to Haiku CLI) ──
+  // ── Write (async, fire-and-forget) ──
 
+  /**
+   * 마지막 요약 이후 threshold 이상 새 프롬프트가 있으면 async 생성.
+   * doCollection()에서 호출 — void로 fire-and-forget.
+   */
   async checkAndGenerate(
     sessionId: string,
     allPrompts: SummaryPrompt[],
@@ -131,9 +133,7 @@ export class SummaryEngine {
     if (this.generating.has(sessionId)) return false;
 
     const latest = this.getLatest(sessionId);
-    const lastCount = latest?.promptCount ?? 0;
-    const newCount = allPrompts.length - lastCount;
-
+    const newCount = allPrompts.length - (latest?.promptCount ?? 0);
     if (newCount < this.threshold) return false;
 
     const result = await this.generate(sessionId, allPrompts, opts);
@@ -150,212 +150,161 @@ export class SummaryEngine {
     this.generating.add(sessionId);
 
     try {
-      // Python 사이드카 시도
-      if (this.pythonAvailable !== false) {
-        const result = await this.generateViaPython(sessionId, allPrompts, opts);
-        if (result) return result;
-      }
+      const latest = this.getLatest(sessionId);
+      const newPrompts = latest ? allPrompts.slice(latest.promptCount) : allPrompts;
+      if (newPrompts.length === 0 && latest) return latest;
 
-      // Fallback: 기존 Haiku CLI
-      console.log(`[summary-engine] Python unavailable, falling back to Haiku CLI for ${sessionId.slice(0, 8)}`);
-      return await this.generateViaHaiku(sessionId, allPrompts, opts);
+      // 1차: Python DSPy CLI
+      const pyResult = await this.spawnPython(sessionId, newPrompts, allPrompts.length, opts);
+      if (pyResult) return pyResult;
+
+      // 2차: Haiku CLI fallback
+      console.log(`[summary-engine] Python failed, Haiku fallback for ${sessionId.slice(0, 8)}`);
+      return await this.spawnHaiku(sessionId, allPrompts, newPrompts, latest, opts);
     } finally {
       this.generating.delete(sessionId);
     }
   }
 
-  // ── Python sidecar 호출 ──
+  // ── Python DSPy CLI spawn ──
 
-  private async generateViaPython(
+  private spawnPython(
     sessionId: string,
-    allPrompts: SummaryPrompt[],
+    newPrompts: SummaryPrompt[],
+    totalCount: number,
     opts?: { toolNames?: string[]; sessionTitle?: string },
   ): Promise<SessionSummary | null> {
-    try {
-      const latest = this.getLatest(sessionId);
-      // Delta만 전송: 마지막 요약 이후 프롬프트만
-      const newPrompts = latest
-        ? allPrompts.slice(latest.promptCount)
-        : allPrompts;
+    const input = JSON.stringify({
+      session_id: sessionId,
+      session_title: opts?.sessionTitle ?? null,
+      new_prompts: newPrompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+      total_prompt_count: totalCount,
+      tool_names: opts?.toolNames ?? [],
+    });
 
-      if (newPrompts.length === 0 && latest) return latest;
+    return new Promise((resolve) => {
+      try {
+        const child = spawn(PYTHON_VENV, ['-m', 'src'], {
+          cwd: PYTHON_DIR,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: PYTHON_TIMEOUT_MS,
+          env: { ...process.env },
+        });
 
-      const body = JSON.stringify({
-        session_id: sessionId,
-        session_title: opts?.sessionTitle ?? null,
-        new_prompts: newPrompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
-        total_prompt_count: allPrompts.length,
-        tool_names: opts?.toolNames ?? [],
-        force: true,
-      });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (c: Buffer) => { stdout += c; });
+        child.stderr.on('data', (c: Buffer) => { stderr += c; });
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), PYTHON_TIMEOUT_MS);
+        child.on('close', (code) => {
+          if (code !== 0) {
+            console.error(`[summary-engine] Python exited ${code}: ${stderr.slice(0, 300)}`);
+            resolve(null);
+            return;
+          }
 
-      const res = await fetch(`${PYTHON_SERVICE_URL}/api/summarize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
+          try {
+            const data = JSON.parse(stdout) as Record<string, unknown>;
+            if (data.error || !data.summary) {
+              console.error(`[summary-engine] Python error: ${data.error ?? 'no summary'}`);
+              resolve(null);
+              return;
+            }
 
-      if (!res.ok) {
-        console.error(`[summary-engine] Python service returned ${res.status}`);
-        this.pythonAvailable = false;
-        return null;
+            const version = data.version as number;
+            const promptCount = data.prompt_count as number;
+            const generatedAt = data.generated_at as number;
+            const summary = data.summary as string;
+
+            // Node DB에 미러링
+            this.stmtInsert.run(sessionId, summary, promptCount, version, generatedAt);
+            console.log(`[summary-engine] v${version} via Python for ${sessionId.slice(0, 8)}`);
+
+            resolve({ sessionId, summary, promptCount, version, generatedAt });
+          } catch (e) {
+            console.error(`[summary-engine] Python output parse failed: ${stdout.slice(0, 200)}`);
+            resolve(null);
+          }
+        });
+
+        child.on('error', (err) => {
+          console.error(`[summary-engine] Python spawn error: ${err.message}`);
+          resolve(null);
+        });
+
+        child.stdin.write(input);
+        child.stdin.end();
+      } catch (err) {
+        console.error(`[summary-engine] Python spawn failed:`, err);
+        resolve(null);
       }
-
-      const data = await res.json() as {
-        session_id: string;
-        summary: string;
-        version: number;
-        prompt_count: number;
-        generated_at: number;
-      };
-
-      if (!data.summary) return null;
-
-      this.pythonAvailable = true;
-
-      // Python 서비스가 자체 DB에 저장하므로, Node 측 DB에도 미러링
-      this.stmtInsert.run(
-        sessionId, data.summary, data.prompt_count, data.version, data.generated_at,
-      );
-
-      console.log(`[summary-engine] v${data.version} via Python for ${sessionId.slice(0, 8)}`);
-
-      return {
-        sessionId,
-        summary: data.summary,
-        promptCount: data.prompt_count,
-        version: data.version,
-        generatedAt: data.generated_at,
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('abort') || msg.includes('ECONNREFUSED')) {
-        this.pythonAvailable = false;
-      }
-      console.error(`[summary-engine] Python call failed: ${msg}`);
-      return null;
-    }
+    });
   }
 
   // ── Haiku CLI fallback ──
 
-  private async generateViaHaiku(
+  private async spawnHaiku(
     sessionId: string,
     allPrompts: SummaryPrompt[],
+    newPrompts: SummaryPrompt[],
+    latest: SessionSummary | null,
     opts?: { toolNames?: string[]; sessionTitle?: string },
   ): Promise<SessionSummary | null> {
-    const latest = this.getLatest(sessionId);
-    const newPrompts = latest ? allPrompts.slice(latest.promptCount) : allPrompts;
-
-    if (newPrompts.length === 0 && latest) return latest;
-
     const promptText = latest
       ? buildAdditivePrompt(latest.summary, newPrompts, opts?.toolNames)
-      : buildInitialPrompt(
-          opts?.sessionTitle ?? sessionId.slice(0, 12),
-          allPrompts,
-          opts?.toolNames,
-        );
+      : buildInitialPrompt(opts?.sessionTitle ?? sessionId.slice(0, 12), allPrompts, opts?.toolNames);
 
     const summary = await callHaiku(promptText);
     if (!summary) return null;
 
     const version = (latest?.version ?? 0) + 1;
     const now = Date.now();
-
     this.stmtInsert.run(sessionId, summary, allPrompts.length, version, now);
 
-    return {
-      sessionId,
-      summary,
-      promptCount: allPrompts.length,
-      version,
-      generatedAt: now,
-    };
-  }
-
-  // ── Python 서비스 가용성 체크 ──
-
-  private async checkPythonService(): Promise<void> {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3_000);
-      const res = await fetch(`${PYTHON_SERVICE_URL}/health`, { signal: controller.signal });
-      clearTimeout(timer);
-      this.pythonAvailable = res.ok;
-      console.log(`[summary-engine] Python service: ${this.pythonAvailable ? 'available' : 'unavailable'}`);
-    } catch {
-      this.pythonAvailable = false;
-      console.log('[summary-engine] Python service: unavailable (fallback to Haiku CLI)');
-    }
+    return { sessionId, summary, promptCount: allPrompts.length, version, generatedAt: now };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Fallback: Haiku CLI prompt builders (기존 유지)
+// Haiku CLI helpers (fallback)
 // ---------------------------------------------------------------------------
 
 function formatPrompts(prompts: SummaryPrompt[]): string {
   return prompts.map(p => {
     const d = new Date(p.timestamp);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `[${hh}:${mm}] "${p.query}"`;
+    return `[${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}] "${p.query}"`;
   }).join('\n');
 }
 
-function toolsLine(toolNames?: string[]): string {
-  if (!toolNames?.length) return '';
-  return `\n사용된 도구: ${toolNames.join(', ')}\n`;
-}
-
 function buildInitialPrompt(title: string, prompts: SummaryPrompt[], toolNames?: string[]): string {
+  const tools = toolNames?.length ? `\n사용된 도구: ${toolNames.join(', ')}\n` : '';
   return `다음은 코딩 세션의 사용자 프롬프트 목록입니다. 아래 형식으로 요약하세요.
 
-출력 형식 (반드시 준수):
-첫 줄: 이 세션이 무엇을 하는 세션인지 한 문장
-이후: 불렛 포인트로 주요 활동 요약 (각 항목은 결과 포함)
-  • A를 시도 → 성공
-  • B를 수정 → 빌드 실패로 롤백
-
-규칙:
-- 한국어로 작성
-- 불렛은 최대 5개. 핵심만.
-- 각 불렛에 성공/실패/진행중 결과를 명시
-- 불렛 기호는 "• " 사용
+출력 형식:
+첫 줄: 세션 목적 한 문장
+이후: • 작업 → 결과(성공/실패/진행중) 불렛 (최대 5개)
 
 세션: ${title}
 프롬프트 (${prompts.length}개):
 ${formatPrompts(prompts)}
-${toolsLine(toolNames)}`;
+${tools}`;
 }
 
 function buildAdditivePrompt(prev: string, newPrompts: SummaryPrompt[], toolNames?: string[]): string {
+  const tools = toolNames?.length ? `사용된 도구: ${toolNames.join(', ')}\n` : '';
   const first = new Date(newPrompts[0].timestamp);
   const last = new Date(newPrompts[newPrompts.length - 1].timestamp);
-  const timeRange = `${fmt(first)}~${fmt(last)}`;
+  const range = `${fmt(first)}~${fmt(last)}`;
 
-  return `기존 요약에 새 활동을 추가하세요. 형식을 반드시 유지하세요.
-
-출력 형식:
-첫 줄: 세션 한줄 설명 (기존 유지 또는 범위 확장 시 갱신)
-이후: 불렛 포인트 (기존 + 새 활동 병합, 최대 8개)
-
-규칙:
-- 한국어, "• " 불렛, 성공/실패/진행중 명시
+  return `기존 요약에 새 활동 불렛만 추가하세요.
 
 [기존 요약]
 ${prev}
 
-[새 활동 — ${newPrompts.length}건, ${timeRange}]
+[새 활동 — ${newPrompts.length}건, ${range}]
 ${formatPrompts(newPrompts)}
-${toolsLine(toolNames)}
-갱신된 요약:`;
+${tools}
+새 불렛만 추가 (기존 유지, 최대 3개 추가):`;
 }
 
 function fmt(d: Date): string {
@@ -365,32 +314,22 @@ function fmt(d: Date): string {
 function callHaiku(prompt: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
-      const child = spawn(
-        'claude',
-        ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'],
-        { stdio: ['pipe', 'pipe', 'pipe'], timeout: HAIKU_TIMEOUT_MS },
-      );
+      const child = spawn('claude', ['-p', '--model', 'claude-haiku-4-5', '--no-session-persistence'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: HAIKU_TIMEOUT_MS,
+      });
       let stdout = '';
       let stderr = '';
-      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk; });
-      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk; });
+      child.stdout.on('data', (c: Buffer) => { stdout += c; });
+      child.stderr.on('data', (c: Buffer) => { stderr += c; });
       child.on('close', (code) => {
         if (code === 0 && stdout.trim()) resolve(stdout.trim());
-        else {
-          console.error(`[summary-engine] Haiku exited ${code}: ${stderr.slice(0, 200)}`);
-          resolve(null);
-        }
+        else { console.error(`[summary-engine] Haiku exited ${code}: ${stderr.slice(0, 200)}`); resolve(null); }
       });
-      child.on('error', (err) => {
-        console.error('[summary-engine] Haiku spawn error:', err.message);
-        resolve(null);
-      });
+      child.on('error', (err) => { console.error('[summary-engine] Haiku error:', err.message); resolve(null); });
       child.stdin.write(prompt);
       child.stdin.end();
-    } catch (err) {
-      console.error('[summary-engine] callHaiku failed:', err);
-      resolve(null);
-    }
+    } catch { resolve(null); }
   });
 }
 
@@ -399,20 +338,13 @@ function callHaiku(prompt: string): Promise<string | null> {
 // ---------------------------------------------------------------------------
 
 interface SummaryRow {
-  id: number;
-  session_id: string;
-  summary: string;
-  prompt_count: number;
-  version: number;
-  generated_at: number;
+  id: number; session_id: string; summary: string;
+  prompt_count: number; version: number; generated_at: number;
 }
 
 function rowToSummary(row: SummaryRow): SessionSummary {
   return {
-    sessionId: row.session_id,
-    summary: row.summary,
-    promptCount: row.prompt_count,
-    version: row.version,
-    generatedAt: row.generated_at,
+    sessionId: row.session_id, summary: row.summary,
+    promptCount: row.prompt_count, version: row.version, generatedAt: row.generated_at,
   };
 }

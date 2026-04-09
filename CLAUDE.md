@@ -116,7 +116,6 @@ cd agent && npm run dev
 | 서비스 | 포트 | 바인딩 | 필수 환경변수 |
 |--------|------|--------|---------------|
 | Agent | 3098 | `HOST=0.0.0.0` | MacBook: `SOURCE=both` |
-| Python Summary | 3099 | 127.0.0.1 | `ANTHROPIC_API_KEY` (optional — 미기동 시 Haiku CLI fallback) |
 | Dashboard | 3097 | `HOST=0.0.0.0` | Docker로 실행 (192.168.0.2) |
 | oc-serve | 4096 | 127.0.0.1 | opencode 내장 (변경 불가) |
 

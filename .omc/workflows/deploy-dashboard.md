@@ -17,14 +17,13 @@
 - [ ] 로컬 변경사항이 테스트 통과
 - [ ] `git status` clean하거나 커밋 준비됨
 - [ ] SSH 접근 가능: `192.168.0.2`
-- [ ] MacBook local 포트 3098, 3099 사용 가능
+- [ ] MacBook local 포트 3098 사용 가능
 
 ## 표준 포트 & 설정
 
 | 컴포넌트 | 호스트 | 포트 | 실행 방식 | 필수 환경변수 |
 |---------|--------|------|----------|-------------|
 | MacBook Agent | 192.168.0.63 (로컬) | **3098** | `install/agent.sh --restart` | `.env`: `HOST=0.0.0.0 SOURCE=both PORT=3098` |
-| **Python Summary** | 192.168.0.63 (로컬) | **3099** | `uvicorn src.main:app --port 3099` | `ANTHROPIC_API_KEY` |
 | Workstation Agent | 192.168.0.2 (SSH) | **3098** | `install/agent.sh --restart` | `.env`: `HOST=0.0.0.0 PORT=3098` |
 | Dashboard Server | 192.168.0.2 (Docker) | **3097** | Docker Compose | `HOST=0.0.0.0` (docker-compose.yml) |
 | oc-serve | 각 머신 로컬 | **4096** | opencode 내장 (변경 불가) | — |
@@ -88,33 +87,6 @@ curl -s http://localhost:3098/health
 **예상 결과**: `{"status":"ok","claudeSourceConnected":true,...}`
 **실패시**: `install/agent.sh --logs` 또는 dev 모드 `npm run dev`로 확인
 
-### Step 2.5: Python Summary Service 재시작 (agent/python/ 변경 시만)
-
-```bash
-cd agent/python
-
-# venv 없으면 생성
-[ -d .venv ] || python3 -m venv .venv
-source .venv/bin/activate
-pip install -e . --quiet
-
-# 기존 프로세스 종료
-lsof -i :3099 -sTCP:LISTEN -t 2>/dev/null | xargs kill 2>/dev/null
-sleep 1
-
-# 재시작 (ANTHROPIC_API_KEY 필수)
-ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" nohup .venv/bin/uvicorn src.main:app --port 3099 --host 127.0.0.1 > /tmp/summary-service.log 2>&1 &
-
-# 검증
-sleep 2 && curl -s http://127.0.0.1:3099/health
-```
-
-> **주의**: Python 3.11+ 필요. `ANTHROPIC_API_KEY` 미설정 시 DSPy 호출 실패 → Node agent가 Haiku CLI로 fallback.
-> Python 서비스는 MacBook에서만 실행 (워크스테이션은 Haiku CLI fallback).
-
-**예상 결과**: `{"status":"ok","model":"anthropic/claude-haiku-4-5-20251001",...}`
-**실패시**: `/tmp/summary-service.log` 확인
-
 ### Step 3: Workstation Agent 재시작 (agent 변경 시만)
 
 ```bash
@@ -146,7 +118,6 @@ ssh 192.168.0.2 "bash -lc 'cd ~/project/session-dashboard && git pull && cd serv
 
 ```bash
 curl -s http://localhost:3098/health                                    # MacBook agent
-curl -s http://localhost:3099/health                                    # Python summary service
 ssh 192.168.0.2 "curl -s http://127.0.0.1:3098/health"                # Workstation agent
 ssh 192.168.0.2 "curl -s http://127.0.0.1:3097/health"                # Dashboard server
 curl -s http://192.168.0.2:3097/api/machines                           # 머신 연결 확인
@@ -160,7 +131,7 @@ curl -s http://192.168.0.2:3097/api/machines                           # 머신 
 ## Verification
 
 - [ ] MacBook agent `/health` 200 OK, `claudeSourceConnected: true`
-- [ ] Python summary service `:3099/health` 200 OK (optional — 다운 시 Haiku fallback)
+
 - [ ] Workstation agent `/health` 200 OK
 - [ ] Dashboard `/health` 200 OK
 - [ ] `/api/machines` — 2개 connected
@@ -177,7 +148,6 @@ curl -s http://192.168.0.2:3097/api/machines                           # 머신 
 - **Config**: `server/machines.yml` (git 미포함, 192.168.0.2 로컬)
 - **Claude Hook**: `~/.claude/settings.json` → `"url": "http://localhost:3098/hooks/event"`
 - **Agent .env**: `agent/.env` (git 미포함) — `PORT`, `HOST`, `SOURCE`, `API_KEY`
-- **Python venv**: `agent/python/.venv/` (git 미포함) — `pip install -e .` 로 설치
-- **Python log**: `/tmp/summary-service.log`
-- **ADR-008**: Python DSPy 사이드카 아키텍처 결정
+- **Python venv**: `agent/python/.venv/` (git 미포함) — `pip install -e .`로 설치. Node agent가 spawn으로 호출.
+- **ADR-008**: Python DSPy 요약 아키텍처 결정
 - **Skill**: `/deploy-dashboard` (동일 절차를 스킬로 호출 가능)
