@@ -419,7 +419,4 @@ main {
   100% { filter: brightness(1); transform: scale(1); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dot-loader span, .dot-loader-sm span { animation: none; opacity: 0.5; }
-  .status-flash { animation: none; }
-}
+/* prefers-reduced-motion 처리는 개별 컴포넌트에서 비-animation 속성만 */
