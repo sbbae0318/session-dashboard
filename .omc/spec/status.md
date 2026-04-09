@@ -42,7 +42,7 @@ _이번 세션/최근에 배운 것._
 - **정렬 우선순위 로직**: 시간 무관 상태 우선순위 항상 적용 (WAITING=0 > WORKING=1 > RENAME=2 > IDLE=3). 같은 우선순위 내에서만 `lastActivityTime` 순. 활성 세션이 항상 IDLE 위에 표시되도록 보장.
 - **Svelte 5 `document.addEventListener` vs `svelte:window`**: `document.addEventListener`로 등록한 핸들러에서 `$state`/`$derived` 변수 접근 시 reactive 업데이트가 동작하지 않을 수 있음. `svelte:window onkeydown`으로 전환하면 Svelte reactive context 내에서 실행되어 정상 동작. (`de44c26`에서 발견)
 - **프롬프트 스피너 busy 조건 불일치 (F-004)**: `getDisplayStatus`는 `currentTool` 존재만으로 Working 판정하지만, `getQueryResult`/`busySessions`/`isSessionBusy`는 `apiStatus==='busy'`만 체크했음. Hook이 `currentTool`을 먼저 세팅하는 타이밍에 스피너 미표시. 세 곳 모두 `(apiStatus∈{busy,retry} ∨ currentTool) ∧ ¬waitingForInput`으로 정렬하여 해결. **교훈: "is working?" 판정은 반드시 getDisplayStatus와 동일 조건 사용.**
-- **SummaryEngine progressive 패턴**: 프롬프트 5개 threshold 도달 시 기존 요약 + 새 활동을 Haiku에 additive 요약 위임. SQLite `session_summaries` 테이블 영구 저장 (버전 히스토리). 기존 in-memory `summaryCache` 제거. 출력 형식: 한줄 세션 설명 + 불렛 포인트(성공/실패/진행중). OC DB에서 tool names 추출하여 컨텍스트에 포함.
+- **SummaryEngine incremental 패턴**: configurable threshold(default 5) 도달 시 Python DSPy CLI spawn으로 요약 생성. InitialSummary(첫 요약) + IncrementalUpdate(delta만 처리, O(delta)) 2개 Signature 분리. 기존 bullets는 DB 누적, LLM에 재전송 안 함. Python 실패 시 Haiku CLI fallback. sidecar(port 3099) → spawn 방식으로 최종 단순화 (ADR-008 v2).
 - **Agent TTL ↔ Frontend 필터 정합 원칙**: Agent eviction/scan TTL은 프론트엔드 최대 필터 범위 이상이어야 함. `STALE_TTL_MS=4h`로 7d 필터 세션이 소실되는 regression 발생 (F-006). Agent `.env` PORT도 `machines.yml`과 반드시 동기화 — 불일치 시 production 서버에서 agent 연결 불가.
 - **Svelte 5 scoped @keyframes 실제 브라우저 미동작 (F-007)**: Svelte 5 `<style>` 내 `@keyframes`는 headless Chrome(Playwright)에서 `getComputedStyle` 정상이지만 실제 브라우저에서 시각적 렌더링 안 됨. 순수 HTML/CSS 진단 페이지(`test-animation.html`)로 격리 확인하여 Svelte 스코핑 원인 특정. **규칙: `@keyframes` + `animation` 관련 CSS는 반드시 `app.css` 글로벌로 정의. 컴포넌트 `<style>` 내 `@keyframes` 사용 금지.**
 
@@ -50,8 +50,8 @@ _이번 세션/최근에 배운 것._
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **Svelte scoped CSS 추가 audit** — 다른 `@keyframes`가 컴포넌트 `<style>`에 남아있는지 전수 점검, app.css로 이동.
-2. **test-animation.html 정리** — production에서 제거 또는 `/debug` 경로로 이동.
+1. **DSPy BootstrapFewShot 최적화** — labeled examples 10개 수집 + optimizer 실행 (Phase 3).
+2. **워크스테이션 Python venv 설치** — `agent/python/.venv` 생성, DSPy 요약 양쪽에서 동작 확인.
 3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
 
 ---
@@ -62,4 +62,4 @@ _다음 세션에 할 것 (최대 3개)._
 - Decisions: `spec/decisions/`
 - Known Failures: `knowledge/known-failures.md`
 - Workflows: `workflows/deploy-dashboard.md`, `workflows/auto-live-test.md`, `workflows/status-transition-regression.md`
-- Plans: `plans/hook-event-sse-push.md` (B' 설계 — 구현 완료)
+- Plans: `plans/hook-event-sse-push.md` (B' 설계 — 구현 완료), `plans/dspy-summary-sidecar.md` (DSPy 요약 — Phase 1+2 완료)

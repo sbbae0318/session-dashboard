@@ -1,6 +1,6 @@
-# ADR-008: Summary 기능을 Python DSPy 사이드카로 이관
+# ADR-008: Summary 기능을 Python DSPy로 이관
 
-**Status**: Proposed
+**Status**: Accepted (revised: sidecar → spawn)
 **Date**: 2026-04-09
 **Decision Maker**: sb
 
@@ -16,61 +16,54 @@
 
 ## Decision
 
-**Summary 생성을 Python DSPy 사이드카 서비스(port 3099)로 이관한다.**
+**Summary 생성을 Python DSPy CLI spawn 방식으로 이관한다.**
 
-- Node agent는 트리거/데이터 수집만 담당, 요약 생성은 Python 서비스에 위임.
-- DSPy Signature로 입출력을 선언적으로 정의, Optimizer로 프롬프트 자동 최적화.
-- LLM-as-judge metric으로 요약 품질을 정량 평가.
+- Node agent가 threshold 도달 시 `python -m src` spawn (stdin JSON → stdout JSON)
+- 별도 상시 프로세스 없음 — 필요할 때만 Python 호출
+- Python 실패 시 기존 Haiku CLI spawn으로 자동 fallback
 
-## Options Considered
+### 변경 이력
 
-### Option A: Python 사이드카 서비스 ✅ (선택)
-- FastAPI 서비스 (port 3099), Node agent가 HTTP로 호출
-- DSPy compiled model을 메모리에 로드, 장기 실행
-- 장점: DSPy optimizer/metric 완전 활용, 독립 배포, 모델 전환 용이
-- 단점: 서비스 하나 추가, 배포 복잡도 증가
-
-### Option B: Node에서 Python 스크립트 spawn
-- `spawn('python', ['summarize.py', ...])` 패턴
-- 장점: 기존 패턴 유사, 인프라 변경 최소
-- 단점: 프로세스 오버헤드, compiled model 매번 로드, optimizer 활용 제한
-
-### Option C: TypeScript에서 Anthropic SDK 직접 호출
-- CLI spawn 대신 `@anthropic-ai/sdk` 사용
-- 장점: 인프라 변경 없음
-- 단점: DSPy 사용 불가, 프롬프트 최적화/평가 체계 구축해야 함
+- v1 (초안): FastAPI 사이드카 서비스 (port 3099) — **기각**
+  - 이유: 프로세스 2개 운영 복잡도, 30초에 1번 호출에 상시 프로세스 과잉
+- v2 (현재): Node에서 Python CLI spawn — **채택**
+  - 단일 프로세스, 필요 시만 호출, 인프라 최소
 
 ## Architecture
 
 ```
-Node Agent (port 3098)                 Python Summary Service (port 3099)
-  ├─ doCollection() [30초마다]            ├─ POST /api/summarize
-  │   └─ HTTP POST → :3099/api/summarize  │   ├─ DSPy ChainOfThought(SummarizeSession)
-  ├─ GET /api/session-summaries           │   └─ SQLite session_summaries 저장
-  │   └─ SQLite에서 직접 조회              ├─ GET /api/summaries
-  └─ prompt_history (SQLite, read/write)  ├─ POST /api/optimize (수동 최적화 트리거)
-                                          └─ summarizer.json (compiled model)
+Node Agent (PID 1, port 3098) — 단일 프로세스
+  │
+  ├─ doCollection() [30초마다]
+  │   └─ 세션별 threshold 체크 (configurable, default 5)
+  │       └─ delta prompts >= threshold?
+  │           ├─ YES → spawn('python3', ['-m', 'src'])
+  │           │         cwd: agent/python/
+  │           │         stdin: JSON {session_id, new_prompts, total_prompt_count, tool_names}
+  │           │         stdout: JSON {summary, version, one_line, bullets, ...}
+  │           │         Python 실패 → Haiku CLI fallback
+  │           └─ NO → skip
+  │
+  └─ 별도 상시 프로세스 없음
 ```
 
-**DB 전략**: Python 서비스가 `session_summaries` 테이블 소유. Node agent는 읽기만.
-- `prompt_history`는 Node agent 소유 (기존 유지).
-- Python 서비스는 Node agent의 `/api/queries?sessionId=X` API로 프롬프트를 fetch.
+**Incremental 패턴**:
+- InitialSummary: 첫 요약 (프롬프트 전체 → one_line + bullets)
+- IncrementalUpdate: delta만 → new_bullets 추가 + one_line 마이너 갱신
+- 기존 bullets는 DB에 누적, LLM에 재전송하지 않음 (O(delta), not O(total))
 
 ## Consequences
 
 ### Positive
-- DSPy optimizer로 10개 예제만으로 프롬프트 자동 최적화 가능
-- Metric 기반 품질 측정 → 회귀 방지
-- `Signature` 변경만으로 출력 형식 조정 (코드 아닌 선언)
-- 모델 전환이 `dspy.LM(...)` 한 줄로 가능
+- DSPy Signature로 구조화 입출력 선언 (one_line, bullets)
+- Optimizer 적용 시 프롬프트 자동 최적화 가능 (Phase 3)
+- 단일 프로세스 — 운영/배포 복잡도 최소
+- Python 다운 시 Haiku fallback으로 무중단
 
 ### Negative
-- Python 런타임 + 의존성 관리 추가 (pyproject.toml, venv)
-- 서비스 간 통신 레이턴시 (~1ms, 무시 가능)
-- 배포 스크립트 복잡도 증가 (install/agent.sh 수정)
-- 워크스테이션에 Python 3.11+ 필요 (확인 필요)
+- Python venv 필요 (`agent/python/.venv/`)
+- spawn 오버헤드 (~1s venv 로드) — 30초 간격에서 무시 가능
+- compiled model 매 호출 로드 (향후 캐싱 고려)
 
 ### Risks
-- 워크스테이션 Python 버전 호환성 → 사전 확인
-- DSPy 라이브러리 안정성 → pip freeze로 버전 고정
-- SQLite 동시 접근 → WAL 모드 + 읽기/쓰기 분리로 안전
+- 워크스테이션에 Python venv 미설치 시 Haiku fallback만 동작 → 기능 저하 없음

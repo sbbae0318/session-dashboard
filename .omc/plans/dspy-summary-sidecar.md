@@ -1,19 +1,21 @@
-# Plan: DSPy Summary Sidecar Service
+# Plan: DSPy Summary Service
 
 **Date**: 2026-04-09
-**Branch**: feat/dspy-summary
-**ADR**: ADR-008
+**Branch**: main (feat/dspy-summary 머지 완료)
+**ADR**: ADR-008 (v2: spawn 방식)
 
 ## Goal
 
-SummaryEngine을 Python DSPy 사이드카 서비스로 이관.
+SummaryEngine을 Python DSPy CLI spawn 방식으로 이관.
 "오랜만에 돌아온 유저"가 세션 맥락을 10초 안에 파악할 수 있는 고품질 요약 제공.
 
 ## Success Criteria
 
-- [ ] Python 서비스(port 3099)가 POST /api/summarize로 요약 생성
-- [ ] 기존 프론트엔드 SummariesPage가 동일하게 동작
-- [ ] DSPy Signature로 structured output (one_line + bullets)
+- [x] Python CLI (`python -m src`)가 stdin/stdout JSON으로 요약 생성
+- [x] Node agent가 threshold 도달 시 async spawn
+- [x] DSPy Signature로 structured output (one_line + bullets)
+- [x] Incremental 패턴: delta만 처리 (O(delta))
+- [x] Python 실패 시 Haiku CLI fallback
 - [ ] 10개 labeled examples로 BootstrapFewShot 최적화 실행
 - [ ] LLM-as-judge metric으로 품질 >= 0.7 달성
 
