@@ -32,19 +32,15 @@ export class RecentPromptsModule implements BackendModule {
         const sessionId = request.query.sessionId || undefined;
 
         if (sessionId) {
-          // 세션별 조회: queryMap에 있으면 즉시 반환
-          const cached = this.queryMap.get(sessionId);
-          if (cached && cached.length > 0) {
-            // 세션 뷰는 시간순(ASC)으로 반환
-            return { queries: cached.slice(0, limit) };
-          }
-          // 캐시에 없으면 에이전트에서 직접 fetch 후 queryMap에 저장
+          // 항상 agent에서 fetch하여 캐시와 merge (전역 폴링은 세션당 최신 1개만 가져오므로)
+          const existing = this.queryMap.get(sessionId) ?? [];
           const raw = await this.machineManager.pollAllQueries(limit, sessionId);
-          const queries: QueryEntry[] = raw.map(r => normalizeRaw(r));
-          if (queries.length > 0) {
-            this.queryMap.set(sessionId, this.mergeQueries([], queries));
+          const fetched: QueryEntry[] = raw.map(r => normalizeRaw(r));
+          const merged = this.mergeQueries(existing, fetched);
+          if (merged.length > 0) {
+            this.queryMap.set(sessionId, merged);
           }
-          return { queries: queries.slice(0, limit) };
+          return { queries: merged.slice(0, limit) };
         }
 
         return { queries: this.getAllQueries().slice(0, limit) };
