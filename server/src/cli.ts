@@ -11,6 +11,7 @@ import { EnrichmentModule } from './modules/enrichment/index.js';
 import { MemoModule } from './modules/memos/index.js';
 import { SearchModule } from './modules/search/index.js';
 import type { BackendModule } from './modules/types.js';
+import type { DashboardSession } from './shared/api-contract.js';
 import { SSEManager } from './sse/event-stream.js';
 import { createServer, startServer, stopServer } from './server.js';
 import { acquireLock, setupCleanupHandlers } from './singleton.js';
@@ -60,6 +61,10 @@ async function main(): Promise<void> {
 
       // Wire module events → SSE broadcasts
       const SSE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d
+      // delta 감지용 이전 상태 추적
+      const prevSessionHashes = new Map<string, string>();
+      const prevSessionIds = new Set<string>();
+
       activeSessions.setUpdateCallback((sessions) => {
         // SSE는 7일 내 + active 세션만 전송 (bandwidth 절감)
         // REST /api/sessions는 전체 반환 유지
@@ -69,7 +74,38 @@ async function main(): Promise<void> {
           || s.apiStatus === 'busy' || s.apiStatus === 'retry'
           || s.waitingForInput
         );
-        sseManager.broadcast("session.update", sseSessions);
+
+        const currentIds = new Set<string>();
+        const updated: DashboardSession[] = [];
+
+        for (const s of sseSessions) {
+          currentIds.add(s.sessionId);
+          // processMetrics 제외 — CPU/RSS가 매초 변하므로 실제 상태 변경만 감지
+          const hash = `${s.lastActivityTime}|${s.apiStatus}|${s.currentTool}|${s.waitingForInput}|${s.status}|${s.title}|${s.lastPrompt}|${s.machineConnected}|${s.recentlyRenamed}`;
+          const prev = prevSessionHashes.get(s.sessionId);
+          if (prev !== hash) {
+            updated.push(s);
+            prevSessionHashes.set(s.sessionId, hash);
+          }
+        }
+
+        // 제거된 세션 감지
+        const removed: string[] = [];
+        for (const id of prevSessionIds) {
+          if (!currentIds.has(id)) {
+            removed.push(id);
+            prevSessionHashes.delete(id);
+          }
+        }
+
+        // prevSessionIds 갱신
+        prevSessionIds.clear();
+        for (const id of currentIds) prevSessionIds.add(id);
+
+        // delta가 있을 때만 전송
+        if (updated.length > 0 || removed.length > 0) {
+          sseManager.broadcast("session.delta", { updated, removed });
+        }
       });
       recentPrompts.setNewQueryCallback((query) => {
         sseManager.broadcast("query.new", query);

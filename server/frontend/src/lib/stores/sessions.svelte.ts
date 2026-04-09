@@ -15,6 +15,20 @@ export function setSessions(value: DashboardSession[]): void {
   sessions = value;
 }
 
+export function mergeSessions(updated: DashboardSession[], removed: string[]): void {
+  const map = new Map(sessions.map(s => [s.sessionId, s]));
+
+  for (const s of updated) {
+    map.set(s.sessionId, s);
+  }
+
+  for (const id of removed) {
+    map.delete(id);
+  }
+
+  sessions = [...map.values()];
+}
+
 export async function fetchSessions(): Promise<void> {
   try {
     const data = await fetchJSON<SessionsResponse>("/api/sessions");

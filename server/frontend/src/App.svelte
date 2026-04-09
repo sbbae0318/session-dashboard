@@ -3,7 +3,7 @@
   import ActiveSessions from "./components/ActiveSessions.svelte";
   import RecentPrompts from "./components/RecentPrompts.svelte";
   import type { QueryEntry, DashboardSession, MachineInfo } from "./types";
-  import { fetchSessions, getSessions, setSessions } from "./lib/stores/sessions.svelte";
+  import { fetchSessions, getSessions, setSessions, mergeSessions } from "./lib/stores/sessions.svelte";
   import { fetchQueries, addQuery, fetchSessionQueries } from "./lib/stores/queries.svelte";
   import { getSelectedSessionId, clearFilter, getSourceFilter, setSourceFilter, getTimeRange, setTimeRange, type TimeRange } from "./lib/stores/filter.svelte";
   import MachineSelector from './components/MachineSelector.svelte';
@@ -81,6 +81,11 @@
       .onConnectionChange((c) => { connected = c; })
       .on("query.new", (data) => { addQuery(data as QueryEntry); })
       .on("session.update", (data) => { const s = data as DashboardSession[]; setSessions(s); reviveSessions(s); })
+      .on("session.delta", (data) => {
+        const d = data as { updated: DashboardSession[]; removed: string[] };
+        mergeSessions(d.updated, d.removed);
+        if (d.updated.length > 0) reviveSessions(d.updated);
+      })
       .on("machine.status", (data) => { setMachines(data as MachineInfo[]); })
       .on("enrichment.updated", (data) => {
         const d = data as { machineId: string; feature: string; cachedAt: number };

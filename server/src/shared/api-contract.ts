@@ -137,6 +137,8 @@ export interface SearchResponse {
 
 export interface SSEEventMap {
   'session.update': DashboardSession[];
+  /** delta 방식 세션 업데이트 — 변경된 세션만 포함, removed는 제거된 sessionId 목록 */
+  'session.delta': { updated: DashboardSession[]; removed: string[] };
   'query.new': QueryEntry;
   'machine.status': MachineInfo[];
   'enrichment.updated': {
