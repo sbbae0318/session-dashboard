@@ -454,9 +454,9 @@ describe('ClaudeHeartbeat — project scanning', () => {
     const filePath = join(projectDir, `${sessionId}.jsonl`);
     writeFileSync(filePath, JSON.stringify({ type: 'assistant', message: { content: [] } }) + '\n', 'utf-8');
 
-    // Manually set mtime to 5 hours ago (older than STALE_TTL_MS = 4 hours)
+    // Manually set mtime to 8 days ago (older than STALE_TTL_MS = 7 days)
     const { utimesSync } = await import('node:fs');
-    const oldTime = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    const oldTime = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     utimesSync(filePath, oldTime, oldTime);
 
     const hb = new ClaudeHeartbeat(join(tmpDir, 'empty-heartbeats'), projectsDir);

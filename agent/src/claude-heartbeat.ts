@@ -45,7 +45,7 @@ interface ConversationData {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STALE_TTL_MS = 4 * 60 * 60 * 1000;
+const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d — 프론트엔드 기본 필터와 일치
 const EVICTION_INTERVAL_MS = 30_000;
 const MAX_TITLE_LENGTH = 100;
 const MAX_PROMPT_LENGTH = 200;
