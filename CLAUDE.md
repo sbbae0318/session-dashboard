@@ -34,6 +34,9 @@ session-dashboard/
 | `/api/machines` | GET | `MachinesResponse` | 머신 연결 상태 |
 | `/api/search` | POST | `SearchResponse` | 프롬프트 검색 |
 | `/api/enrichment` | GET | (enrichment 전용) | enrichment 캐시 |
+| `/api/session-summaries` | GET | `{ summaries }` | 모든 세션 progressive 요약 |
+| `/api/session-summaries/:id` | GET | `{ latest, history }` | 특정 세션 요약 + 히스토리 |
+| `/api/session-summaries/:id` | POST | `SessionSummary` | 수동 요약 강제 생성 |
 | `/api/memos` | GET | (memo 전용) | 메모 목록 |
 | `/api/events` | GET | SSE stream | 실시간 이벤트 |
 
@@ -113,6 +116,7 @@ cd agent && npm run dev
 | 서비스 | 포트 | 바인딩 | 필수 환경변수 |
 |--------|------|--------|---------------|
 | Agent | 3098 | `HOST=0.0.0.0` | MacBook: `SOURCE=both` |
+| Python Summary | 3099 | 127.0.0.1 | `ANTHROPIC_API_KEY` (optional — 미기동 시 Haiku CLI fallback) |
 | Dashboard | 3097 | `HOST=0.0.0.0` | Docker로 실행 (192.168.0.2) |
 | oc-serve | 4096 | 127.0.0.1 | opencode 내장 (변경 불가) |
 
