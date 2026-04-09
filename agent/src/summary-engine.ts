@@ -173,12 +173,19 @@ export class SummaryEngine {
   ): Promise<SessionSummary | null> {
     try {
       const latest = this.getLatest(sessionId);
+      // Delta만 전송: 마지막 요약 이후 프롬프트만
+      const newPrompts = latest
+        ? allPrompts.slice(latest.promptCount)
+        : allPrompts;
+
+      if (newPrompts.length === 0 && latest) return latest;
+
       const body = JSON.stringify({
         session_id: sessionId,
         session_title: opts?.sessionTitle ?? null,
-        prompts: allPrompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+        new_prompts: newPrompts.map(p => ({ timestamp: p.timestamp, query: p.query })),
+        total_prompt_count: allPrompts.length,
         tool_names: opts?.toolNames ?? [],
-        previous_summary: latest?.summary ?? '',
         force: true,
       });
 
