@@ -65,6 +65,10 @@ async function main(): Promise<void> {
       recentPrompts.setNewQueryCallback((query) => {
         sseManager.broadcast("query.new", query);
       });
+      recentPrompts.setActiveSessionIdsCallback(() => {
+        const sessions = activeSessions.getCachedSessions();
+        return new Set(sessions.map(s => s.sessionId));
+      });
       // NOTE: removed duplicate query.new broadcast — RecentPromptsModule handles this
       machineManager.setStatusChangeCallback((statuses) => {
         sseManager.broadcast('machine.status', statuses.map(s => ({

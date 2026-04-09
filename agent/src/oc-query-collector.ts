@@ -55,7 +55,7 @@ const QUERY_MAX_LENGTH = 2000;
 
 // output limit과 분리된 내부 세션 fetch 한도
 // oc-serve에 200+ 세션이 있을 때 활성 세션이 누락되지 않도록 충분히 크게
-const INTERNAL_SESSION_FETCH_LIMIT = 100;
+const INTERNAL_SESSION_FETCH_LIMIT = 200;
 
 // oc-serve가 부하 상태일 때 충분히 기다리기 위한 타임아웃
 // /session?limit=500 실측: ~5초, /session/{id}/message 실측: ~8초
@@ -175,13 +175,13 @@ export class OcQueryCollector {
     const byUpdatedDesc = (a: OcServeSession, b: OcServeSession) =>
       getUpdatedTime(b) - getUpdatedTime(a);
 
-    const UNCACHED_FETCH_LIMIT = 20;
+    const UNCACHED_FETCH_LIMIT = 50;
     const mainUncached = uncachedSessions
       .filter((s) => !s.parentID)
       .sort(byUpdatedDesc)
       .slice(0, UNCACHED_FETCH_LIMIT);
 
-    const BG_SESSION_LIMIT = 10;
+    const BG_SESSION_LIMIT = 20;
     const bgUncached = uncachedSessions
       .filter((s) => !!s.parentID)
       .sort(byUpdatedDesc)
@@ -227,9 +227,13 @@ export class OcQueryCollector {
     const newMessages = messages;
 
 
-    let lastEntry: QueryEntry | null = null;
+    const entries: QueryEntry[] = [];
     const background = isBackgroundSession(session.title);
-    let lastUserMsgIndex = -1;
+
+    const rawTime = session.time;
+    const sessionTs = typeof rawTime === 'object' && rawTime !== null
+      ? rawTime.created
+      : (rawTime || Date.now());
 
     for (let i = 0; i < newMessages.length; i++) {
       const msg = newMessages[i];
@@ -248,14 +252,9 @@ export class OcQueryCollector {
 
       // per-message 타임스탬프 사용 (info.time.created), 없으면 session 타임스탬프 폴백
       const msgTime = msg.info?.time?.created;
-      const rawTime = session.time;
-      const sessionTs = typeof rawTime === 'object' && rawTime !== null
-        ? rawTime.created
-        : (rawTime || Date.now());
       const timestamp = msgTime ?? sessionTs;
 
-      lastUserMsgIndex = i;
-      lastEntry = {
+      const entry: QueryEntry = {
         sessionId: session.id,
         sessionTitle: session.title,
         timestamp,
@@ -264,20 +263,20 @@ export class OcQueryCollector {
         source: 'opencode',
         completedAt: null,
       };
-      // break 제거 — 계속 순회하여 마지막 유효 메시지를 찾음
-    }
 
-    // 마지막 user 메시지 이후의 assistant 메시지에서 completedAt 추출
-    if (lastEntry && lastUserMsgIndex >= 0) {
-      for (let i = newMessages.length - 1; i > lastUserMsgIndex; i--) {
-        const msg = newMessages[i];
-        if (msg.info?.role === 'assistant' && msg.info?.time?.completed) {
-          lastEntry.completedAt = msg.info.time.completed;
+      // 이 user 메시지 이후 첫 번째 assistant 메시지에서 completedAt 추출
+      for (let j = i + 1; j < newMessages.length; j++) {
+        const next = newMessages[j];
+        if (next.info?.role === 'user') break; // 다음 user 메시지 전까지만
+        if (next.info?.role === 'assistant' && next.info?.time?.completed) {
+          entry.completedAt = next.info.time.completed;
           break;
         }
       }
+
+      entries.push(entry);
     }
 
-    return lastEntry ? [lastEntry] : [];
+    return entries;
   }
 }

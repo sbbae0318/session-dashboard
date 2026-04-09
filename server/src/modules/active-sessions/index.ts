@@ -30,6 +30,11 @@ export class ActiveSessionsModule implements BackendModule {
     });
   }
 
+  /** 현재 캐시된 세션 목록 반환 (7d 필터 포함, RecentPromptsModule 연동용) */
+  getCachedSessions(): DashboardSession[] {
+    return this.cachedSessions;
+  }
+
   setUpdateCallback(cb: (sessions: DashboardSession[]) => void): void {
     this.onUpdate = cb;
   }

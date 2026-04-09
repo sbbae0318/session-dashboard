@@ -18,7 +18,7 @@ import type { QueryEntry } from './oc-query-collector.js';
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const DEFAULT_MAX_ENTRIES = 5000;
+const DEFAULT_MAX_ENTRIES = 20000;
 
 // ---------------------------------------------------------------------------
 // PromptStore

@@ -16,11 +16,11 @@ export function addQuery(query: QueryEntry): void {
   const key = `${query.sessionId}-${query.timestamp}`;
   const exists = queries.some(q => `${q.sessionId}-${q.timestamp}` === key);
   if (!exists) {
-    queries = [query, ...queries].slice(0, 200);
+    queries = [query, ...queries].slice(0, 5000);
   }
 }
 
-export async function fetchQueries(limit: number = 200): Promise<void> {
+export async function fetchQueries(limit: number = 500): Promise<void> {
   try {
     const data = await fetchJSON<QueriesResponse>(`/api/queries?limit=${limit}`);
     queries = data.queries ?? [];
@@ -30,7 +30,7 @@ export async function fetchQueries(limit: number = 200): Promise<void> {
 }
 
 /** 특정 세션의 쿼리를 fetch하여 기존 store에 병합 (dedup) */
-export async function fetchSessionQueries(sessionId: string, limit: number = 50): Promise<void> {
+export async function fetchSessionQueries(sessionId: string, limit: number = 500): Promise<void> {
   try {
     const data = await fetchJSON<QueriesResponse>(`/api/queries?sessionId=${encodeURIComponent(sessionId)}&limit=${limit}`);
     const newQueries = data.queries ?? [];
