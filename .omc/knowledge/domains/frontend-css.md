@@ -66,12 +66,18 @@
 
 ## prefers-reduced-motion
 
-`app.css`에서 글로벌 처리:
-```css
-@media (prefers-reduced-motion: reduce) {
-  .dot-loader span, .dot-loader-sm span { animation: none; opacity: 0.5; }
-  .status-flash { animation: none; }
-}
+**`prefers-reduced-motion` 규칙 제거됨 (480bf80)** — 실제 브라우저에서 이 미디어 쿼리가 예상치 않게 매칭되어 `animation:none` 적용되는 문제 발생. headless Chrome은 기본 `no-preference`라 진단 불일치. 스피너/flash는 핵심 상태 표시이므로 항상 애니메이션 유지.
+
+## Docker 배포 주의사항
+
+프론트엔드 CSS 변경 후 Docker 배포 시:
+```bash
+# ❌ 불충분 — 캐시된 이미지 서빙될 수 있음
+docker compose up -d --build
+docker compose build --no-cache && docker compose up -d
+
+# ✅ 확실한 방법
+docker compose down && docker compose up -d --build --force-recreate
 ```
 
-컴포넌트별 `prefers-reduced-motion` 규칙은 비-애니메이션 속성만 (예: `border-left-color` 전환 비활성화).
+배포 후 확인: `curl -s http://host:3097/ | grep 'assets/index-'` — CSS 해시가 변경되었는지 검증.
