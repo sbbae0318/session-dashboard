@@ -59,8 +59,17 @@ async function main(): Promise<void> {
       const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos, search];
 
       // Wire module events → SSE broadcasts
+      const SSE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d
       activeSessions.setUpdateCallback((sessions) => {
-        sseManager.broadcast("session.update", sessions);
+        // SSE는 7일 내 + active 세션만 전송 (bandwidth 절감)
+        // REST /api/sessions는 전체 반환 유지
+        const cutoff = Date.now() - SSE_SESSION_TTL_MS;
+        const sseSessions = sessions.filter(s =>
+          s.lastActivityTime >= cutoff
+          || s.apiStatus === 'busy' || s.apiStatus === 'retry'
+          || s.waitingForInput
+        );
+        sseManager.broadcast("session.update", sseSessions);
       });
       recentPrompts.setNewQueryCallback((query) => {
         sseManager.broadcast("query.new", query);
