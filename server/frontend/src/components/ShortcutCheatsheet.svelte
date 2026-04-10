@@ -21,6 +21,7 @@
         { key: "j / ↓", desc: "다음 세션" },
         { key: "k / ↑", desc: "이전 세션" },
         { key: "e / Enter", desc: "세션 필터 토글" },
+        { key: "p", desc: "세션 pin / unpin" },
       ],
     },
     {
