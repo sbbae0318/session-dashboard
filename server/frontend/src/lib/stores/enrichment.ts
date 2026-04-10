@@ -259,8 +259,28 @@ export async function fetchRecoveryData(): Promise<void> {
   }
 }
 
+/**
+ * 현재 뷰에 필요한 enrichment feature인지 판별.
+ * 사용자가 보지 않는 페이지의 enrichment를 fetch하지 않도록 guard.
+ */
+function isFeatureActiveForView(feature: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  const featureViewMap: Record<string, string> = {
+    timeline: 'timeline',
+    tokens: 'token-cost',
+    impact: 'code-impact',
+    projects: 'projects',
+    recovery: 'context-recovery',
+  };
+  return featureViewMap[feature] === view;
+}
+
 // SSE 이벤트: enrichment.updated → { machineId, feature, cachedAt }
 export function handleEnrichmentSSEUpdate(feature: string): void {
+  // 현재 뷰에 해당하는 feature가 아니면 skip (over-fetch 방지)
+  if (!isFeatureActiveForView(feature)) return;
   switch (feature) {
     case 'timeline': {
       const range = get(timelineTimeRange);
