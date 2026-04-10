@@ -27,6 +27,21 @@
     })
   );
 
+  // 전체 세션을 reactive하게 캐싱
+  let sessions = $derived(getSessions());
+
+  // cwd → 세션 배열 Map (사전 인덱싱) — O(M) 1회 빌드
+  let sessionsByProject = $derived.by(() => {
+    const map = new Map<string, DashboardSession[]>();
+    for (const s of sessions) {
+      if (!s.projectCwd) continue;
+      const cwd = s.projectCwd.replace(/\\/g, '/');
+      if (!map.has(cwd)) map.set(cwd, []);
+      map.get(cwd)!.push(s);
+    }
+    return map;
+  });
+
   onMount(() => {
     fetchProjectsData();
     return onMachineChange(() => fetchProjectsData());
@@ -43,14 +58,16 @@
     pushSessionDetail(sessionId);
   }
 
+  // Map 조회로 교체 — 일반 케이스 O(1), prefix 포함 시 O(keys)
   function getProjectSessions(project: ProjectSummary): DashboardSession[] {
-    const sessions = getSessions();
-    return sessions.filter((s) => {
-      if (!s.projectCwd) return false;
-      const cwd = s.projectCwd.replace(/\\/g, '/');
-      const worktree = project.worktree.replace(/\\/g, '/');
-      return cwd === worktree || cwd.startsWith(worktree + '/');
-    });
+    const worktree = project.worktree.replace(/\\/g, '/');
+    const result: DashboardSession[] = [];
+    for (const [cwd, list] of sessionsByProject) {
+      if (cwd === worktree || cwd.startsWith(worktree + '/')) {
+        result.push(...list);
+      }
+    }
+    return result;
   }
 
   function shortPath(dir: string): string {
