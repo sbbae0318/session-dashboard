@@ -25,9 +25,24 @@ export class ActiveSessionsModule implements BackendModule {
   }
 
   registerRoutes(app: FastifyInstance): void {
-    app.get("/api/sessions", async (): Promise<SessionsResponse> => {
-      return { sessions: this.cachedSessions };
-    });
+    app.get<{ Querystring: { all?: string } }>(
+      "/api/sessions",
+      async (request): Promise<SessionsResponse> => {
+        // 기본: 7일 내 + active 세션만 반환 (bandwidth 절감)
+        // ?all=true: 전체 세션 반환 (프론트엔드 "all" 필터용)
+        const returnAll = request.query.all === 'true';
+        if (returnAll) {
+          return { sessions: this.cachedSessions };
+        }
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const filtered = this.cachedSessions.filter(s =>
+          s.lastActivityTime >= cutoff
+          || s.apiStatus === 'busy' || s.apiStatus === 'retry'
+          || s.waitingForInput
+        );
+        return { sessions: filtered };
+      },
+    );
   }
 
   /** 현재 캐시된 세션 목록 반환 (7d 필터 포함, RecentPromptsModule 연동용) */
