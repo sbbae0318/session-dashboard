@@ -57,7 +57,10 @@
       .toSorted((a, b) => b.timestamp - a.timestamp)
   );
 
-  // in-progress (busy 세션의 최신 프롬프트)를 목록 맨 위로
+  // in-progress (busy 세션의 최신 프롬프트)를 목록 맨 위로.
+  // 또한 (sessionId, timestamp) 중복 제거: 서버 queryMap이 간헐적으로 중복 반환하는데,
+  // {#each ... (key)} 키가 충돌하면 Svelte 5가 each_key_duplicate를 throw해 렌더가 halt된다.
+  // 첫 occurrence 유지 — 동일 키는 동일 프롬프트를 가리키므로 어느 쪽을 남겨도 무방.
   let sortedQueries = $derived.by(() => {
     const busySessions = new Set(
       sessions
@@ -74,7 +77,17 @@
     const isInProgress = (q: typeof filteredQueries[number]) =>
       busySessions.has(q.sessionId) && q.timestamp === latestTs[q.sessionId];
 
-    return filteredQueries.toSorted((a, b) => {
+    // dedup by (sessionId, timestamp) — 첫 occurrence 유지
+    const seen = new Set<string>();
+    const unique: typeof filteredQueries = [];
+    for (const q of filteredQueries) {
+      const k = `${q.sessionId}-${q.timestamp}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      unique.push(q);
+    }
+
+    return unique.toSorted((a, b) => {
       const aP = isInProgress(a) ? 1 : 0;
       const bP = isInProgress(b) ? 1 : 0;
       if (aP !== bP) return bP - aP;
