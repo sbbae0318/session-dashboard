@@ -5,7 +5,8 @@
   import { getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionPrompts } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../lib/utils";
+  import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, sortSessionsByStatusAndPin } from "../lib/utils";
+  import { isPinned, togglePin, getPinnedIds } from "../lib/stores/pinned.svelte";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -47,8 +48,10 @@
 
   // 정렬: Waiting > Working > Rename > Idle > Disconnected, 동률은 최근 활동 순.
   // ActiveSessions와 동일하게 SSE delta 드리프트를 방어한다.
-  let filteredSessions = $derived(
-    sessions
+  // 정렬: Status(Waiting>Working>Rename>Idle>Disconnected) → Pin 우선 → lastActivityTime desc.
+  // ActiveSessions와 동일: SSE delta 드리프트 방어 + pin-aware.
+  let filteredSessions = $derived.by(() => {
+    const filtered = sessions
       .filter(s => !machineFilter || s.machineId === machineFilter)
       .filter(s => {
         if (sourceFilter === "all") return true;
@@ -61,14 +64,9 @@
         return cutoff === 0 || s.lastActivityTime >= cutoff;
       })
       .filter(s => !s.parentSessionId)
-      .filter(s => !projectFilter || s.projectCwd === projectFilter)
-      .slice()
-      .sort((a, b) => {
-        const sp = statusSortPriority(a) - statusSortPriority(b);
-        if (sp !== 0) return sp;
-        return b.lastActivityTime - a.lastActivityTime;
-      })
-  );
+      .filter(s => !projectFilter || s.projectCwd === projectFilter);
+    return sortSessionsByStatusAndPin(filtered, getPinnedIds());
+  });
 
   $effect(() => {
     const changed = detectStatusChanges(prevStatusMap, filteredSessions);
@@ -170,6 +168,12 @@
           copyToClipboard(cmd).then(ok => showToast(ok ? 'Copied!' : 'Copy failed'));
         }
         break;
+      case 'p':
+        if (focusedIndex >= 0 && focusedIndex < len) {
+          e.preventDefault();
+          togglePin(filteredSessions[focusedIndex].sessionId);
+        }
+        break;
     }
   }
 
@@ -199,15 +203,26 @@
     <div class="cards-grid">
       {#each filteredSessions as session, si (session.sessionId)}
         {@const ds = getDisplayStatus(session)}
-        <button
+        <div
           class="card"
           class:card-working={ds.cssClass === 'status-working'}
           class:focused={focusedIndex === si}
+          class:pinned={isPinned(session.sessionId)}
           onclick={() => handleCardClick(session)}
+          onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(session); }}
+          role="button"
+          tabindex="-1"
           data-card-index={si}
           data-testid="session-card"
-          tabindex="-1"
         >
+          <button
+            type="button"
+            class="pin-btn corner"
+            class:pinned={isPinned(session.sessionId)}
+            aria-label={isPinned(session.sessionId) ? 'Unpin session' : 'Pin session'}
+            title={isPinned(session.sessionId) ? 'Unpin' : 'Pin'}
+            onclick={(e) => { e.stopPropagation(); togglePin(session.sessionId); }}
+          >📌</button>
           <div class="card-top">
             <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>
               {ds.label}
@@ -254,7 +269,7 @@
           {#if session.lastPrompt}
             <div class="card-prompt">{session.lastPrompt.length > 120 ? session.lastPrompt.slice(0, 120) + '…' : session.lastPrompt}</div>
           {/if}
-        </button>
+        </div>
       {/each}
     </div>
 
@@ -320,6 +335,38 @@
     transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
     box-sizing: border-box;
     min-width: 0;
+    position: relative;
+  }
+
+  .card.pinned {
+    box-shadow: inset 2px 0 0 var(--warning);
+  }
+
+  .pin-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    font-size: 0.85rem;
+    line-height: 1;
+    opacity: 0.25;
+    transition: opacity 150ms ease;
+    color: inherit;
+  }
+  .card:hover .pin-btn,
+  .pin-btn.pinned {
+    opacity: 1;
+  }
+  .pin-btn.corner {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    z-index: 1;
+  }
+  .pin-btn:focus-visible {
+    outline: 1px solid var(--warning);
+    outline-offset: 1px;
+    opacity: 1;
   }
 
   .card:hover {
