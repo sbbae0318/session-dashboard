@@ -5,7 +5,7 @@
   import { getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionPrompts } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges } from "../lib/utils";
+  import { relativeTime, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../lib/utils";
   import { onMount } from "svelte";
 
   let tick = $state(0);
@@ -45,6 +45,8 @@
     })
   );
 
+  // 정렬: Waiting > Working > Rename > Idle > Disconnected, 동률은 최근 활동 순.
+  // ActiveSessions와 동일하게 SSE delta 드리프트를 방어한다.
   let filteredSessions = $derived(
     sessions
       .filter(s => !machineFilter || s.machineId === machineFilter)
@@ -60,6 +62,12 @@
       })
       .filter(s => !s.parentSessionId)
       .filter(s => !projectFilter || s.projectCwd === projectFilter)
+      .slice()
+      .sort((a, b) => {
+        const sp = statusSortPriority(a) - statusSortPriority(b);
+        if (sp !== 0) return sp;
+        return b.lastActivityTime - a.lastActivityTime;
+      })
   );
 
   $effect(() => {

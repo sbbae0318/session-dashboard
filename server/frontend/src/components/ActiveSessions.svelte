@@ -5,7 +5,7 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail, popToOverview } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatDuration, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges } from "../lib/utils";
+  import { relativeTime, formatDuration, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../lib/utils";
   import { onMount } from "svelte";
 
   let { paneActive = false }: { paneActive?: boolean } = $props();
@@ -151,6 +151,8 @@
   }
 
   // Top-level sessions: no parent, or parent not in active set
+  // 정렬: 상태 우선순위 (Waiting > Working > Rename > Idle > Disconnected), 동률은 최근 활동 순.
+  // SSE delta merge가 Map 삽입 순서를 유지해 백엔드 sort가 드리프트하므로 프론트에서 재정렬한다.
   let topLevelSessions = $derived(
     sessions
       .filter(s => !machineFilter || s.machineId === machineFilter)
@@ -167,6 +169,12 @@
       })
       .filter(s => !s.parentSessionId)
       .filter(s => !projectFilter || s.projectCwd === projectFilter)
+      .slice()
+      .sort((a, b) => {
+        const sp = statusSortPriority(a) - statusSortPriority(b);
+        if (sp !== 0) return sp;
+        return b.lastActivityTime - a.lastActivityTime;
+      })
   );
 
 

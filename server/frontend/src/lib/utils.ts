@@ -138,6 +138,29 @@ export function getDisplayStatus(session: {
   return { label: 'Idle', cssClass: 'status-idle' };
 }
 
+/**
+ * 표시 상태 기준 정렬 우선순위: Waiting > Working > Rename > Idle > Disconnected.
+ * getDisplayStatus와 동일한 분기를 사용해 UI 뱃지와 순서가 항상 일치하도록 보장한다.
+ * SSE delta merge 이후에도 드리프트 없이 재정렬할 수 있도록 derived에서 매 렌더마다 호출한다.
+ */
+export function statusSortPriority(session: {
+  apiStatus: string | null;
+  currentTool: string | null;
+  waitingForInput: boolean;
+  recentlyRenamed?: boolean;
+  machineConnected?: boolean;
+}): number {
+  const cls = getDisplayStatus(session).cssClass;
+  switch (cls) {
+    case 'status-waiting': return 0;
+    case 'status-working': return 1;
+    case 'status-rename': return 2;
+    case 'status-idle': return 3;
+    case 'status-disconnected': return 4;
+    default: return 5;
+  }
+}
+
 /** 이전 상태와 현재 상태를 비교하여 변경된 세션 ID를 반환 */
 export function detectStatusChanges(
   prevMap: Map<string, string>,

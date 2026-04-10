@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getQueryResult, getCompletionTime, getDisplayStatus, detectStatusChanges } from "../utils.js";
+import { getQueryResult, getCompletionTime, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../utils.js";
 
 describe("getQueryResult", () => {
   const sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }> = [];
@@ -195,5 +195,44 @@ describe("detectStatusChanges", () => {
       mkSession("s3", null, null, false),      // idle → idle (no change)
     ];
     expect(detectStatusChanges(prev, sessions)).toEqual(new Set(["s1", "s2"]));
+  });
+});
+
+describe("statusSortPriority", () => {
+  const base = { recentlyRenamed: false, machineConnected: true };
+
+  it("orders Waiting < Working < Rename < Idle < Disconnected", () => {
+    const waiting = { ...base, apiStatus: null, currentTool: null, waitingForInput: true };
+    const working = { ...base, apiStatus: "busy", currentTool: null, waitingForInput: false };
+    const rename = { ...base, apiStatus: null, currentTool: null, waitingForInput: false, recentlyRenamed: true };
+    const idle = { ...base, apiStatus: null, currentTool: null, waitingForInput: false };
+    const disconnected = { ...base, apiStatus: "busy", currentTool: null, waitingForInput: false, machineConnected: false };
+
+    expect(statusSortPriority(waiting)).toBe(0);
+    expect(statusSortPriority(working)).toBe(1);
+    expect(statusSortPriority(rename)).toBe(2);
+    expect(statusSortPriority(idle)).toBe(3);
+    // disconnected는 getDisplayStatus에서 rename 이후 분기, rename=false라 disconnected로 빠짐
+    expect(statusSortPriority({ ...disconnected, recentlyRenamed: false })).toBe(4);
+  });
+
+  it("treats currentTool as working", () => {
+    const s = { ...base, apiStatus: null, currentTool: "bash", waitingForInput: false };
+    expect(statusSortPriority(s)).toBe(1);
+  });
+
+  it("sort produces Waiting → Working → Idle order regardless of input order", () => {
+    const sessions = [
+      { id: "idle1", ...base, apiStatus: null, currentTool: null, waitingForInput: false, lastActivityTime: 30 },
+      { id: "work1", ...base, apiStatus: "busy", currentTool: null, waitingForInput: false, lastActivityTime: 10 },
+      { id: "wait1", ...base, apiStatus: null, currentTool: null, waitingForInput: true, lastActivityTime: 20 },
+      { id: "work2", ...base, apiStatus: "retry", currentTool: null, waitingForInput: false, lastActivityTime: 50 },
+    ];
+    const sorted = sessions.slice().sort((a, b) => {
+      const sp = statusSortPriority(a) - statusSortPriority(b);
+      if (sp !== 0) return sp;
+      return b.lastActivityTime - a.lastActivityTime;
+    });
+    expect(sorted.map(s => s.id)).toEqual(["wait1", "work2", "work1", "idle1"]);
   });
 });
