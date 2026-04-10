@@ -15,8 +15,22 @@
   } = $props();
 
   let query = $state("");
+  let debouncedQuery = $state("");
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let selectedIndex = $state(0);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
+
+  $effect(() => {
+    // query 변경 시 100ms debounce 후 debouncedQuery 반영
+    const current = query;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debouncedQuery = current;
+    }, 100);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
+  });
 
   // ── Background session detection ──────────────────────────────────────
   function isBackgroundSession(s: DashboardSession): boolean {
@@ -70,28 +84,28 @@
   let sessionMap = $derived(new Map(allSessions.map(s => [s.sessionId, s])));
 
   let filteredSessions: DashboardSession[] = $derived(
-    query.trim() === ""
+    debouncedQuery.trim() === ""
       ? allSessions.filter((s) => !isBackgroundSession(s)).slice(0, 5)
       : allSessions
           .filter((s) => !isBackgroundSession(s))
           .filter((s) =>
             fuzzyMatch(
               [s.title ?? "", s.sessionId, s.machineAlias ?? ""].join(" "),
-              query,
+              debouncedQuery,
             ),
           )
           .slice(0, 5),
   );
 
   let filteredPrompts: QueryEntry[] = $derived(
-    query.trim() === ""
+    debouncedQuery.trim() === ""
       ? allQueries.filter((q) => !isBackgroundQuery(q, sessionMap)).slice(0, 10)
       : allQueries
           .filter((q) => !isBackgroundQuery(q, sessionMap))
           .filter((q) =>
             fuzzyMatch(
               [q.query, q.sessionTitle ?? "", q.sessionId].join(" "),
-              query,
+              debouncedQuery,
             ),
           )
           .slice(0, 10),
