@@ -71,6 +71,7 @@
   });
 
   let refetchTimer: ReturnType<typeof setInterval> | null = null;
+  let lastVisibilityFetchAt = 0;
 
   onMount(async () => {
     await Promise.all([fetchQueries(), fetchSessions(), fetchMachines()]);
@@ -100,7 +101,10 @@
       })
       .start();
 
+    // Polling fallback: SSE가 연결 안 되어 있을 때만 재조회.
+    // SSE가 정상이면 session.delta/query.new로 실시간 업데이트됨.
     refetchTimer = setInterval(async () => {
+      if (connected) return; // SSE 정상 → fallback 불필요
       await Promise.all([fetchSessions(), fetchQueries(), fetchMachines()]);
     }, 30_000);
 
@@ -108,9 +112,11 @@
   });
 
   function handleVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-      Promise.all([fetchSessions(), fetchQueries(), fetchMachines()]);
-    }
+    if (document.visibilityState !== 'visible') return;
+    // SSE가 연결되어 있고 5초 이내에 fetch했으면 skip
+    if (connected && Date.now() - lastVisibilityFetchAt < 5000) return;
+    lastVisibilityFetchAt = Date.now();
+    Promise.all([fetchSessions(), fetchQueries(), fetchMachines()]);
   }
 
   onDestroy(() => {
