@@ -23,9 +23,14 @@
       : ($impactData ?? []).filter((i) => i.projectId === selectedProject)
   );
 
-  const maxChange = $derived(
-    Math.max(...(filteredImpact).map((i) => i.additions + i.deletions), 1)
-  );
+  const maxChange = $derived.by(() => {
+    let max = 1;
+    for (const i of filteredImpact) {
+      const v = i.additions + i.deletions;
+      if (v > max) max = v;
+    }
+    return max;
+  });
 
   function addWidth(item: SessionCodeImpact): number {
     if (maxChange === 0) return 0;
