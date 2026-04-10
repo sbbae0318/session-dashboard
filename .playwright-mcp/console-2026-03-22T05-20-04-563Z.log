@@ -1,1 +1,42 @@
 [12913072ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[13210381ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[19669230ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[28530188ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/sessions:0
+[28530189ms] [ERROR] Failed to fetch sessions: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at na (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:6197)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79115 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[28530190ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/queries?limit=200:0
+[28530190ms] [ERROR] Failed to fetch queries: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at la (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:17397)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79120 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[28530190ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/machines:0
+[28530190ms] [ERROR] Failed to fetch machines: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at ra (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:6998)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79125 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[28532003ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[28533015ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/events:0
+[33316082ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[33471972ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[33900131ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/sessions:0
+[33900131ms] [ERROR] Failed to fetch sessions: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at na (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:6197)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79115 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[33900131ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/queries?limit=200:0
+[33900131ms] [ERROR] Failed to fetch queries: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at la (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:17397)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79120 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[33900131ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/machines:0
+[33900131ms] [ERROR] Failed to fetch machines: TypeError: Failed to fetch
+    at Xe (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:5994)
+    at ra (http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:6998)
+    at http://192.168.0.2:3097/assets/index-CjlY6L8p.js:2:79125 @ http://192.168.0.2:3097/assets/index-CjlY6L8p.js:1
+[33905878ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[34212791ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[34213794ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://192.168.0.2:3097/api/events:0
+[36622260ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0
+[36896068ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://192.168.0.2:3097/api/events:0

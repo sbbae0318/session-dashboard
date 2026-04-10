@@ -50,6 +50,7 @@ Browser
 - ADR-004: Zero-dep Markdown 렌더러 → 번들 최소화, code block folding 커스텀
 - ADR-005: Svelte 5 runes + Svelte 4 store 혼용 → .ts 파일 runes 미지원 제약
 - ADR-006: Session dismiss auto-revive → 재활성 세션 자동 복귀 UX
+- ADR-008: Python DSPy summary spawn → Node에서 Python CLI spawn, incremental 요약
 
 ---
 
@@ -62,7 +63,7 @@ Browser
 ### F1.1 세션 목록 (ActiveSessions.svelte)
 
 - 세션 카드에 표시할 정보:
-  - **Status badge**: Working (파란), Waiting (보라), Idle (초록), Rename (주황, 3초 TTL)
+  - **Status badge**: Working (파란), Waiting (보라), Idle (초록), Rename (주황, 3초 TTL), Disconnected (회색, 머신 연결 끊김)
   - **Title**: 세션 제목 또는 lastPrompt 첫 60자 또는 sessionId 첫 8자 (fallback 순서)
   - **Subagent badge**: childSessionIds.length > 0 일 때 숫자 표시
   - **시간**: lastActivityTime 상대 시간 (방금 전, N분 전, N시간 전, N일 전)
@@ -74,15 +75,16 @@ Browser
   - **마지막 프롬프트**: lastPrompt 미리보기
   - **No hooks 표시**: Claude 세션에서 hooksActive=false일 때 경고 아이콘
 
-- **Status 판별 로직** (프론트엔드):
+- **Status 판별 로직** (프론트엔드, 우선순위 순):
   ```
-  RENAME:  recentlyRenamed = true (최우선, 3초 후 자동 해제)
-  WORKING: (apiStatus ∈ {busy, retry} ∨ currentTool ≠ null) ∧ ¬waitingForInput
-  WAITING: waitingForInput = true
-  IDLE:    그 외
+  RENAME:       recentlyRenamed = true (최우선, 3초 후 자동 해제)
+  DISCONNECTED: machineConnected = false (머신 연결 끊김 — stale 데이터)
+  WORKING:      (apiStatus ∈ {busy, retry} ∨ currentTool ≠ null) ∧ ¬waitingForInput
+  WAITING:      waitingForInput = true
+  IDLE:         그 외
   ```
 
-- **정렬 우선순위**: 시간 무관 상태 우선순위 항상 적용 (WAITING > WORKING > RENAME > IDLE). 같은 우선순위 내에서 `lastActivityTime` 내림차순.
+- **정렬 우선순위**: 시간 무관 상태 우선순위 항상 적용 (WAITING > WORKING > RENAME > IDLE > DISCONNECTED). 같은 우선순위 내에서 `lastActivityTime` 내림차순.
 
 - **상태 변경 flash 효과**: 세션 상태가 전환될 때 (예: Idle→Working) 뱃지가 1.2초간 brightness+scale 펄스로 반짝임. 이전 상태를 Map으로 추적하여 변경 감지. `prefers-reduced-motion` 존중.
 
@@ -128,9 +130,15 @@ Browser
   getQueryResult, busySessions, isSessionBusy 모두 이 조건 사용.
   getDisplayStatus와 불일치 시 세션 뱃지는 Working인데 스피너 미표시 (F-004).
 
-- **세션별 쿼리 fetch**: 글로벌 캐시(200건)에 없는 세션 클릭 시
-  `/api/queries?sessionId=X`로 에이전트에서 직접 조회 → store 병합.
+- **세션별 쿼리 fetch**: 세션 클릭 시 `/api/queries?sessionId=X&limit=100`으로
+  에이전트에서 fetch + 서버 queryMap에 merge → store 병합. (이전 limit 500 → 100, DOM 부하 감소)
+  서버는 세션별 Map 캐시(queryMap)를 유지하되 항상 agent로부터 최신 데이터 보충.
   session-detail, session-prompts 진입 시 자동 트리거.
+
+- **렌더링 최적화 패턴 (Backbone 규칙)**:
+  - `{#each}` 내부에서 `array.find()` 금지 → `sessionMap = $derived(new Map(...))`로 O(1) 변환
+  - `isBackgroundQuery(q, sessionMap)`도 Map 기반 (utils.ts)
+  - `getDisplayStatus`, `buildResumeCommand` 등 모든 lookup은 sessionMap 사용
 
 - **정렬**: busy 세션의 최신 프롬프트 최상단 고정, 나머지 timestamp 역순
 
@@ -359,8 +367,9 @@ Browser
 
 | Event | Payload | 핸들러 |
 |-------|---------|--------|
-| `session.update` | `DashboardSession[]` | 세션 목록 교체 + dismissed 자동 복원 |
-| `query.new` | `QueryEntry` | 쿼리 추가 (중복 제거, 최대 200개) |
+| `session.update` | `DashboardSession[]` | (Legacy) 전체 세션 목록 교체. 현재 SSE에서는 사용 안 함 — REST `/api/sessions`로만 전체 fetch. |
+| `session.delta` | `{ updated: DashboardSession[], removed: string[] }` | 변경된 세션만 push. processMetrics 제외 hash 비교로 실제 상태 변경만 감지. 프론트엔드 Map 기반 merge + dismissed 자동 복원. 유휴 시 0 bytes. |
+| `query.new` | `QueryEntry` | 쿼리 추가 (세션별 lastTimestamp 비교로 감지, 중복 제거) |
 | `machine.status` | `MachineInfo[]` | 머신 목록 교체 |
 | `enrichment.updated` | `{ machineId, feature, cachedAt }` | 단일 머신 enrichment re-fetch |
 | `enrichment.merged.updated` | `{ feature, machineCount, cachedAt }` | merged enrichment re-fetch (머신 미선택 시만) |
@@ -375,9 +384,12 @@ Browser
 ### F6.5 데이터 흐름
 
 ```
-Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) ── SSE ──→ Frontend
+Hook → Agent(즉시) ── SSE push(즉시) ──→ Server(100ms debounce) ── SSE delta ──→ Frontend
                     └── 1초 폴링 (fallback) ──┘
 ```
+> **SSE delta 최적화**: `session.delta`는 이전 broadcast와 hash 비교하여 변경된 세션만 전송.
+> 7d 필터 + active 조건은 유지. processMetrics(CPU/RSS 매초 변동)는 hash에서 제외하여 실제 상태 변경만 감지.
+> 유휴 시 0 bytes 전송. 초기 로드 및 SSE 재연결 시 REST `/api/sessions`로 full state 복구.
 
 ---
 

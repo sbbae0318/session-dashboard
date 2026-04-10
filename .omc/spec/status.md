@@ -48,15 +48,16 @@ _이번 세션/최근에 배운 것._
 - **프롬프트 캐시 아키텍처 재설계**: collectFromSession 세션당 1개→전체 반환. 서버 cachedQueries[] 전체 교체→queryMap(Map<sessionId, QueryEntry[]>) 누적. sessionId 조회 시 항상 agent fetch+merge (전역 폴링이 세션당 1개만 유입하는 구조적 한계). query.new는 세션별 lastTimestamp 비교로 효율화.
 - **Docker OOM 원인**: `NODE_OPTIONS=--max-old-space-size=384` 하드캡이 1200+ 세션 + queryMap 누적 + enrichment 캐시 합계를 감당 못 함. 2048MB로 상향 해소.
 - **머신 disconnected 세션 표시**: `DashboardSession.machineConnected: boolean` 필드 추가. 서버 poll()에서 머신 연결 상태 태깅, getDisplayStatus()에서 RENAME 다음 우선순위로 판정. 정렬: DISCONNECTED=4 (IDLE=3 뒤). 회색 뱃지.
+- **SSE bandwidth 최적화 (2-stage)**: (1) `session.update`가 전체 314세션(219KB)을 무필터 broadcast → 7d+active 필터로 55세션(36KB)로 83% 감소. (2) `session.delta`로 전환 — 변경된 세션만 hash 비교 후 전송(~700B/event), 유휴 시 0 bytes. processMetrics(CPU/RSS)는 매초 변동하므로 hash에서 제외. 프론트엔드 Map 기반 mergeSessions로 반영. 총 99.7% 감소. REST `/api/sessions`는 full fetch 유지.
+- **프론트엔드 성능 안티패턴 5가지 제거**: (1) `{#each}` 내 `sessions.find()` O(n²) → `sessionMap.get()` O(1) (RecentPrompts/CommandPalette/utils.isBackgroundQuery — 28,500 find/render → Map.get). (2) SSE 연결 중에도 30초 refetch 무조건 실행 → `connected` guard로 일일 8,640 요청 제거. visibility change도 5초 debounce. (3) ProjectsPage `getProjectSessions` O(N×M) → `sessionsByProject` $derived Map 사전 인덱싱. (4) `Math.max(...spread)` 안티패턴 → `$derived.by` + 단일 reduce 루프 (CodeImpactPage). (5) CommandPalette 입력마다 fuzzyMatch × 전체 세션/쿼리 재계산 → `debouncedQuery` state 100ms 분리. `/api/sessions`도 1384세션 875KB → 7d 기본 필터로 57세션 47KB. **규칙: `{#each}` 안에서 array.find() 금지**.
 
 ## Next
 
 _다음 세션에 할 것 (최대 3개)._
 
-1. **DSPy BootstrapFewShot 최적화** — labeled examples 10개 수집 + optimizer 실행.
-2. **프롬프트 검색 통합** — PromptStore FTS5 검색 + Claude 프롬프트 포함.
-3. **Pre-existing 19개 테스트 실패 조사** — claude-heartbeat.test.ts eviction/PID/parse 계열.
-3. **Pre-existing 19개 테스트 실패** 조사 — `claude-heartbeat.test.ts`의 eviction/PID liveness/parseConversationFile 계열.
+1. **잔여 Low 영향도 perf 이슈** — responseCache Map 매번 복사, sortedQueries latestTs 재계산, ActiveSessions/SessionCards uniqueProjects 중복, SummariesPage projectGroups 이중 정렬, TimelinePage fetchSessionSegments 캐시 skip. 측정 후 필요시 처리.
+2. **DSPy BootstrapFewShot 최적화** — labeled examples 10개 수집 + optimizer 실행.
+3. **프롬프트 검색 통합** — PromptStore FTS5 + Claude 프롬프트 포함.
 
 ---
 
