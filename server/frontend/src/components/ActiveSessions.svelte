@@ -5,7 +5,8 @@
   import { shouldShowMachineFilter, getSelectedMachineId } from '../lib/stores/machine.svelte';
   import { isDismissed, getDismissedCount, restoreAll } from "../lib/stores/dismissed.svelte";
   import { pushSessionDetail, popToOverview } from '../lib/stores/navigation.svelte';
-  import { relativeTime, formatDuration, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../lib/utils";
+  import { relativeTime, formatDuration, formatRss, copyToClipboard, getDisplayStatus, detectStatusChanges, sortSessionsByStatusAndPin } from "../lib/utils";
+  import { isPinned, togglePin, getPinnedIds } from "../lib/stores/pinned.svelte";
   import { onMount } from "svelte";
 
   let { paneActive = false }: { paneActive?: boolean } = $props();
@@ -131,6 +132,14 @@
         }
         break;
       }
+
+      case 'p': {
+        if (focusedSessionIndex >= 0 && focusedSessionIndex < len) {
+          e.preventDefault();
+          togglePin(topLevelSessions[focusedSessionIndex].sessionId);
+        }
+        break;
+      }
     }
   }
 
@@ -151,10 +160,11 @@
   }
 
   // Top-level sessions: no parent, or parent not in active set
-  // 정렬: 상태 우선순위 (Waiting > Working > Rename > Idle > Disconnected), 동률은 최근 활동 순.
-  // SSE delta merge가 Map 삽입 순서를 유지해 백엔드 sort가 드리프트하므로 프론트에서 재정렬한다.
-  let topLevelSessions = $derived(
-    sessions
+  // 정렬: Status(Waiting>Working>Rename>Idle>Disconnected) → Pin 우선 → lastActivityTime desc.
+  // Pinned 세션은 같은 status 그룹 내에서만 상위로 올라오며, status invariant는 깨지지 않는다.
+  // SSE delta merge가 Map 삽입 순서를 유지해 드리프트되므로 프론트에서 재정렬한다.
+  let topLevelSessions = $derived.by(() => {
+    const filtered = sessions
       .filter(s => !machineFilter || s.machineId === machineFilter)
       .filter(s => {
         if (sourceFilter === "all") return true;
@@ -168,14 +178,9 @@
         return cutoff === 0 || s.lastActivityTime >= cutoff;
       })
       .filter(s => !s.parentSessionId)
-      .filter(s => !projectFilter || s.projectCwd === projectFilter)
-      .slice()
-      .sort((a, b) => {
-        const sp = statusSortPriority(a) - statusSortPriority(b);
-        if (sp !== 0) return sp;
-        return b.lastActivityTime - a.lastActivityTime;
-      })
-  );
+      .filter(s => !projectFilter || s.projectCwd === projectFilter);
+    return sortSessionsByStatusAndPin(filtered, getPinnedIds());
+  });
 
 
   // 상태 변경 감지 → flash 트리거
@@ -221,6 +226,7 @@
             class="session-item"
             class:selected={selectedSessionId === session.sessionId}
             class:focused={paneActive && focusedSessionIndex === si}
+            class:pinned={isPinned(session.sessionId)}
             data-session-index={si}
             onclick={() => handleSessionClick(session)}
             role="button"
@@ -230,6 +236,14 @@
             <div class="session-header">
               <!-- Row 1: status + title + actions -->
               <div class="session-header-top">
+                <button
+                  type="button"
+                  class="pin-btn"
+                  class:pinned={isPinned(session.sessionId)}
+                  aria-label={isPinned(session.sessionId) ? 'Unpin session' : 'Pin session'}
+                  title={isPinned(session.sessionId) ? 'Unpin' : 'Pin'}
+                  onclick={(e) => { e.stopPropagation(); togglePin(session.sessionId); }}
+                >📌</button>
                 <span class="status-badge {ds.cssClass}" class:status-flash={flashingIds.has(session.sessionId)}>{ds.label}{#if ds.cssClass === 'status-working'}&nbsp;<span class="dot-loader"><span></span><span></span><span></span></span>{/if}</span>
                 <span class="session-title">{session.title || session.lastPrompt?.slice(0, 60) || session.sessionId.slice(0, 8)}</span>
                 {#if session.childSessionIds && session.childSessionIds.length > 0}
@@ -351,6 +365,35 @@
   .session-item.focused {
     outline: 2px solid rgba(88, 166, 255, 0.6);
     outline-offset: -2px;
+  }
+
+  .session-item.pinned {
+    box-shadow: inset 2px 0 0 var(--warning);
+  }
+  .session-item.selected.pinned {
+    /* selected(accent 3px) + pinned(warning 2px) 겹치지 않게 accent 유지 + 우측 warning dot */
+    box-shadow: inset 3px 0 0 var(--accent), inset -2px 0 0 var(--warning);
+  }
+
+  .pin-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    opacity: 0.25;
+    transition: opacity 150ms ease;
+    color: inherit;
+  }
+  .session-item:hover .pin-btn,
+  .pin-btn.pinned {
+    opacity: 1;
+  }
+  .pin-btn:focus-visible {
+    outline: 1px solid var(--warning);
+    outline-offset: 1px;
+    opacity: 1;
   }
 
   .session-header {
