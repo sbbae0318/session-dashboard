@@ -34,9 +34,9 @@
 
   let filteredQueries = $derived(
     queries
-      .filter(q => showBackground || !isBackgroundQuery(q, sessions))
+      .filter(q => showBackground || !isBackgroundQuery(q, sessionMap))
       .map(q => {
-        if (!isBackgroundQuery(q, sessions)) return q;
+        if (!isBackgroundQuery(q, sessionMap)) return q;
         const childSession = sessionMap.get(q.sessionId);
         const parentId = childSession?.parentSessionId;
         if (!parentId) return q;
@@ -91,7 +91,7 @@
 
   let backgroundCount = $derived(
     queries
-      .filter(q => isBackgroundQuery(q, sessions))
+      .filter(q => isBackgroundQuery(q, sessionMap))
       .filter(q => !machineFilter || q.machineId === machineFilter)
       .filter(q => {
         if (sourceFilter === "all") return true;

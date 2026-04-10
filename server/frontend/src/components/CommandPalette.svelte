@@ -66,6 +66,8 @@
   // ── Derived filtered results ──────────────────────────────────────────
   let allSessions = $derived(getSessions());
   let allQueries = $derived(getQueries());
+  // O(1) 세션 lookup용 Map — 매 렌더 시 sessions.find() O(n) 호출 방지
+  let sessionMap = $derived(new Map(allSessions.map(s => [s.sessionId, s])));
 
   let filteredSessions: DashboardSession[] = $derived(
     query.trim() === ""
@@ -83,9 +85,9 @@
 
   let filteredPrompts: QueryEntry[] = $derived(
     query.trim() === ""
-      ? allQueries.filter((q) => !isBackgroundQuery(q, allSessions)).slice(0, 10)
+      ? allQueries.filter((q) => !isBackgroundQuery(q, sessionMap)).slice(0, 10)
       : allQueries
-          .filter((q) => !isBackgroundQuery(q, allSessions))
+          .filter((q) => !isBackgroundQuery(q, sessionMap))
           .filter((q) =>
             fuzzyMatch(
               [q.query, q.sessionTitle ?? "", q.sessionId].join(" "),

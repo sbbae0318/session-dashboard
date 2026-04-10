@@ -156,13 +156,13 @@ export function detectStatusChanges(
 
 export function isBackgroundQuery(
   q: { isBackground: boolean; sessionId: string; sessionTitle?: string | null },
-  sessions: Array<{ sessionId: string; parentSessionId?: string | null; title?: string | null }>,
+  sessionMap: Map<string, { parentSessionId?: string | null; title?: string | null }>,
 ): boolean {
   // Explicit flag from backend
   if (q.isBackground) return true;
 
-  // Cross-reference session metadata
-  const session = sessions.find(s => s.sessionId === q.sessionId);
+  // Cross-reference session metadata via Map (O(1))
+  const session = sessionMap.get(q.sessionId);
 
   // If the session has a parent, it is a child/subagent session
   if (session?.parentSessionId) return true;
