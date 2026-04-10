@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getQueryResult, getCompletionTime, getDisplayStatus, detectStatusChanges, statusSortPriority } from "../utils.js";
+import { getQueryResult, getCompletionTime, getDisplayStatus, detectStatusChanges, statusSortPriority, sortSessionsByStatusAndPin } from "../utils.js";
 
 describe("getQueryResult", () => {
   const sessions: Array<{ sessionId: string; status: string; apiStatus: string | null }> = [];
@@ -234,5 +234,77 @@ describe("statusSortPriority", () => {
       return b.lastActivityTime - a.lastActivityTime;
     });
     expect(sorted.map(s => s.id)).toEqual(["wait1", "work2", "work1", "idle1"]);
+  });
+});
+
+describe("sortSessionsByStatusAndPin", () => {
+  const base = { recentlyRenamed: false, machineConnected: true };
+
+  function mk(id: string, kind: "waiting" | "working" | "idle", activity: number) {
+    return {
+      sessionId: id,
+      lastActivityTime: activity,
+      apiStatus: kind === "working" ? "busy" : null,
+      currentTool: null,
+      waitingForInput: kind === "waiting",
+      ...base,
+    };
+  }
+
+  it("pins go first within same status, status order preserved", () => {
+    const sessions = [
+      mk("idle-unpin-recent", "idle", 100),
+      mk("work-pin-old",      "working", 10),
+      mk("wait-unpin",        "waiting", 50),
+      mk("idle-pin-old",      "idle", 1),
+      mk("work-unpin-recent", "working", 200),
+      mk("wait-pin",          "waiting", 5),
+    ];
+    const pinnedIds = new Set(["work-pin-old", "idle-pin-old", "wait-pin"]);
+    const sorted = sortSessionsByStatusAndPin(sessions, pinnedIds);
+    expect(sorted.map(s => s.sessionId)).toEqual([
+      "wait-pin",          // waiting + pinned
+      "wait-unpin",        // waiting + unpinned
+      "work-pin-old",      // working + pinned
+      "work-unpin-recent", // working + unpinned
+      "idle-pin-old",      // idle + pinned
+      "idle-unpin-recent", // idle + unpinned
+    ]);
+  });
+
+  it("idle pinned never outranks working unpinned (status invariant)", () => {
+    const sessions = [
+      mk("idle-pin", "idle", 999),
+      mk("work-unpin", "working", 1),
+    ];
+    const sorted = sortSessionsByStatusAndPin(sessions, new Set(["idle-pin"]));
+    expect(sorted[0].sessionId).toBe("work-unpin");
+    expect(sorted[1].sessionId).toBe("idle-pin");
+  });
+
+  it("within same status and pin state, sorts by lastActivityTime desc", () => {
+    const sessions = [
+      mk("a", "idle", 10),
+      mk("b", "idle", 30),
+      mk("c", "idle", 20),
+    ];
+    const sorted = sortSessionsByStatusAndPin(sessions, new Set());
+    expect(sorted.map(s => s.sessionId)).toEqual(["b", "c", "a"]);
+  });
+
+  it("does not mutate input array", () => {
+    const sessions = [mk("a", "idle", 1), mk("b", "waiting", 1)];
+    const snapshot = sessions.map(s => s.sessionId);
+    sortSessionsByStatusAndPin(sessions, new Set());
+    expect(sessions.map(s => s.sessionId)).toEqual(snapshot);
+  });
+
+  it("empty pinnedIds falls back to pure status+activity order", () => {
+    const sessions = [
+      mk("i", "idle", 5),
+      mk("w", "waiting", 1),
+    ];
+    const sorted = sortSessionsByStatusAndPin(sessions, new Set());
+    expect(sorted.map(s => s.sessionId)).toEqual(["w", "i"]);
   });
 });

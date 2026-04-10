@@ -161,6 +161,34 @@ export function statusSortPriority(session: {
   }
 }
 
+/**
+ * 세션 목록을 정렬한다. 우선순위:
+ *   1. Status (Waiting > Working > Rename > Idle > Disconnected) — statusSortPriority
+ *   2. 같은 status 내에서 pinned 먼저
+ *   3. 같은 status + 같은 pin 상태 내에서 lastActivityTime 내림차순
+ *
+ * Status invariant는 절대 깨지지 않는다 — Idle-pinned 세션이 Working-unpinned 위에 오지 않는다.
+ * 순수 함수: 입력 배열을 mutate 하지 않고 새 배열을 반환한다.
+ */
+export function sortSessionsByStatusAndPin<T extends {
+  sessionId: string;
+  apiStatus: string | null;
+  currentTool: string | null;
+  waitingForInput: boolean;
+  recentlyRenamed?: boolean;
+  machineConnected?: boolean;
+  lastActivityTime: number;
+}>(sessions: T[], pinnedIds: Set<string>): T[] {
+  return sessions.slice().sort((a, b) => {
+    const sp = statusSortPriority(a) - statusSortPriority(b);
+    if (sp !== 0) return sp;
+    const pa = pinnedIds.has(a.sessionId) ? 0 : 1;
+    const pb = pinnedIds.has(b.sessionId) ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return b.lastActivityTime - a.lastActivityTime;
+  });
+}
+
 /** 이전 상태와 현재 상태를 비교하여 변경된 세션 ID를 반환 */
 export function detectStatusChanges(
   prevMap: Map<string, string>,
