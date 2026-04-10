@@ -27,6 +27,9 @@
   let sessions = $derived(getSessions());
   let sourceFilter = $derived(getSourceFilter());
 
+  // O(1) 세션 lookup용 Map — 매 렌더 시 sessions.find() O(n) 호출 방지
+  let sessionMap = $derived(new Map(sessions.map(s => [s.sessionId, s])));
+
   // --- State ---
 
   let filteredQueries = $derived(
@@ -34,10 +37,10 @@
       .filter(q => showBackground || !isBackgroundQuery(q, sessions))
       .map(q => {
         if (!isBackgroundQuery(q, sessions)) return q;
-        const childSession = sessions.find(s => s.sessionId === q.sessionId);
+        const childSession = sessionMap.get(q.sessionId);
         const parentId = childSession?.parentSessionId;
         if (!parentId) return q;
-        const parentSession = sessions.find(s => s.sessionId === parentId);
+        const parentSession = sessionMap.get(parentId);
         if (!parentSession) return q;
         return { ...q, sessionId: parentId, sessionTitle: parentSession.title ?? parentId.slice(0, 8) };
       })
@@ -99,7 +102,7 @@
         const sid = sessionIdFilter ?? selectedSessionId;
         if (!sid) return true;
         if (q.sessionId === sid) return true;
-        const childSession = sessions.find(s => s.sessionId === q.sessionId);
+        const childSession = sessionMap.get(q.sessionId);
         return childSession?.parentSessionId === sid;
       })
       .length
@@ -306,7 +309,7 @@
   }
 
   function buildResumeCommand(entry: { sessionId: string; source?: string }): string {
-    const session = sessions.find((s: DashboardSession) => s.sessionId === entry.sessionId);
+    const session = sessionMap.get(entry.sessionId);
     const cwd = session?.projectCwd ?? '~';
     const source = entry.source ?? session?.source;
     if (source === 'claude-code') {
@@ -330,11 +333,10 @@
   {:else}
     <div class="prompts-list">
       {#each sortedQueries as entry, i (entry.sessionId + '-' + entry.timestamp)}
-        {@const matchedSession = sessions.find(s => s.sessionId === entry.sessionId)}
-        {@const resolvedTitle = entry.sessionTitle || matchedSession?.title || matchedSession?.projectCwd?.split('/').pop() || entry.sessionId.slice(0, 8)}
+        {@const session = sessionMap.get(entry.sessionId)}
+        {@const resolvedTitle = entry.sessionTitle || session?.title || session?.projectCwd?.split('/').pop() || entry.sessionId.slice(0, 8)}
         {@const result = getQueryResult(entry, sessions)}
         {@const completionTs = getCompletionTime(entry)}
-        {@const session = sessions.find(s => s.sessionId === entry.sessionId)}
         {@const isSessionBusy = (session?.apiStatus === 'busy' || session?.apiStatus === 'retry' || session?.currentTool) && !session?.waitingForInput}
         {@const isLatestForSession = i === latestIndexBySession[entry.sessionId]}
         {@const isWorking = isSessionBusy && isLatestForSession}
