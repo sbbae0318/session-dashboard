@@ -74,21 +74,9 @@
   let lastVisibilityFetchAt = 0;
 
   onMount(async () => {
-    (window as unknown as { __dbg: string[] }).__dbg = [];
-    const dbg = (window as unknown as { __dbg: string[] }).__dbg;
-    dbg.push('A:onMount start ' + Date.now());
-    try {
-      dbg.push('B:before Promise.all');
-      await Promise.all([fetchQueries(), fetchSessions(), fetchMachines()]);
-      dbg.push('C:after Promise.all, sessions=' + getSessions().length);
-      reviveSessions(getSessions());
-      dbg.push('D:after reviveSessions');
-      loading = false;
-      dbg.push('E:loading=false set');
-    } catch (e) {
-      dbg.push('ERR:' + String(e) + ' ' + ((e as Error)?.stack || '').slice(0, 200));
-      throw e;
-    }
+    await Promise.all([fetchQueries(), fetchSessions(), fetchMachines()]);
+    reviveSessions(getSessions());
+    loading = false;
 
     createSSEClient({ url: "/api/events" })
       .onConnectionChange((c) => { connected = c; })
