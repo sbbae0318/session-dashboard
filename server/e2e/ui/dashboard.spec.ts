@@ -297,3 +297,93 @@ test.describe('Command Palette', () => {
     await expect(page.locator('.command-palette')).not.toBeVisible();
   });
 });
+
+// =============================================================================
+// Session Pin / Favorite
+// =============================================================================
+
+test.describe('Session Pin', () => {
+  test.beforeEach(async ({ page }) => {
+    // 테스트 간 pin 상태 격리 — localStorage 초기화
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('session-dashboard:pinned'));
+    await page.reload();
+    await waitForDashboardReady(page);
+  });
+
+  test('pin 버튼 클릭 시 .pinned 클래스 부여 + localStorage 기록', async ({ page }) => {
+    const items = page.locator('[data-testid="active-sessions"] .session-item');
+    const count = await items.count();
+    test.skip(count === 0, '세션 없음');
+
+    const first = items.first();
+    await first.locator('.pin-btn').click();
+
+    // .pinned 클래스 적용 확인 (first 위치의 항목이 재정렬되어 바뀌었을 수 있으므로
+    // 재정렬 후에는 pinned 클래스를 가진 세션이 최소 1개 존재해야 함)
+    const pinnedItems = page.locator('[data-testid="active-sessions"] .session-item.pinned');
+    await expect(pinnedItems).toHaveCount(1);
+
+    const stored = await page.evaluate(() => localStorage.getItem('session-dashboard:pinned'));
+    expect(stored).not.toBeNull();
+    const parsed = JSON.parse(stored!);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBe(1);
+  });
+
+  test('pinned 상태가 페이지 리로드 후에도 유지', async ({ page }) => {
+    const items = page.locator('[data-testid="active-sessions"] .session-item');
+    test.skip((await items.count()) === 0, '세션 없음');
+
+    await items.first().locator('.pin-btn').click();
+
+    const storedBefore = await page.evaluate(() => localStorage.getItem('session-dashboard:pinned'));
+    expect(storedBefore).not.toBeNull();
+
+    await page.reload();
+    await waitForDashboardReady(page);
+
+    const pinnedItems = page.locator('[data-testid="active-sessions"] .session-item.pinned');
+    await expect(pinnedItems).toHaveCount(1);
+
+    const storedAfter = await page.evaluate(() => localStorage.getItem('session-dashboard:pinned'));
+    expect(storedAfter).toBe(storedBefore);
+  });
+
+  test('pin 버튼 클릭이 세션 상세 네비게이션을 트리거하지 않음', async ({ page }) => {
+    const items = page.locator('[data-testid="active-sessions"] .session-item');
+    test.skip((await items.count()) === 0, '세션 없음');
+
+    const urlBefore = page.url();
+    await items.first().locator('.pin-btn').click();
+
+    // URL 변화 없음 — 세션 상세 진입 시 URL query가 바뀜
+    expect(page.url()).toBe(urlBefore);
+  });
+
+  test('unpin 클릭 시 하이라이트 제거 및 localStorage 비움', async ({ page }) => {
+    const items = page.locator('[data-testid="active-sessions"] .session-item');
+    test.skip((await items.count()) === 0, '세션 없음');
+
+    // 1차 클릭: pin
+    await items.first().locator('.pin-btn').click();
+    await expect(page.locator('[data-testid="active-sessions"] .session-item.pinned')).toHaveCount(1);
+
+    // 재정렬된 최상단(= 방금 pin된 세션)을 다시 클릭: unpin
+    await page.locator('[data-testid="active-sessions"] .session-item.pinned').first()
+      .locator('.pin-btn').click();
+
+    await expect(page.locator('[data-testid="active-sessions"] .session-item.pinned')).toHaveCount(0);
+
+    const stored = await page.evaluate(() => localStorage.getItem('session-dashboard:pinned'));
+    const parsed = stored ? JSON.parse(stored) : [];
+    expect(parsed.length).toBe(0);
+  });
+
+  test('ShortcutCheatsheet에 p 키 항목 표시', async ({ page }) => {
+    await page.keyboard.press('?');
+    const modal = page.locator('.shortcut-cheatsheet, [class*="cheatsheet"]').first();
+    await expect(modal).toBeVisible({ timeout: 2_000 });
+    await expect(modal).toContainText('pin');
+  });
+});
