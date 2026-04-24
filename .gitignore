@@ -5,3 +5,6 @@ data/
 *.env.local
 server/machines.yml
 .omc/state/
+
+# superpowers brainstorm session content (non-tracked mockups)
+.superpowers/
