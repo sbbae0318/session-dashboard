@@ -25,9 +25,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';
 
+import { hostname } from 'node:os';
+
 import { authPreHandler, createAuthToken } from './auth.js';
 import { parseJsonlLine } from './transcript-jsonl-parser.js';
 import { JsonlReader } from './jsonl-reader.js';
+import { TranscriptIngestor } from './transcript-ingestor.js';
 import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeConnection } from './oc-serve-proxy.js';
 import { SessionCache } from './session-cache.js';
 import { OcQueryCollector, type QueryEntry } from './oc-query-collector.js';
@@ -394,6 +397,31 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
   const claudeHeartbeat = new ClaudeHeartbeat(undefined, undefined, processScanner);
   claudeHeartbeat.start();
 
+  // TranscriptIngestor: JSONL → TurnSummary → dashboard push
+  const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'http://192.168.0.2:3097';
+  const machineId = process.env['MACHINE_ID'] ?? hostname();
+  const transcriptIngestor = new TranscriptIngestor({
+    onTurn: (turn) => {
+      void (async () => {
+        try {
+          await fetch(`${dashboardUrl}/api/ingest/turn-summary`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...turn,
+              machineId,
+              slug: null,
+              gitBranch: null,
+              cwd: null,
+            }),
+          });
+        } catch (err) {
+          console.error('[TranscriptIngestor] push failed:', (err as Error).message);
+        }
+      })();
+    },
+  });
+
   // ClaudeSource only needed when Claude routes are active
   let claudeSource: ClaudeSource | null = null;
   if (claudeEnabled) {
@@ -739,12 +767,30 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
         );
         claudeHeartbeat.handlePromptEvent(sessionId, prompt, Date.now());
         broadcastHookUpdate(sessionId);
+        void (async () => {
+          try {
+            const jsonlPath = await findSessionJsonl(CLAUDE_PROJECTS_DIR, sessionId);
+            const sessionDir = await findSessionDir(CLAUDE_PROJECTS_DIR, sessionId);
+            if (jsonlPath && sessionDir) {
+              transcriptIngestor.processFile(sessionId, jsonlPath, sessionDir);
+            }
+          } catch { /* isolation: ingestor errors must not affect hook processing */ }
+        })();
         break;
       }
       case 'Stop':
       case 'SubagentStop': {
         claudeHeartbeat.handleStatusEvent(sessionId, 'idle');
         broadcastHookUpdate(sessionId);
+        void (async () => {
+          try {
+            const jsonlPath = await findSessionJsonl(CLAUDE_PROJECTS_DIR, sessionId);
+            const sessionDir = await findSessionDir(CLAUDE_PROJECTS_DIR, sessionId);
+            if (jsonlPath && sessionDir) {
+              transcriptIngestor.processFile(sessionId, jsonlPath, sessionDir);
+            }
+          } catch { /* isolation: ingestor errors must not affect hook processing */ }
+        })();
         break;
       }
       case 'Notification': {
