@@ -20,6 +20,17 @@ export type {
   SSEEventName,
 } from '../../src/shared/api-contract.js';
 
+export type {
+  TurnSummaryPayload,
+  SessionTurnsResponse,
+  PromptTurnSummary,
+  PromptAuditResponse,
+  ToolInvocationEntry,
+  SubagentRunEntry,
+  TranscriptBodyResponse,
+  TranscriptEvent,
+} from '../../src/shared/api-contract.js';
+
 // ── 프론트엔드 전용 타입 (Memo 등) ──
 
 export interface Memo {

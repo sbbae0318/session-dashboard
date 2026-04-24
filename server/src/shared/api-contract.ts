@@ -156,6 +156,7 @@ export interface SSEEventMap {
     feature: string;
     cachedAt: number;
   };
+  'turn.new': PromptTurnSummary & { sessionId: string; machineId: string };
 }
 
 export type SSEEventName = keyof SSEEventMap;
@@ -175,3 +176,98 @@ export type SSEEventName = keyof SSEEventMap;
  *   IDLE:         그 외
  */
 export type DisplayStatusLabel = 'Working' | 'Retry' | 'Waiting' | 'Idle' | 'Rename' | 'Disconnected';
+
+// =============================================================================
+// Audit Types (Subagent/Transcript Monitoring)
+// =============================================================================
+
+export interface TurnSummaryPayload {
+  sessionId: string;
+  slug: string | null;
+  gitBranch: string | null;
+  cwd: string | null;
+  turn: {
+    promptId: string;
+    seq: number;
+    userText: string | null;
+    startedAt: number;
+    endedAt: number | null;
+    model: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    tools: ToolInvocationEntry[];
+    subagents: SubagentRunEntry[];
+  };
+}
+
+export interface SessionTurnsResponse {
+  sessionId: string;
+  slug: string | null;
+  gitBranch: string | null;
+  turns: PromptTurnSummary[];
+}
+
+export interface PromptTurnSummary {
+  promptId: string;
+  seq: number;
+  userText: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  toolCount: number;
+  subagentCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  model: string | null;
+  status: 'running' | 'done' | 'error';
+}
+
+export interface PromptAuditResponse {
+  turn: PromptTurnSummary;
+  tools: ToolInvocationEntry[];
+  subagents: SubagentRunEntry[];
+}
+
+export interface ToolInvocationEntry {
+  id: string;
+  toolName: string;
+  toolSubname: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  inputSummary: string | null;
+  resultSummary: string | null;
+  error: boolean;
+}
+
+export interface SubagentRunEntry {
+  agentKey: string;
+  agentType: string | null;
+  description: string | null;
+  parentToolUseId: string | null;
+  cwd: string | null;
+  model: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  messageCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  bodyAvailable?: boolean;
+}
+
+export interface TranscriptBodyResponse {
+  promptId: string;
+  sessionId: string;
+  events: TranscriptEvent[];
+}
+
+export interface TranscriptEvent {
+  uuid: string;
+  parentUuid: string | null;
+  type: 'user' | 'assistant' | 'system';
+  timestamp: number;
+  role: string;
+  model: string | null;
+  toolUses: { id: string; name: string; inputPreview: string }[];
+  toolResults: { toolUseId: string; contentPreview: string }[];
+  textPreview: string | null;
+  usage: { inputTokens: number; outputTokens: number } | null;
+}

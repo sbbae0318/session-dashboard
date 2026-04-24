@@ -11,7 +11,7 @@
   import { createSSEClient } from "./lib/sse-client";
   import { reviveSessions, dismissSession } from "./lib/stores/dismissed.svelte";
   import { handleEnrichmentSSEUpdate, handleMergedEnrichmentSSEUpdate } from './lib/stores/enrichment';
-  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView, popToSessions, isSessionPromptsView, cycleTab } from "./lib/stores/navigation.svelte";
+  import { getDetailSessionId, pushSessionDetail, popToOverview, isDetailView, getCurrentView, popToSessions, isSessionPromptsView, cycleTab, getNavigationState } from "./lib/stores/navigation.svelte";
   import CommandPalette from './components/CommandPalette.svelte';
   import ShortcutCheatsheet from './components/ShortcutCheatsheet.svelte';
   import TopNav from './components/TopNav.svelte';
@@ -23,6 +23,8 @@
   import SummariesPage from './components/pages/SummariesPage.svelte';
   import MemosPage from './components/pages/MemosPage.svelte';
   import SessionCards from './components/SessionCards.svelte';
+  import PromptDetailPage from './components/pages/PromptDetailPage.svelte';
+  import SessionTimelinePage from './components/pages/SessionTimelinePage.svelte';
 
   let connected = $state(false);
   let loading = $state(true);
@@ -43,6 +45,7 @@
     { value: "all", label: "All" },
   ];
   let currentView = $derived(getCurrentView());
+  let navState = $derived(getNavigationState());
   let isSessionPrompts = $derived(isSessionPromptsView());
   let showBackground = $state(false);
   let backgroundCount = $state(0);
@@ -98,6 +101,10 @@
       })
       .on("enrichment.cache", (_data) => {
         // hydration: 초기 연결 시 현재 캐시 상태 수신 — 각 페이지 onMount에서 초기 fetch
+      })
+      .on("turn.new", (data) => {
+        // For now, just log. Full integration will come when audit data is linked to queries.
+        console.log('[audit] new turn:', data);
       })
       .start();
 
@@ -245,6 +252,10 @@
     <SummariesPage />
   {:else if currentView === 'memos'}
     <MemosPage />
+  {:else if currentView === 'prompt-audit'}
+    <PromptDetailPage promptId={navState.promptId ?? ''} />
+  {:else if currentView === 'session-timeline'}
+    <SessionTimelinePage sessionId={navState.sessionId ?? ''} />
   {:else if currentView === 'sessions'}
     <div class="panel sessions-page">
       <h2>Sessions</h2>
