@@ -60,7 +60,7 @@ async function main(): Promise<void> {
 
       const auditDbPath = process.env.AUDIT_DB_PATH ?? `${dirname(dbPath)}/audit.db`;
       const auditDb = new AuditDB(auditDbPath);
-      const audit = new AuditModule(auditDb, machineManager);
+      const audit = new AuditModule(auditDb, machineManager, sseManager);
 
       const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos, search, audit];
 

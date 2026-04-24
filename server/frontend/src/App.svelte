@@ -102,6 +102,10 @@
       .on("enrichment.cache", (_data) => {
         // hydration: 초기 연결 시 현재 캐시 상태 수신 — 각 페이지 onMount에서 초기 fetch
       })
+      .on("turn.new", (data) => {
+        // For now, just log. Full integration will come when audit data is linked to queries.
+        console.log('[audit] new turn:', data);
+      })
       .start();
 
     // Polling fallback: SSE가 연결 안 되어 있을 때만 재조회.

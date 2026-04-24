@@ -5,8 +5,9 @@
   import { getSessions } from "../lib/stores/sessions.svelte";
   import { truncate, getQueryResult, getCompletionTime, formatTimestamp, formatDuration, copyToClipboard, isBackgroundQuery } from "../lib/utils";
   import { renderMarkdown } from "../lib/markdown";
-  import type { DashboardSession } from "../types";
+  import type { DashboardSession, PromptTurnSummary, QueryEntry } from "../types";
   import { onMount } from "svelte";
+  import PromptAuditDrawer from "./audit/PromptAuditDrawer.svelte";
 
   let {
     sessionIdFilter = null,
@@ -338,6 +339,25 @@
     showToast(ok ? 'Copied!' : 'Copy failed');
   }
 
+  // --- Audit drawer ---
+  let drawerTurn = $state<PromptTurnSummary | null>(null);
+
+  function openAudit(entry: QueryEntry): void {
+    drawerTurn = {
+      promptId: `${entry.sessionId}:${entry.timestamp}`,
+      seq: 0,
+      userText: entry.query?.slice(0, 120) ?? null,
+      startedAt: entry.timestamp,
+      endedAt: entry.completedAt ?? null,
+      toolCount: 0,
+      subagentCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      model: null,
+      status: entry.completedAt ? 'done' : 'running',
+    };
+  }
+
 </script>
 
 <div class="recent-prompts" data-testid="recent-prompts">
@@ -419,6 +439,11 @@
                   onclick={(e) => handleCopyCommand(entry, e)}
                   title="resume 명령어 복사"
                 >⎘</button>
+                <button
+                  class="audit-btn"
+                  onclick={(e) => { e.stopPropagation(); openAudit(entry); }}
+                  title="Inspect prompt"
+                >⊕</button>
               </div>
             </div>
             <div class="prompt-text">{isExpanded ? entry.query : truncate(entry.query, 200)}</div>
@@ -456,6 +481,7 @@
   <div class="copy-toast">{toastMessage}</div>
 {/if}
 
+<PromptAuditDrawer turn={drawerTurn} onclose={() => { drawerTurn = null; }} />
 
 <style>
   .recent-prompts {
@@ -597,6 +623,31 @@
     background: rgba(88, 166, 255, 0.1);
     border-color: rgba(88, 166, 255, 0.4);
     color: var(--accent);
+  }
+
+  /* ── Audit inspect button ── */
+  .audit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    border-radius: 9999px;
+    width: 1.3rem;
+    height: 1.3rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .audit-btn:hover {
+    background: rgba(168, 113, 255, 0.1);
+    border-color: rgba(168, 113, 255, 0.4);
+    color: #a871ff;
   }
 
   /* ── Badges ── */

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { BackendModule } from '../types.js';
 import type { MachineManager } from '../../machines/machine-manager.js';
 import type { TurnSummaryPayload } from '../../shared/api-contract.js';
+import type { SSEManager } from '../../sse/event-stream.js';
 import { AuditDB } from './audit-db.js';
 
 export { AuditDB };
@@ -12,6 +13,7 @@ export class AuditModule implements BackendModule {
   constructor(
     private readonly db: AuditDB,
     private readonly machineManager: MachineManager | null,
+    private readonly sseManager: SSEManager | null = null,
   ) {}
 
   registerRoutes(app: FastifyInstance): void {
@@ -22,6 +24,24 @@ export class AuditModule implements BackendModule {
       }
       const { machineId, ...payload } = body;
       this.db.upsertTurnSummary(payload, machineId);
+      if (this.sseManager) {
+        const t = payload.turn;
+        this.sseManager.broadcast('turn.new', {
+          promptId: t.promptId,
+          seq: t.seq,
+          userText: t.userText?.slice(0, 120) ?? null,
+          startedAt: t.startedAt,
+          endedAt: t.endedAt,
+          toolCount: t.tools.length,
+          subagentCount: t.subagents.length,
+          inputTokens: t.inputTokens,
+          outputTokens: t.outputTokens,
+          model: t.model,
+          status: t.endedAt ? 'done' : 'running',
+          sessionId: payload.sessionId,
+          machineId,
+        });
+      }
       return { ok: true };
     });
 
