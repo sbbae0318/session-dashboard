@@ -10,6 +10,7 @@ import { RecentPromptsModule } from './modules/recent-prompts/index.js';
 import { EnrichmentModule } from './modules/enrichment/index.js';
 import { MemoModule } from './modules/memos/index.js';
 import { SearchModule } from './modules/search/index.js';
+import { AuditModule, AuditDB } from './modules/audit/index.js';
 import type { BackendModule } from './modules/types.js';
 import type { DashboardSession } from './shared/api-contract.js';
 import { SSEManager } from './sse/event-stream.js';
@@ -57,7 +58,11 @@ async function main(): Promise<void> {
       const memos = new MemoModule(memoDb, memoDir, defaultMachineId);
       const search = new SearchModule(machineManager);
 
-      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos, search];
+      const auditDbPath = process.env.AUDIT_DB_PATH ?? `${dirname(dbPath)}/audit.db`;
+      const auditDb = new AuditDB(auditDbPath);
+      const audit = new AuditModule(auditDb, machineManager);
+
+      const modules: BackendModule[] = [activeSessions, recentPrompts, enrichment, memos, search, audit];
 
       // Wire module events → SSE broadcasts
       const SSE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d
