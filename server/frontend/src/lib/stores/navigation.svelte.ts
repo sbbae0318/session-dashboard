@@ -10,7 +10,9 @@ type ViewType =
   | 'projects'
   | 'context-recovery'
   | 'summaries'
-  | 'memos';
+  | 'memos'
+  | 'prompt-audit'
+  | 'session-timeline';
 
 const VALID_VIEWS: ViewType[] = [
   'overview',
@@ -24,6 +26,8 @@ const VALID_VIEWS: ViewType[] = [
   'context-recovery',
   'summaries',
   'memos',
+  'prompt-audit',
+  'session-timeline',
 ];
 
 const ENRICHMENT_VIEWS: ViewType[] = [
@@ -38,6 +42,7 @@ const ENRICHMENT_VIEWS: ViewType[] = [
 interface NavigationState {
   currentView: ViewType;
   sessionId: string | null;
+  promptId?: string | null;
   previousScrollPosition: number;
 }
 
@@ -54,6 +59,15 @@ function getInitialState(): NavigationState {
         sessionId,
         previousScrollPosition: 0,
       };
+    }
+
+    if (view === 'prompt-audit') {
+      const promptId = params.get('promptId');
+      return { currentView: 'prompt-audit', sessionId: null, promptId: promptId ?? null, previousScrollPosition: 0 };
+    }
+
+    if (view === 'session-timeline' && sessionId) {
+      return { currentView: 'session-timeline', sessionId, promptId: null, previousScrollPosition: 0 };
     }
 
     if (sessionId) {
@@ -159,6 +173,7 @@ export function popToOverview(): void {
 
   state.currentView = 'overview';
   state.sessionId = null;
+  state.promptId = null;
   state.previousScrollPosition = 0;
 
   if (typeof window !== 'undefined') {
@@ -187,6 +202,47 @@ export function pushSessionPrompts(sessionId: string): void {
     url.searchParams.set('session', sessionId);
     history.pushState(null, '', url.toString());
   }
+}
+
+export function pushPromptAudit(promptId: string): void {
+  if (typeof window !== 'undefined') {
+    const mainContent = document.querySelector('.main-content');
+    state.previousScrollPosition = mainContent ? (mainContent as HTMLElement).scrollTop : 0;
+  }
+
+  state.currentView = 'prompt-audit';
+  state.sessionId = null;
+  state.promptId = promptId;
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'prompt-audit');
+    url.searchParams.set('promptId', promptId);
+    url.searchParams.delete('session');
+    history.pushState(null, '', url.toString());
+  }
+}
+
+export function pushSessionTimeline(sessionId: string): void {
+  if (typeof window !== 'undefined') {
+    const mainContent = document.querySelector('.main-content');
+    state.previousScrollPosition = mainContent ? (mainContent as HTMLElement).scrollTop : 0;
+  }
+
+  state.currentView = 'session-timeline';
+  state.sessionId = sessionId;
+  state.promptId = null;
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'session-timeline');
+    url.searchParams.set('session', sessionId);
+    history.pushState(null, '', url.toString());
+  }
+}
+
+export function getNavigationState(): NavigationState {
+  return state;
 }
 
 export function popToSessions(): void {
