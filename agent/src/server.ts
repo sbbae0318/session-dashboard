@@ -20,10 +20,13 @@ import fastifyJwt from '@fastify/jwt';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { readdir, readFile, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { homedir } from 'node:os';
 
 import { authPreHandler, createAuthToken } from './auth.js';
+import { parseJsonlLine } from './transcript-jsonl-parser.js';
 import { JsonlReader } from './jsonl-reader.js';
 import { fetchJson, registerProxyRoutes, registerPostProxyRoutes, checkOcServeConnection } from './oc-serve-proxy.js';
 import { SessionCache } from './session-cache.js';
@@ -52,6 +55,169 @@ function getVersion(): string {
     return 'unknown';
   }
 }
+
+// ── Transcript endpoint types & helpers ────────────────────────────────────
+
+interface TranscriptToolUse {
+  id: string;
+  name: string;
+  inputPreview: string;
+}
+
+interface TranscriptToolResult {
+  toolUseId: string;
+  contentPreview: string;
+}
+
+interface TranscriptEvent {
+  uuid: string;
+  parentUuid: string | null;
+  type: string;
+  timestamp: number;
+  role: string;
+  model: string | null;
+  toolUses: TranscriptToolUse[];
+  toolResults: TranscriptToolResult[];
+  textPreview: string | null;
+  usage: { inputTokens: number; outputTokens: number } | null;
+}
+
+/** ~/.claude/projects/ 아래 모든 프로젝트 폴더에서 <sessionId>.jsonl 경로 탐색 */
+async function findSessionJsonl(projectsDir: string, sessionId: string): Promise<string | null> {
+  let dirs: string[];
+  try {
+    dirs = await readdir(projectsDir);
+  } catch {
+    return null;
+  }
+  for (const dir of dirs) {
+    const candidate = join(projectsDir, dir, `${sessionId}.jsonl`);
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/** ~/.claude/projects/ 아래 모든 프로젝트 폴더에서 <sessionId>/ 디렉토리 경로 탐색 */
+async function findSessionDir(projectsDir: string, sessionId: string): Promise<string | null> {
+  let dirs: string[];
+  try {
+    dirs = await readdir(projectsDir);
+  } catch {
+    return null;
+  }
+  for (const dir of dirs) {
+    const candidate = join(projectsDir, dir, sessionId);
+    try {
+      await readdir(candidate);  // 디렉토리인지 확인 (readdir 성공 = 디렉토리 존재)
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/** raw JSONL 객체를 TranscriptEvent로 변환 */
+function toTranscriptEvent(obj: Record<string, unknown>): TranscriptEvent {
+  const message = (obj.message ?? {}) as Record<string, unknown>;
+  const content = Array.isArray(message.content) ? (message.content as Record<string, unknown>[]) : [];
+  const role = (message.role as string | undefined) ?? (obj.type as string);
+  const model = (message.model as string | undefined) ?? null;
+
+  const toolUses: TranscriptToolUse[] = [];
+  const toolResults: TranscriptToolResult[] = [];
+  const textParts: string[] = [];
+
+  for (const block of content) {
+    if (block.type === 'tool_use') {
+      const input = (block.input ?? {}) as Record<string, unknown>;
+      toolUses.push({
+        id: String(block.id ?? ''),
+        name: String(block.name ?? ''),
+        inputPreview: JSON.stringify(input).slice(0, 300),
+      });
+    } else if (block.type === 'tool_result') {
+      const resultContent = block.content;
+      let preview = '';
+      if (typeof resultContent === 'string') {
+        preview = resultContent.slice(0, 300);
+      } else if (Array.isArray(resultContent)) {
+        const textBlock = (resultContent as Record<string, unknown>[]).find(b => b.type === 'text');
+        preview = textBlock ? String(textBlock.text ?? '').slice(0, 300) : '';
+      }
+      toolResults.push({
+        toolUseId: String(block.tool_use_id ?? ''),
+        contentPreview: preview,
+      });
+    } else if (block.type === 'text' && typeof block.text === 'string') {
+      textParts.push(block.text);
+    }
+  }
+
+  // string content (user 메시지가 단순 문자열인 경우)
+  if (typeof message.content === 'string' && message.content) {
+    textParts.push(message.content);
+  }
+
+  const fullText = textParts.join('\n');
+  const textPreview = fullText ? fullText.slice(0, 500) : null;
+
+  const usageRaw = message.usage as Record<string, number> | undefined;
+  const usage = usageRaw
+    ? { inputTokens: usageRaw.input_tokens ?? 0, outputTokens: usageRaw.output_tokens ?? 0 }
+    : null;
+
+  const ts = typeof obj.timestamp === 'string' ? new Date(obj.timestamp).getTime() : (obj.timestamp as number ?? 0);
+
+  return {
+    uuid: String(obj.uuid ?? ''),
+    parentUuid: (obj.parentUuid as string | null | undefined) ?? null,
+    type: String(obj.type ?? ''),
+    timestamp: ts,
+    role,
+    model,
+    toolUses,
+    toolResults,
+    textPreview,
+    usage,
+  };
+}
+
+/** JSONL 파일을 읽어 TranscriptEvent[] 반환. filterFn이 null을 반환하면 스킵 */
+async function readTranscriptEvents(filePath: string): Promise<Record<string, unknown>[]> {
+  let content: string;
+  try {
+    content = await readFile(filePath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const results: Record<string, unknown>[] = [];
+  for (const line of content.trimEnd().split('\n')) {
+    if (!line.trim()) continue;
+    const parsed = parseJsonlLine(line);
+    if (!parsed) continue;
+    // parseJsonlLine이 null 반환 = skip types (file-history-snapshot 등) + isSidechain
+    // 이미 필터링됨 — raw object도 필요하므로 재파싱
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    results.push(raw);
+  }
+  return results;
+}
+
+const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+
+// ── End transcript helpers ──────────────────────────────────────────────────
 
 const MAX_LIMIT = 2_000;
 const DEFAULT_LIMIT = 50;
@@ -368,6 +534,67 @@ export async function createServer(config: AgentConfig): Promise<{ app: FastifyI
       const queries = await claudeSource!.getRecentQueries(limit, sessionId);
       return { queries };
     });
+
+    // GET /claude/transcript/:sessionId/:promptId
+    // 특정 prompt turn의 모든 JSONL 이벤트를 반환
+    app.get<{ Params: { sessionId: string; promptId: string } }>(
+      '/claude/transcript/:sessionId/:promptId',
+      async (request, reply) => {
+        const { sessionId, promptId } = request.params;
+
+        const jsonlPath = await findSessionJsonl(CLAUDE_PROJECTS_DIR, sessionId);
+        if (!jsonlPath) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        const rawLines = await readTranscriptEvents(jsonlPath);
+
+        // promptId 필터링: user 라인의 promptId로 범위 결정
+        // - target promptId user 라인 → in scope
+        // - 다른 promptId user 라인 → out of scope
+        // - assistant/system 라인 → 앞선 user 라인의 scope 상속
+        const events: TranscriptEvent[] = [];
+        let inScope = false;
+
+        for (const raw of rawLines) {
+          const type = raw.type as string;
+          if (type === 'user') {
+            const linePromptId = (raw.promptId as string | undefined) ?? null;
+            inScope = linePromptId === promptId;
+          }
+          if (inScope) {
+            events.push(toTranscriptEvent(raw));
+          }
+        }
+
+        return { promptId, sessionId, events };
+      },
+    );
+
+    // GET /claude/transcript/:sessionId/subagent/:agentKey
+    // 서브에이전트 JSONL 파일의 모든 이벤트를 반환
+    app.get<{ Params: { sessionId: string; agentKey: string } }>(
+      '/claude/transcript/:sessionId/subagent/:agentKey',
+      async (request, reply) => {
+        const { sessionId, agentKey } = request.params;
+
+        const sessionDir = await findSessionDir(CLAUDE_PROJECTS_DIR, sessionId);
+        if (!sessionDir) {
+          return reply.code(404).send({ error: 'Session directory not found' });
+        }
+
+        const subagentPath = join(sessionDir, 'subagents', `agent-${agentKey}.jsonl`);
+        try {
+          await access(subagentPath);
+        } catch {
+          return reply.code(404).send({ error: 'Subagent file not found' });
+        }
+
+        const rawLines = await readTranscriptEvents(subagentPath);
+        const events = rawLines.map(toTranscriptEvent);
+        return { agentKey, sessionId, events };
+      },
+    );
 
   }
 
